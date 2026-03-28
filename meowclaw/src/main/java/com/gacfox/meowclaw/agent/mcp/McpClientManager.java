@@ -20,6 +20,7 @@ import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.stereotype.Component;
 
+import java.net.URI;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
@@ -204,11 +205,54 @@ public class McpClientManager implements ApplicationRunner {
     }
 
     private McpClientTransport createStreamableHttpTransport(McpConfig mcpConfig) {
-        return HttpClientStreamableHttpTransport.builder(mcpConfig.getUrl()).build();
+        String fullUrl = mcpConfig.getUrl();
+
+        try {
+            URI uri = new URI(fullUrl);
+            String host = uri.getHost();
+            int port = uri.getPort();
+            String path = uri.getPath();
+            String query = uri.getQuery();
+
+            String scheme = uri.getScheme();
+            String baseUrl = scheme + "://" + host + (port != -1 ? ":" + port : "");
+            String endpoint = path + (query != null && !query.isBlank() ? "?" + query : "");
+
+            log.info("解析URL: {} -> baseUrl={}, endpoint={}", fullUrl, baseUrl, endpoint);
+
+            return HttpClientStreamableHttpTransport.builder(baseUrl)
+                    .endpoint(endpoint)
+                    .openConnectionOnStartup(false)
+                    .build();
+        } catch (Exception e) {
+            log.error("解析URL失败: {}", fullUrl, e);
+            return HttpClientStreamableHttpTransport.builder(fullUrl).build();
+        }
     }
 
     private McpClientTransport createSseTransport(McpConfig mcpConfig) {
-        return HttpClientSseClientTransport.builder(mcpConfig.getUrl()).build();
+        String fullUrl = mcpConfig.getUrl();
+
+        try {
+            URI uri = new URI(fullUrl);
+            String host = uri.getHost();
+            int port = uri.getPort();
+            String path = uri.getPath();
+            String query = uri.getQuery();
+
+            String scheme = uri.getScheme();
+            String baseUrl = scheme + "://" + host + (port != -1 ? ":" + port : "");
+            String endpoint = path + (query != null && !query.isBlank() ? "?" + query : "");
+
+            log.info("解析SSE URL: {} -> baseUrl={}, endpoint={}", fullUrl, baseUrl, endpoint);
+
+            return HttpClientSseClientTransport.builder(baseUrl)
+                    .sseEndpoint(endpoint)
+                    .build();
+        } catch (Exception e) {
+            log.error("解析SSE URL失败: {}", fullUrl, e);
+            return HttpClientSseClientTransport.builder(fullUrl).build();
+        }
     }
 
     private List<String> parseArgs(String argsJson) {
