@@ -13,13 +13,18 @@ import java.util.Map;
 @Slf4j
 public class McpToolWrapper implements Tool {
     private final String toolName;
+    private final String description;
+    private final String inputSchema;
     private final String mcpServerName;
     private final McpConfig mcpConfig;
     private final McpClientManager clientManager;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
-    public McpToolWrapper(String toolName, String mcpServerName, McpConfig mcpConfig, McpClientManager clientManager) {
+    public McpToolWrapper(String toolName, String description, String inputSchema,
+                          String mcpServerName, McpConfig mcpConfig, McpClientManager clientManager) {
         this.toolName = toolName;
+        this.description = description;
+        this.inputSchema = inputSchema;
         this.mcpServerName = mcpServerName;
         this.mcpConfig = mcpConfig;
         this.clientManager = clientManager;
@@ -32,12 +37,12 @@ public class McpToolWrapper implements Tool {
 
     @Override
     public String getDescription() {
-        return "MCP工具 [" + mcpServerName + "] - " + toolName;
+        return description != null ? description : "MCP工具 [" + mcpServerName + "] - " + toolName;
     }
 
     @Override
     public String getParameters() {
-        return "{\"type\":\"object\",\"properties\":{}}";
+        return inputSchema != null ? inputSchema : "{\"type\":\"object\",\"properties\":{}}";
     }
 
     @Override
@@ -47,7 +52,8 @@ public class McpToolWrapper implements Tool {
             if (params == null || params.isBlank()) {
                 args = Map.of();
             } else {
-                args = objectMapper.readValue(params, new TypeReference<>() {});
+                args = objectMapper.readValue(params, new TypeReference<>() {
+                });
             }
             return clientManager.callTool(mcpConfig, toolName, args);
         }).subscribeOn(reactor.core.scheduler.Schedulers.boundedElastic());

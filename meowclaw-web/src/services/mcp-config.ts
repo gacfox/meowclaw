@@ -10,9 +10,29 @@ export interface McpConfigDto {
   url?: string;
 }
 
+export interface McpClientStatusDto {
+  name: string;
+  status: "INITIALIZING" | "CONNECTED" | "FAILED";
+  statusLabel: string;
+  errorMessage?: string;
+}
+
 export const mcpConfigService = {
   async list() {
     return request.request<McpConfigDto[]>("/api/mcp-configs");
+  },
+
+  async getStatus() {
+    return request.request<McpClientStatusDto[]>("/api/mcp-configs/status");
+  },
+
+  async reinitialize(id: number) {
+    return request.request<McpClientStatusDto>(
+      `/api/mcp-configs/${id}/reinitialize`,
+      {
+        method: "POST",
+      },
+    );
   },
 
   async getById(id: number) {

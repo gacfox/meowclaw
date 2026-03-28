@@ -4,6 +4,7 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.gacfox.meowclaw.agent.mcp.McpClientManager;
 import com.gacfox.meowclaw.agent.mcp.McpToolWrapper;
+import com.gacfox.meowclaw.dto.McpToolInfoDto;
 import com.gacfox.meowclaw.entity.McpConfig;
 import com.gacfox.meowclaw.service.McpConfigService;
 import lombok.extern.slf4j.Slf4j;
@@ -103,14 +104,21 @@ public class ToolRegistry {
                 return List.of();
             }
 
-            List<String> toolNames = mcpClientManager.listToolNames(mcpConfig);
+            List<McpToolInfoDto> toolInfos = mcpClientManager.listToolInfos(mcpConfig);
             List<Tool> tools = new ArrayList<>();
-            for (String toolName : toolNames) {
-                String toolId = "mcp:" + serverName + ":" + toolName;
+            for (McpToolInfoDto toolInfo : toolInfos) {
+                String toolId = "mcp:" + serverName + ":" + toolInfo.getName();
                 if (toolInstances.containsKey(toolId)) {
                     tools.add(toolInstances.get(toolId));
                 } else {
-                    McpToolWrapper tool = new McpToolWrapper(toolName, serverName, mcpConfig, mcpClientManager);
+                    McpToolWrapper tool = new McpToolWrapper(
+                            toolInfo.getName(),
+                            toolInfo.getDescription(),
+                            toolInfo.getInputSchema(),
+                            serverName,
+                            mcpConfig,
+                            mcpClientManager
+                    );
                     toolInstances.put(toolId, tool);
                     tools.add(tool);
                 }

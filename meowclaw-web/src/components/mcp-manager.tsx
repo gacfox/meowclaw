@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from "react";
-import { Plus, Edit, Trash2 } from "lucide-react";
+import React, { useState, useEffect, useCallback } from "react";
+import { Plus, Edit, Trash2, RefreshCw, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -36,7 +36,17 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { mcpConfigService, type McpConfigDto } from "@/services/mcp-config";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import {
+  mcpConfigService,
+  type McpConfigDto,
+  type McpClientStatusDto,
+} from "@/services/mcp-config";
 import { Badge } from "@/components/ui/badge";
 
 const TRANSPORT_OPTIONS = [
@@ -45,8 +55,19 @@ const TRANSPORT_OPTIONS = [
   { value: "sse", label: "SSE (Server-Sent Events)" },
 ];
 
+const STATUS_COLORS = {
+  INITIALIZING: "bg-yellow-500",
+  CONNECTED: "bg-green-500",
+  FAILED: "bg-red-500",
+};
+
+const STATUS_REFRESH_INTERVAL = 5000; // 5 seconds
+
 export const McpManager: React.FC = () => {
   const [configs, setConfigs] = useState<McpConfigDto[]>([]);
+  const [statuses, setStatuses] = useState<Map<string, McpClientStatusDto>>(
+    new Map(),
+  );
   const [isLoading, setIsLoading] = useState(false);
   const [isInitialLoading, setIsInitialLoading] = useState(true);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -61,12 +82,9 @@ export const McpManager: React.FC = () => {
   });
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deletingConfigId, setDeletingConfigId] = useState<number | null>(null);
+  const [reinitializingId, setReinitializingId] = useState<number | null>(null);
 
-  useEffect(() => {
-    loadConfigs();
-  }, []);
-
-  const loadConfigs = async () => {
+  const loadConfigs = useCallback(async () => {
     try {
       const response = await mcpConfigService.list();
       if (response.code === 200 && response.data) {
@@ -76,6 +94,47 @@ export const McpManager: React.FC = () => {
       console.error("加载MCP配置失败", error);
     } finally {
       setIsInitialLoading(false);
+    }
+  }, []);
+
+  const loadStatuses = useCallback(async () => {
+    try {
+      const response = await mcpConfigService.getStatus();
+      if (response.code === 200 && response.data) {
+        const statusMap = new Map<string, McpClientStatusDto>();
+        response.data.forEach((status) => {
+          statusMap.set(status.name, status);
+        });
+        setStatuses(statusMap);
+      }
+    } catch (error) {
+      console.error("加载MCP状态失败", error);
+    }
+  }, []);
+
+  const loadAll = useCallback(async () => {
+    await Promise.all([loadConfigs(), loadStatuses()]);
+  }, [loadConfigs, loadStatuses]);
+
+  useEffect(() => {
+    loadAll();
+  }, [loadAll]);
+
+  // Polling for status updates
+  useEffect(() => {
+    const interval = setInterval(loadStatuses, STATUS_REFRESH_INTERVAL);
+    return () => clearInterval(interval);
+  }, [loadStatuses]);
+
+  const handleReinitialize = async (id: number) => {
+    setReinitializingId(id);
+    try {
+      await mcpConfigService.reinitialize(id);
+      await loadStatuses();
+    } catch (error) {
+      console.error("重新初始化MCP失败", error);
+    } finally {
+      setReinitializingId(null);
     }
   };
 
@@ -110,14 +169,14 @@ export const McpManager: React.FC = () => {
           payload,
         );
         if (response.code === 200) {
-          loadConfigs();
+          await loadAll();
           setIsDialogOpen(false);
           resetForm();
         }
       } else {
         const response = await mcpConfigService.create(payload);
         if (response.code === 200) {
-          loadConfigs();
+          await loadAll();
           setIsDialogOpen(false);
           resetForm();
         }
@@ -140,7 +199,7 @@ export const McpManager: React.FC = () => {
     try {
       const response = await mcpConfigService.delete(deletingConfigId);
       if (response.code === 200) {
-        loadConfigs();
+        await loadAll();
       }
     } catch (error) {
       console.error("删除MCP配置失败", error);
@@ -188,9 +247,47 @@ export const McpManager: React.FC = () => {
     });
   };
 
-  const getTransportLabel = (type: string) => {
-    const option = TRANSPORT_OPTIONS.find((o) => o.value === type);
-    return option?.label || type;
+  const getStatusForConfig = (name: string) => {
+    return statuses.get(name);
+  };
+
+  const renderStatusDot = (status: McpClientStatusDto | undefined) => {
+    if (!status) {
+      return <span className="w-2.5 h-2.5 rounded-full bg-gray-300" />;
+    }
+
+    const colorClass = STATUS_COLORS[status.status] || "bg-gray-300";
+
+    if (status.status === "FAILED") {
+      return (
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span
+                className={`w-2.5 h-2.5 rounded-full ${colorClass} cursor-help inline-block align-middle`}
+              />
+            </TooltipTrigger>
+            <TooltipContent className="max-w-xs">
+              <div className="flex items-start gap-2">
+                <AlertCircle className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />
+                <div>
+                  <p className="font-medium">启动失败</p>
+                  <p className="text-sm text-muted-foreground">
+                    {status.errorMessage || "未知错误"}
+                  </p>
+                </div>
+              </div>
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+      );
+    }
+
+    return (
+      <span
+        className={`w-2.5 h-2.5 rounded-full ${colorClass} inline-block align-middle`}
+      />
+    );
   };
 
   return (
@@ -226,6 +323,7 @@ export const McpManager: React.FC = () => {
                   }
                   placeholder="例如：filesystem, brave-search"
                   required
+                  disabled={!!editingConfig}
                 />
                 <p className="text-xs text-muted-foreground">
                   名称必须唯一，用于在智能体配置中引用
@@ -334,69 +432,112 @@ export const McpManager: React.FC = () => {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>名称</TableHead>
-              <TableHead>传输类型</TableHead>
-              <TableHead>配置详情</TableHead>
+              <TableHead className="text-center">状态</TableHead>
+              <TableHead className="text-center">名称</TableHead>
+              <TableHead className="text-center">传输类型</TableHead>
+              <TableHead className="text-center">配置详情</TableHead>
               <TableHead className="text-center">操作</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {isInitialLoading ? (
               <TableRow>
-                <TableCell colSpan={4} className="text-center py-12">
+                <TableCell colSpan={5} className="text-center py-12">
                   <Spinner className="size-6 mx-auto" />
                 </TableCell>
               </TableRow>
             ) : configs.length === 0 ? (
               <TableRow>
                 <TableCell
-                  colSpan={4}
+                  colSpan={5}
                   className="text-center text-muted-foreground py-8"
                 >
                   暂无MCP配置，点击"添加MCP配置"创建
                 </TableCell>
               </TableRow>
             ) : (
-              configs.map((config) => (
-                <TableRow key={config.id}>
-                  <TableCell className="font-medium">
-                    <Badge variant="outline" className="text-base">
-                      mcp:{config.name}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>
-                    {getTransportLabel(config.transportType)}
-                  </TableCell>
-                  <TableCell className="text-sm text-muted-foreground">
-                    {config.transportType === "stdio" ? (
-                      <div>
-                        {config.command} {config.args && `(${config.args})`}
-                      </div>
-                    ) : (
-                      <div>{config.url}</div>
-                    )}
-                  </TableCell>
-                  <TableCell className="text-left">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => handleEdit(config)}
-                    >
-                      <Edit className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => config.id && handleDelete(config.id)}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </TableCell>
-                </TableRow>
-              ))
+              configs.map((config) => {
+                const status = getStatusForConfig(config.name);
+                const isReinitializing = reinitializingId === config.id;
+
+                return (
+                  <TableRow key={config.id}>
+                    <TableCell className="text-center">
+                      {isReinitializing ? (
+                        <Spinner className="size-4 mx-auto" />
+                      ) : (
+                        <div className="flex justify-center">
+                          {renderStatusDot(status)}
+                        </div>
+                      )}
+                    </TableCell>
+                    <TableCell className="font-medium text-center">
+                      <Badge variant="outline" className="text-base">
+                        mcp:{config.name}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-center">
+                      {config.transportType}
+                    </TableCell>
+                    <TableCell className="text-sm text-muted-foreground text-center">
+                      {config.transportType === "stdio" ? (
+                        <div>
+                          {config.command} {config.args && `(${config.args})`}
+                        </div>
+                      ) : (
+                        <div>{config.url}</div>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-center">
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() =>
+                                config.id && handleReinitialize(config.id)
+                              }
+                              disabled={isReinitializing}
+                            >
+                              <RefreshCw
+                                className={`h-4 w-4 ${
+                                  isReinitializing ? "animate-spin" : ""
+                                }`}
+                              />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>重新初始化</TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => handleEdit(config)}
+                      >
+                        <Edit className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => config.id && handleDelete(config.id)}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                );
+              })
             )}
           </TableBody>
         </Table>
+      </div>
+
+      <div className="mt-4 text-xs text-muted-foreground">
+        状态指示: <span className="text-yellow-600">● 启动中</span>{" "}
+        <span className="text-green-600">● 已连接</span>{" "}
+        <span className="text-red-600">● 启动失败</span> (鼠标悬停查看错误信息)
+        <span className="ml-4">自动刷新间隔: 5秒</span>
       </div>
 
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
