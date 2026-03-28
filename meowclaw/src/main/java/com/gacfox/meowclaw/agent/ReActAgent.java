@@ -12,9 +12,12 @@ import com.gacfox.meowclaw.service.TodoService;
 import com.openai.client.OpenAIClient;
 import com.openai.client.okhttp.OpenAIOkHttpClient;
 import com.openai.core.JsonValue;
+import com.openai.core.http.StreamResponse;
+import com.openai.helpers.ChatCompletionAccumulator;
 import com.openai.models.FunctionDefinition;
 import com.openai.models.FunctionParameters;
 import com.openai.models.chat.completions.ChatCompletion;
+import com.openai.models.chat.completions.ChatCompletionChunk;
 import com.openai.models.chat.completions.ChatCompletionCreateParams;
 import com.openai.models.chat.completions.ChatCompletionMessage;
 import com.openai.models.chat.completions.ChatCompletionAssistantMessageParam;
@@ -142,8 +145,7 @@ public class ReActAgent {
                     continue;
                 }
 
-                String content = message.content().orElse("");
-                emitEvent(sink, ChatStreamEventDto.TYPE_CONTENT, content);
+                String content = streamContentResponse(messages, sink);
 
                 MessageDto assistantMsg = new MessageDto();
                 assistantMsg.setRole(MessageDto.ROLE_ASSISTANT);
@@ -161,29 +163,53 @@ public class ReActAgent {
         }
     }
 
+    private ChatCompletionCreateParams buildCompletionParams(List<ChatCompletionMessageParam> messages) {
+        ChatCompletionCreateParams.Builder paramsBuilder = ChatCompletionCreateParams.builder()
+                .model(llmConfig.getModel())
+                .messages(messages);
+
+        if (llmConfig.getTemperature() != null) {
+            paramsBuilder.temperature(llmConfig.getTemperature());
+        }
+        if (llmConfig.getMaxContextLength() != null) {
+            paramsBuilder.maxTokens(llmConfig.getMaxContextLength() / 2);
+        }
+
+        List<FunctionDefinition> functionDefinitions = buildFunctionDefinitions();
+        for (FunctionDefinition functionDefinition : functionDefinitions) {
+            paramsBuilder.addFunctionTool(functionDefinition);
+        }
+
+        return paramsBuilder.build();
+    }
+
     private ChatCompletion callLLM(List<ChatCompletionMessageParam> messages) {
         try {
-            ChatCompletionCreateParams.Builder paramsBuilder = ChatCompletionCreateParams.builder()
-                    .model(llmConfig.getModel())
-                    .messages(messages);
-
-            if (llmConfig.getTemperature() != null) {
-                paramsBuilder.temperature(llmConfig.getTemperature());
-            }
-            if (llmConfig.getMaxContextLength() != null) {
-                paramsBuilder.maxTokens(llmConfig.getMaxContextLength() / 2);
-            }
-
-            List<FunctionDefinition> functionDefinitions = buildFunctionDefinitions();
-            for (FunctionDefinition functionDefinition : functionDefinitions) {
-                paramsBuilder.addFunctionTool(functionDefinition);
-            }
-
-            return openAIClient.chat().completions().create(paramsBuilder.build());
+            return openAIClient.chat().completions().create(buildCompletionParams(messages));
         } catch (Exception e) {
             log.error("LLM调用失败", e);
             throw new RuntimeException("LLM调用失败: " + e.getMessage(), e);
         }
+    }
+
+    private String streamContentResponse(List<ChatCompletionMessageParam> messages, Sinks.Many<ChatStreamEventDto> sink) {
+        StringBuilder contentBuilder = new StringBuilder();
+        ChatCompletionAccumulator accumulator = ChatCompletionAccumulator.create();
+
+        try (StreamResponse<ChatCompletionChunk> streamResponse = openAIClient.chat().completions().createStreaming(buildCompletionParams(messages))) {
+            streamResponse.stream()
+                    .peek(accumulator::accumulate)
+                    .flatMap(completion -> completion.choices().stream())
+                    .flatMap(choice -> choice.delta().content().stream())
+                    .forEach(delta -> {
+                        contentBuilder.append(delta);
+                        emitEvent(sink, ChatStreamEventDto.TYPE_CONTENT, delta);
+                    });
+        } catch (Exception e) {
+            log.error("流式LLM调用失败", e);
+            emitEvent(sink, ChatStreamEventDto.TYPE_ERROR, "流式响应失败: " + e.getMessage());
+        }
+        return contentBuilder.toString();
     }
 
     private String buildSystemPrompt() {
