@@ -17,6 +17,7 @@ import {
   ChevronRight,
   type LucideIcon,
   Github,
+  Plug,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -38,10 +39,10 @@ import { AgentManager } from "@/components/agent-manager";
 import { ConversationManager } from "@/components/conversation-manager";
 import { SystemSettings } from "@/components/system-settings";
 import { WorkspaceManager } from "@/components/workspace-manager";
+import { McpManager } from "@/components/mcp-manager";
 
 const ThemeIcon: React.FC<{ theme: string | undefined }> = ({ theme }) => {
-  if (theme === "system")
-    return <Monitor className="h-[1.2rem] w-[1.2rem]" />;
+  if (theme === "system") return <Monitor className="h-[1.2rem] w-[1.2rem]" />;
   if (theme === "light") return <Sun className="h-[1.2rem] w-[1.2rem]" />;
   return <Moon className="h-[1.2rem] w-[1.2rem]" />;
 };
@@ -124,6 +125,7 @@ const navItems: NavItem[] = [
   { id: "workspace", label: "工作区", icon: Folder },
   { id: "llm", label: "LLM管理", icon: Brain },
   { id: "agent", label: "智能体管理", icon: Users },
+  { id: "mcp", label: "MCP配置", icon: Plug },
   { id: "conversation", label: "会话管理", icon: History },
   { id: "settings", label: "系统设置", icon: Settings },
 ];
@@ -135,7 +137,12 @@ interface SidebarProps {
   onToggle: () => void;
 }
 
-function Sidebar({ activeTab, onTabChange, collapsed, onToggle }: SidebarProps) {
+function Sidebar({
+  activeTab,
+  onTabChange,
+  collapsed,
+  onToggle,
+}: SidebarProps) {
   return (
     <div
       className={`border-r bg-muted/30 flex flex-col transition-all duration-300 ${
@@ -201,7 +208,9 @@ function Header({ onSettingsClick }: HeaderProps) {
         <Button
           variant="ghost"
           size="icon"
-          onClick={() => window.open("https://github.com/gacfox/meowclaw", "_blank")}
+          onClick={() =>
+            window.open("https://github.com/gacfox/meowclaw", "_blank")
+          }
         >
           <Github className="h-[1.2rem] w-[1.2rem]" />
           <span className="sr-only">GitHub</span>
@@ -226,6 +235,8 @@ function MainContent({ activeTab }: MainContentProps) {
       return <AgentManager />;
     case "workspace":
       return <WorkspaceManager />;
+    case "mcp":
+      return <McpManager />;
     case "conversation":
       return <ConversationManager />;
     case "settings":

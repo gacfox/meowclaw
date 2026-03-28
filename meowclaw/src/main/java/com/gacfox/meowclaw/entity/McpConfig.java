@@ -5,15 +5,14 @@ import lombok.Data;
 import java.time.Instant;
 
 @Data
-public class AgentConfig {
+public class McpConfig {
     private Long id;
     private String name;
-    private String avatar;
-    private String systemPrompt;
-    private String enabledTools;
-    private String enabledMcpTools;
-    private Long defaultLlmId;
-    private String workspaceFolder;
+    private String transportType;
+    private String command;
+    private String args;
+    private String envVars;
+    private String url;
     private Long createdAt;
     private Long updatedAt;
 

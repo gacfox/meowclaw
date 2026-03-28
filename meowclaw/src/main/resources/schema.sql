@@ -12,15 +12,16 @@ CREATE TABLE IF NOT EXISTS users
 -- 智能体配置表
 CREATE TABLE IF NOT EXISTS agent_configs
 (
-    id               INTEGER PRIMARY KEY AUTOINCREMENT,
-    name             TEXT   NOT NULL,
-    avatar           TEXT,
-    system_prompt    TEXT,
-    enabled_tools    TEXT,
-    default_llm_id   BIGINT,
-    workspace_folder TEXT,
-    created_at       BIGINT NOT NULL,
-    updated_at       BIGINT NOT NULL
+    id                INTEGER PRIMARY KEY AUTOINCREMENT,
+    name              TEXT   NOT NULL,
+    avatar            TEXT,
+    system_prompt     TEXT,
+    enabled_tools     TEXT,
+    enabled_mcp_tools TEXT,
+    default_llm_id    BIGINT,
+    workspace_folder  TEXT,
+    created_at        BIGINT NOT NULL,
+    updated_at        BIGINT NOT NULL
 );
 
 -- LLM配置表
@@ -76,6 +77,20 @@ CREATE INDEX IF NOT EXISTS idx_agent_configs_name ON agent_configs (name);
 CREATE INDEX IF NOT EXISTS idx_conversations_agent_config_id ON conversations (agent_config_id);
 CREATE INDEX IF NOT EXISTS idx_messages_conversation_id ON messages (conversation_id);
 CREATE INDEX IF NOT EXISTS idx_todo_items_conversation_id ON todo_items (conversation_id);
+
+-- MCP配置表
+CREATE TABLE IF NOT EXISTS mcp_configs
+(
+    id             INTEGER PRIMARY KEY AUTOINCREMENT,
+    name           TEXT   NOT NULL UNIQUE,
+    transport_type TEXT   NOT NULL,
+    command        TEXT,
+    args           TEXT,
+    env_vars       TEXT,
+    url            TEXT,
+    created_at     BIGINT NOT NULL,
+    updated_at     BIGINT NOT NULL
+);
 
 -- 创建vec0虚拟表（如果sqlite-vec扩展已加载）
 -- 注意：这个表需要动态创建，在代码中检测扩展是否可用后再创建

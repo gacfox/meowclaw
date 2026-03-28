@@ -12,6 +12,7 @@ public class AgentConfigDto {
     private String avatar;
     private String systemPrompt;
     private String enabledTools;
+    private String enabledMcpTools;
     @NotNull(message = "默认LLM不能为空")
     private Long defaultLlmId;
     private String workspaceFolder;

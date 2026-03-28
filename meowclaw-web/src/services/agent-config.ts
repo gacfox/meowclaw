@@ -6,6 +6,7 @@ export interface AgentConfigDto {
   avatar?: string;
   systemPrompt?: string;
   enabledTools?: string;
+  enabledMcpTools?: string;
   defaultLlmId: number;
   workspaceFolder?: string;
 }

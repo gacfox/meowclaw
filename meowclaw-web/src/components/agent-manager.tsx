@@ -42,6 +42,7 @@ import {
   type AgentConfigDto,
 } from "@/services/agent-config";
 import { llmService, type LlmConfigDto } from "@/services/llm";
+import { mcpConfigService, type McpConfigDto } from "@/services/mcp-config";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   DropdownMenu,
@@ -56,7 +57,9 @@ export const AgentManager: React.FC = () => {
   const [agents, setAgents] = useState<AgentConfigDto[]>([]);
   const [llms, setLlms] = useState<LlmConfigDto[]>([]);
   const [tools, setTools] = useState<ToolDto[]>([]);
+  const [mcpConfigs, setMcpConfigs] = useState<McpConfigDto[]>([]);
   const [selectedToolIds, setSelectedToolIds] = useState<string[]>([]);
+  const [selectedMcpToolIds, setSelectedMcpToolIds] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isInitialLoading, setIsInitialLoading] = useState(true);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -66,6 +69,7 @@ export const AgentManager: React.FC = () => {
     avatar: "",
     systemPrompt: "",
     enabledTools: "",
+    enabledMcpTools: "",
     defaultLlmId: 0,
     workspaceFolder: "",
   });
@@ -79,7 +83,19 @@ export const AgentManager: React.FC = () => {
     loadAgents();
     loadLlms();
     loadTools();
+    loadMcpConfigs();
   }, []);
+
+  const loadMcpConfigs = async () => {
+    try {
+      const response = await mcpConfigService.list();
+      if (response.code === 200 && response.data) {
+        setMcpConfigs(response.data);
+      }
+    } catch (error) {
+      console.error("加载MCP配置失败", error);
+    }
+  };
 
   const loadAgents = async () => {
     try {
@@ -154,6 +170,7 @@ export const AgentManager: React.FC = () => {
         ...formData,
         workspaceFolder: workspaceFolder ? workspaceFolder : undefined,
         enabledTools: JSON.stringify(selectedToolIds),
+        enabledMcpTools: JSON.stringify(selectedMcpToolIds),
       };
       if (editingAgent?.id) {
         const response = await agentConfigService.update(
@@ -209,6 +226,7 @@ export const AgentManager: React.FC = () => {
     setEditingAgent(agent);
     setFormData(agent);
     setSelectedToolIds(parseEnabledTools(agent.enabledTools));
+    setSelectedMcpToolIds(parseEnabledTools(agent.enabledMcpTools));
     setAvatarPreview(agent.avatar || null);
     setAvatarFile(null);
     setIsDialogOpen(true);
@@ -221,10 +239,12 @@ export const AgentManager: React.FC = () => {
       avatar: "",
       systemPrompt: "",
       enabledTools: "",
+      enabledMcpTools: "",
       defaultLlmId: llms[0]?.id || 0,
       workspaceFolder: "",
     });
     setSelectedToolIds([]);
+    setSelectedMcpToolIds([]);
     setAvatarPreview(null);
     setAvatarFile(null);
     setIsDialogOpen(true);
@@ -237,10 +257,12 @@ export const AgentManager: React.FC = () => {
       avatar: "",
       systemPrompt: "",
       enabledTools: "",
+      enabledMcpTools: "",
       defaultLlmId: 0,
       workspaceFolder: "",
     });
     setSelectedToolIds([]);
+    setSelectedMcpToolIds([]);
     setAvatarFile(null);
     setAvatarPreview(null);
   };
@@ -271,6 +293,15 @@ export const AgentManager: React.FC = () => {
       prev.includes(toolId)
         ? prev.filter((id) => id !== toolId)
         : [...prev, toolId],
+    );
+  };
+
+  const toggleMcpTool = (mcpName: string) => {
+    const mcpId = `mcp:${mcpName}`;
+    setSelectedMcpToolIds((prev) =>
+      prev.includes(mcpId)
+        ? prev.filter((id) => id !== mcpId)
+        : [...prev, mcpId],
     );
   };
 
@@ -450,6 +481,62 @@ export const AgentManager: React.FC = () => {
                           </div>
                         </DropdownMenuCheckboxItem>
                       ))
+                    )}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
+              <div className="space-y-2">
+                <Label>MCP工具</Label>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className="w-full justify-between"
+                    >
+                      {selectedMcpToolIds.length > 0 ? (
+                        <div className="flex flex-wrap gap-1">
+                          {selectedMcpToolIds.slice(0, 3).map((mcpId) => (
+                            <Badge key={mcpId} variant="outline">
+                              {mcpId}
+                            </Badge>
+                          ))}
+                          {selectedMcpToolIds.length > 3 && (
+                            <Badge variant="outline">
+                              +{selectedMcpToolIds.length - 3}
+                            </Badge>
+                          )}
+                        </div>
+                      ) : (
+                        <span className="text-muted-foreground">
+                          选择MCP工具
+                        </span>
+                      )}
+                      <ChevronDown className="h-4 w-4 opacity-60" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="start">
+                    {mcpConfigs.length === 0 ? (
+                      <div className="px-2 py-1.5 text-sm text-muted-foreground">
+                        暂无可用MCP配置，请在"MCP配置"中添加
+                      </div>
+                    ) : (
+                      mcpConfigs.map((config) => {
+                        const mcpId = `mcp:${config.name}`;
+                        return (
+                          <DropdownMenuCheckboxItem
+                            key={config.id}
+                            checked={selectedMcpToolIds.includes(mcpId)}
+                            onCheckedChange={() => toggleMcpTool(config.name)}
+                          >
+                            <div className="flex flex-col">
+                              <span>{config.name}</span>
+                              <span className="text-xs text-muted-foreground">
+                                {config.transportType}
+                              </span>
+                            </div>
+                          </DropdownMenuCheckboxItem>
+                        );
+                      })
                     )}
                   </DropdownMenuContent>
                 </DropdownMenu>

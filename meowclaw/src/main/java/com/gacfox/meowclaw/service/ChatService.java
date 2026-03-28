@@ -66,7 +66,9 @@ public class ChatService {
                 .orElseThrow(() -> new ServiceNotSatisfiedException("LLM配置不存在"));
         List<MessageDto> history = loadConversationHistory(conversationId);
         List<Tool> tools = toolRegistry.parseAndLoadTools(agentConfig.getEnabledTools());
-        log.info("AgentConfig '{}' 加载了 {} 个工具", agentConfig.getName(), tools.size());
+        List<Tool> mcpTools = toolRegistry.loadToolsWithMcp(agentConfig.getEnabledTools(), agentConfig.getEnabledMcpTools());
+        tools.addAll(mcpTools);
+        log.info("AgentConfig '{}' 加载了 {} 个工具 (内置: {}, MCP: {})", agentConfig.getName(), tools.size(), tools.size() - mcpTools.size(), mcpTools.size());
 
         ReActAgent reactAgent = new ReActAgent(
                 agentConfig,
