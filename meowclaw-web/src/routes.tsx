@@ -2,6 +2,7 @@ import { Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { InitPage } from "@/pages/init";
 import { LoginPage } from "@/pages/login";
 import { NotFoundPage } from "@/pages/not-found";
+import { StatisticsPage } from "@/pages/statistics";
 import { Layout } from "@/components/layout";
 import { ChatInterface } from "@/components/chat-interface";
 import { LlmManager } from "@/components/llm-manager";
@@ -63,10 +64,7 @@ export function RoutesView() {
           element={<PlaceholderPage title="定时任务" />}
         />
         <Route path="skill" element={<PlaceholderPage title="技能" />} />
-        <Route
-          path="statistics"
-          element={<PlaceholderPage title="统计信息" />}
-        />
+        <Route path="statistics" element={<StatisticsPage />} />
         <Route path="settings" element={<SystemSettings />} />
       </Route>
       <Route path="*" element={<NotFoundPage />} />

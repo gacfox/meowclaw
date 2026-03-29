@@ -81,6 +81,47 @@ public class MessageRepository {
         jdbcTemplate.update(sql, conversationId, role, content, apiUrl, model, inputTokens, outputTokens, createdAt);
     }
 
+    public long[] sumTokensByTimeRange(Long startTime, Long endTime) {
+        String sql = "SELECT COALESCE(SUM(input_tokens), 0), COALESCE(SUM(output_tokens), 0) FROM messages WHERE created_at >= ? AND created_at <= ?";
+        return jdbcTemplate.query(sql, rs -> {
+            if (rs.next()) {
+                return new long[]{rs.getLong(1), rs.getLong(2)};
+            }
+            return new long[]{0L, 0L};
+        }, startTime, endTime);
+    }
+
+    public long countByTimeRange(Long startTime, Long endTime) {
+        String sql = "SELECT COUNT(*) FROM messages WHERE created_at >= ? AND created_at <= ?";
+        Long count = jdbcTemplate.queryForObject(sql, Long.class, startTime, endTime);
+        return count != null ? count : 0L;
+    }
+
+    public List<String[]> findDistinctApiUrlModelPairs() {
+        String sql = "SELECT DISTINCT api_url, model FROM messages WHERE model IS NOT NULL AND model != '' AND api_url IS NOT NULL AND api_url != '' ORDER BY api_url, model";
+        return jdbcTemplate.query(sql, (rs, rowNum) -> new String[]{rs.getString("api_url"), rs.getString("model")});
+    }
+
+    public long[] sumDailyTokensByApiUrlAndModel(Long dayStart, Long dayEnd, String apiUrl, String model) {
+        String sql = "SELECT COALESCE(SUM(input_tokens), 0), COALESCE(SUM(output_tokens), 0), COUNT(*) FROM messages WHERE created_at >= ? AND created_at <= ? AND api_url = ? AND model = ?";
+        return jdbcTemplate.query(sql, rs -> {
+            if (rs.next()) {
+                return new long[]{rs.getLong(1), rs.getLong(2), rs.getLong(3)};
+            }
+            return new long[]{0L, 0L, 0L};
+        }, dayStart, dayEnd, apiUrl, model);
+    }
+
+    public long[] sumDailyTokensAllModels(Long dayStart, Long dayEnd) {
+        String sql = "SELECT COALESCE(SUM(input_tokens), 0), COALESCE(SUM(output_tokens), 0), COUNT(*) FROM messages WHERE created_at >= ? AND created_at <= ?";
+        return jdbcTemplate.query(sql, rs -> {
+            if (rs.next()) {
+                return new long[]{rs.getLong(1), rs.getLong(2), rs.getLong(3)};
+            }
+            return new long[]{0L, 0L, 0L};
+        }, dayStart, dayEnd);
+    }
+
     private static class MessageRowMapper implements RowMapper<Message> {
         @Override
         public Message mapRow(ResultSet rs, int rowNum) throws SQLException {
