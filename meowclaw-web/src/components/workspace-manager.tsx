@@ -494,7 +494,7 @@ export const WorkspaceManager: React.FC = () => {
       </div>
 
       {/* 操作面板 */}
-      <div className="flex items-center gap-3 mb-3 p-3 bg-muted/50 rounded-lg border">
+      <div className="flex items-center gap-3 mb-3 p-3 bg-muted/50 rounded-lg border min-h-13.5">
         <span className="text-sm font-medium">
           已选择 {selectedEntries.length} 项
         </span>
