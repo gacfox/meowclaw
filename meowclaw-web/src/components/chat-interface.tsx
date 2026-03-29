@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from "react";
+import { useParams, useNavigate } from "react-router-dom";
 import {
   Send,
   Loader2,
@@ -138,6 +139,10 @@ const buildMessageGroups = (messages: Message[]): MessageGroup[] => {
 };
 
 export const ChatInterface: React.FC = () => {
+  const { agentId: agentIdParam, conversationId: conversationIdParam } =
+    useParams<{ agentId: string; conversationId: string }>();
+  const navigate = useNavigate();
+
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -173,7 +178,20 @@ export const ChatInterface: React.FC = () => {
 
   useEffect(() => {
     loadAgents();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    if (agentIdParam && agents.length > 0) {
+      const agentId = parseInt(agentIdParam);
+      const agent = agents.find((a) => a.id === agentId);
+      if (agent && agent.id !== selectedAgent?.id) {
+        setSelectedAgent(agent);
+        setLastSelectedAgentId(agent.id);
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [agentIdParam, agents, selectedAgent?.id]);
 
   useEffect(() => {
     if (selectedAgent) {
@@ -198,10 +216,16 @@ export const ChatInterface: React.FC = () => {
         const availableAgents = response.data.filter(isAgentItem);
         setAgents(availableAgents);
         if (availableAgents.length > 0) {
+          const agentIdFromUrl = agentIdParam ? parseInt(agentIdParam) : null;
+          const agentFromUrl = agentIdFromUrl
+            ? availableAgents.find((a) => a.id === agentIdFromUrl)
+            : null;
           const lastAgent = lastSelectedAgentId
             ? availableAgents.find((a) => a.id === lastSelectedAgentId)
             : null;
-          setSelectedAgent(lastAgent || availableAgents[0]);
+          const agentToSelect = agentFromUrl || lastAgent || availableAgents[0];
+          setSelectedAgent(agentToSelect);
+          setLastSelectedAgentId(agentToSelect.id);
         }
       }
     } catch (error) {
@@ -230,7 +254,36 @@ export const ChatInterface: React.FC = () => {
           response.data.items.filter(isConversationItem);
         if (reset) {
           setConversations(availableConversations);
-          if (
+          const conversationIdFromUrl = conversationIdParam
+            ? parseInt(conversationIdParam)
+            : null;
+          if (conversationIdFromUrl) {
+            const convFromUrl = availableConversations.find(
+              (c) => c.id === conversationIdFromUrl,
+            );
+            if (convFromUrl) {
+              setCurrentConversation(convFromUrl);
+              currentConversationIdRef.current = convFromUrl.id;
+              loadConversationMessages(convFromUrl.id);
+            } else {
+              const convResponse = await conversationService.getById(
+                conversationIdFromUrl,
+              );
+              if (
+                convResponse.code === 200 &&
+                convResponse.data &&
+                isConversationItem(convResponse.data)
+              ) {
+                setCurrentConversation(convResponse.data);
+                currentConversationIdRef.current = conversationIdFromUrl;
+                loadConversationMessages(conversationIdFromUrl);
+              } else if (availableConversations.length > 0) {
+                setCurrentConversation(availableConversations[0]);
+                currentConversationIdRef.current = availableConversations[0].id;
+                loadConversationMessages(availableConversations[0].id);
+              }
+            }
+          } else if (
             !currentConversationIdRef.current &&
             availableConversations.length > 0
           ) {
@@ -321,6 +374,7 @@ export const ChatInterface: React.FC = () => {
         currentConversationIdRef.current = response.data.id;
         setMessages([]);
         setConversationPage(1);
+        navigate(`/chat/${selectedAgent.id}/${response.data.id}`);
         loadConversations(selectedAgent.id, 1, true);
       }
     } catch (error) {
@@ -434,6 +488,7 @@ export const ChatInterface: React.FC = () => {
           conversationId = response.data.id;
           setCurrentConversation(response.data);
           currentConversationIdRef.current = response.data.id;
+          navigate(`/chat/${selectedAgent.id}/${response.data.id}`);
           loadConversations(selectedAgent.id);
         }
       } catch (error) {
@@ -546,7 +601,7 @@ export const ChatInterface: React.FC = () => {
                   : msg,
               ),
             );
-          } catch (e) {
+          } catch {
             // ignore
           }
         }
@@ -735,6 +790,9 @@ export const ChatInterface: React.FC = () => {
                           onClick={() => {
                             setCurrentConversation(conv);
                             currentConversationIdRef.current = conv.id;
+                            if (selectedAgent) {
+                              navigate(`/chat/${selectedAgent.id}/${conv.id}`);
+                            }
                             loadConversationMessages(conv.id);
                           }}
                         >
@@ -821,6 +879,7 @@ export const ChatInterface: React.FC = () => {
                 setCurrentConversation(null);
                 currentConversationIdRef.current = null;
                 setMessages([]);
+                navigate(`/chat/${agent.id}`);
               }
             }}
           >

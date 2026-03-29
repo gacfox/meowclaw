@@ -1,10 +1,12 @@
 import React, { useState, useEffect, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   Trash2,
   MessageSquare,
   Bot,
   ChevronLeft,
   ChevronRight,
+  MessageCircle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -50,6 +52,7 @@ import {
 } from "@/services/agent-config";
 
 export const ConversationManager: React.FC = () => {
+  const navigate = useNavigate();
   const [conversations, setConversations] = useState<ConversationDto[]>([]);
   const [agents, setAgents] = useState<AgentConfigDto[]>([]);
   const [selectedAgent, setSelectedAgent] = useState<string>("all");
@@ -184,7 +187,7 @@ export const ConversationManager: React.FC = () => {
             <TableRow>
               <TableHead className="text-left">标题</TableHead>
               <TableHead className="text-center">智能体</TableHead>
-              <TableHead className="text-center">操作</TableHead>
+              <TableHead className="text-center w-28">操作</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -226,13 +229,28 @@ export const ConversationManager: React.FC = () => {
                     </div>
                   </TableCell>
                   <TableCell className="text-center">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => conv.id && handleDelete(conv.id)}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
+                    <div className="flex items-center justify-center gap-1">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        title="进入聊天"
+                        onClick={() =>
+                          conv.id &&
+                          conv.agentConfigId &&
+                          navigate(`/chat/${conv.agentConfigId}/${conv.id}`)
+                        }
+                      >
+                        <MessageCircle className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        title="删除"
+                        onClick={() => conv.id && handleDelete(conv.id)}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
                   </TableCell>
                 </TableRow>
               ))

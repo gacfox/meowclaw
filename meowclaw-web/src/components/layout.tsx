@@ -1,5 +1,5 @@
-import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useEffect } from "react";
+import { useNavigate, useLocation, Outlet } from "react-router-dom";
 import { useTheme } from "next-themes";
 import {
   Cat,
@@ -37,13 +37,6 @@ import { authService } from "@/services/auth";
 import { userService } from "@/services/user";
 import { useUserStore } from "@/stores/userStore";
 import { useAppStore } from "@/stores/appStore";
-import { ChatInterface } from "@/components/chat-interface";
-import { LlmManager } from "@/components/llm-manager";
-import { AgentManager } from "@/components/agent-manager";
-import { ConversationManager } from "@/components/conversation-manager";
-import { SystemSettings } from "@/components/system-settings";
-import { WorkspaceManager } from "@/components/workspace-manager";
-import { McpManager } from "@/components/mcp-manager";
 
 const ThemeIcon: React.FC<{ theme: string | undefined }> = ({ theme }) => {
   if (theme === "system") return <Monitor className="h-[1.2rem] w-[1.2rem]" />;
@@ -119,38 +112,34 @@ function UserMenu() {
 }
 
 interface NavItem {
-  id: string;
+  path: string;
   label: string;
   icon: LucideIcon;
 }
 
 const navItems: NavItem[] = [
-  { id: "chat", label: "聊天", icon: MessageSquare },
-  { id: "channel", label: "频道", icon: Radio },
-  { id: "conversation", label: "会话", icon: Users },
-  { id: "scheduled", label: "定时任务", icon: Clock },
-  { id: "workspace", label: "工作区", icon: Folder },
-  { id: "agent", label: "智能体", icon: Brain },
-  { id: "mcp", label: "MCP", icon: Plug },
-  { id: "skill", label: "技能", icon: Star },
-  { id: "llm", label: "大语言模型", icon: Box },
-  { id: "statistics", label: "统计信息", icon: BarChart3 },
-  { id: "settings", label: "系统设置", icon: Settings },
+  { path: "/chat", label: "聊天", icon: MessageSquare },
+  { path: "/channel", label: "频道", icon: Radio },
+  { path: "/conversation", label: "会话", icon: Users },
+  { path: "/scheduled", label: "定时任务", icon: Clock },
+  { path: "/workspace", label: "工作区", icon: Folder },
+  { path: "/agent", label: "智能体", icon: Brain },
+  { path: "/mcp", label: "MCP", icon: Plug },
+  { path: "/skill", label: "技能", icon: Star },
+  { path: "/llm", label: "大语言模型", icon: Box },
+  { path: "/statistics", label: "统计信息", icon: BarChart3 },
+  { path: "/settings", label: "系统设置", icon: Settings },
 ];
 
 interface SidebarProps {
-  activeTab: string;
-  onTabChange: (tab: string) => void;
+  activePath: string;
   collapsed: boolean;
   onToggle: () => void;
 }
 
-function Sidebar({
-  activeTab,
-  onTabChange,
-  collapsed,
-  onToggle,
-}: SidebarProps) {
+function Sidebar({ activePath, collapsed, onToggle }: SidebarProps) {
+  const navigate = useNavigate();
+
   return (
     <div
       className={`border-r bg-muted/30 flex flex-col transition-all duration-300 ${
@@ -181,14 +170,17 @@ function Sidebar({
       <nav className="flex-1 p-2 space-y-1">
         {navItems.map((item) => {
           const Icon = item.icon;
+          const isActive =
+            activePath === item.path ||
+            (item.path === "/chat" && activePath.startsWith("/chat/"));
           return (
             <Button
-              key={item.id}
-              variant={activeTab === item.id ? "secondary" : "ghost"}
+              key={item.path}
+              variant={isActive ? "secondary" : "ghost"}
               className={`w-full gap-3 ${
                 collapsed ? "justify-center px-2" : "justify-start px-3"
               }`}
-              onClick={() => onTabChange(item.id)}
+              onClick={() => navigate(item.path)}
             >
               <Icon className="h-4 w-4 shrink-0" />
               {!collapsed && <span>{item.label}</span>}
@@ -229,69 +221,9 @@ function Header({ onSettingsClick }: HeaderProps) {
   );
 }
 
-interface MainContentProps {
-  activeTab: string;
-}
-
-function MainContent({ activeTab }: MainContentProps) {
-  switch (activeTab) {
-    case "chat":
-      return <ChatInterface />;
-    case "channel":
-      return (
-        <div className="p-6 h-full flex flex-col min-h-0">
-          <div className="mb-6">
-            <h1 className="text-2xl font-bold">频道</h1>
-            <p className="text-sm text-muted-foreground mt-1">频道管理（功能开发中）</p>
-          </div>
-        </div>
-      );
-    case "conversation":
-      return <ConversationManager />;
-    case "scheduled":
-      return (
-        <div className="p-6 h-full flex flex-col min-h-0">
-          <div className="mb-6">
-            <h1 className="text-2xl font-bold">定时任务</h1>
-            <p className="text-sm text-muted-foreground mt-1">定时任务管理（功能开发中）</p>
-          </div>
-        </div>
-      );
-    case "workspace":
-      return <WorkspaceManager />;
-    case "agent":
-      return <AgentManager />;
-    case "mcp":
-      return <McpManager />;
-    case "skill":
-      return (
-        <div className="p-6 h-full flex flex-col min-h-0">
-          <div className="mb-6">
-            <h1 className="text-2xl font-bold">技能</h1>
-            <p className="text-sm text-muted-foreground mt-1">技能管理（功能开发中）</p>
-          </div>
-        </div>
-      );
-    case "llm":
-      return <LlmManager />;
-    case "statistics":
-      return (
-        <div className="p-6 h-full flex flex-col min-h-0">
-          <div className="mb-6">
-            <h1 className="text-2xl font-bold">统计信息</h1>
-            <p className="text-sm text-muted-foreground mt-1">统计信息（功能开发中）</p>
-          </div>
-        </div>
-      );
-    case "settings":
-      return <SystemSettings />;
-    default:
-      return <ChatInterface />;
-  }
-}
-
 export function Layout() {
-  const [activeTab, setActiveTab] = useState("chat");
+  const navigate = useNavigate();
+  const location = useLocation();
   const { sidebarOpen, setSidebarOpen } = useAppStore();
   const setUser = useUserStore((state) => state.setUser);
 
@@ -302,18 +234,19 @@ export function Layout() {
       .catch(() => {});
   }, [setUser]);
 
+  const activePath = "/" + (location.pathname.split("/")[1] || "chat");
+
   return (
     <div className="flex h-screen">
       <Sidebar
-        activeTab={activeTab}
-        onTabChange={setActiveTab}
+        activePath={activePath}
         collapsed={!sidebarOpen}
         onToggle={() => setSidebarOpen(!sidebarOpen)}
       />
       <div className="flex-1 flex flex-col">
-        <Header onSettingsClick={() => setActiveTab("settings")} />
+        <Header onSettingsClick={() => navigate("/settings")} />
         <main className="flex-1 min-h-0 overflow-auto">
-          <MainContent activeTab={activeTab} />
+          <Outlet />
         </main>
       </div>
     </div>
