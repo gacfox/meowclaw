@@ -185,8 +185,8 @@ function Sidebar({
             <Button
               key={item.id}
               variant={activeTab === item.id ? "secondary" : "ghost"}
-              className={`w-full justify-start gap-3 ${
-                collapsed ? "px-2" : "px-3"
+              className={`w-full gap-3 ${
+                collapsed ? "justify-center px-2" : "justify-start px-3"
               }`}
               onClick={() => onTabChange(item.id)}
             >
