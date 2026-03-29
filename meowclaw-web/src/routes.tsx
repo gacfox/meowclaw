@@ -11,6 +11,7 @@ import { SystemSettings } from "@/pages/system-settings";
 import { WorkspaceManager } from "@/pages/workspace-manager";
 import { McpManager } from "@/pages/mcp-manager";
 import { ScheduledTaskManager } from "@/pages/scheduled-task-manager";
+import { SkillManager } from "@/pages/skill-manager";
 import { Layout } from "@/components/layout";
 import { useAuthStore } from "@/stores";
 
@@ -61,7 +62,7 @@ export function RoutesView() {
         <Route path="mcp" element={<McpManager />} />
         <Route path="channel" element={<PlaceholderPage title="频道" />} />
         <Route path="scheduled" element={<ScheduledTaskManager />} />
-        <Route path="skill" element={<PlaceholderPage title="技能" />} />
+        <Route path="skill" element={<SkillManager />} />
         <Route path="statistics" element={<StatisticsPage />} />
         <Route path="settings" element={<SystemSettings />} />
       </Route>

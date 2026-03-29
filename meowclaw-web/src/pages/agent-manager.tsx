@@ -52,14 +52,17 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Badge } from "@/components/ui/badge";
 import { toolService, type ToolDto } from "@/services/tool";
+import { skillService, type SkillDto } from "@/services/skill";
 
 export const AgentManager: React.FC = () => {
   const [agents, setAgents] = useState<AgentConfigDto[]>([]);
   const [llms, setLlms] = useState<LlmConfigDto[]>([]);
   const [tools, setTools] = useState<ToolDto[]>([]);
+  const [skills, setSkills] = useState<SkillDto[]>([]);
   const [mcpConfigs, setMcpConfigs] = useState<McpConfigDto[]>([]);
   const [selectedToolIds, setSelectedToolIds] = useState<string[]>([]);
   const [selectedMcpToolIds, setSelectedMcpToolIds] = useState<string[]>([]);
+  const [selectedSkillNames, setSelectedSkillNames] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isInitialLoading, setIsInitialLoading] = useState(true);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -70,6 +73,7 @@ export const AgentManager: React.FC = () => {
     systemPrompt: "",
     enabledTools: "",
     enabledMcpTools: "",
+    enabledSkills: "",
     defaultLlmId: 0,
     workspaceFolder: "",
   });
@@ -84,6 +88,7 @@ export const AgentManager: React.FC = () => {
     loadLlms();
     loadTools();
     loadMcpConfigs();
+    loadSkills();
   }, []);
 
   const loadMcpConfigs = async () => {
@@ -132,6 +137,17 @@ export const AgentManager: React.FC = () => {
     }
   };
 
+  const loadSkills = async () => {
+    try {
+      const response = await skillService.list();
+      if (response.code === 200 && response.data) {
+        setSkills(response.data);
+      }
+    } catch (error) {
+      console.error("加载技能失败", error);
+    }
+  };
+
   const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
@@ -171,6 +187,7 @@ export const AgentManager: React.FC = () => {
         workspaceFolder: workspaceFolder ? workspaceFolder : undefined,
         enabledTools: JSON.stringify(selectedToolIds),
         enabledMcpTools: JSON.stringify(selectedMcpToolIds),
+        enabledSkills: JSON.stringify(selectedSkillNames),
       };
       if (editingAgent?.id) {
         const response = await agentConfigService.update(
@@ -227,6 +244,7 @@ export const AgentManager: React.FC = () => {
     setFormData(agent);
     setSelectedToolIds(parseEnabledTools(agent.enabledTools));
     setSelectedMcpToolIds(parseEnabledTools(agent.enabledMcpTools));
+    setSelectedSkillNames(parseEnabledTools(agent.enabledSkills));
     setAvatarPreview(agent.avatar || null);
     setAvatarFile(null);
     setIsDialogOpen(true);
@@ -240,11 +258,13 @@ export const AgentManager: React.FC = () => {
       systemPrompt: "",
       enabledTools: "",
       enabledMcpTools: "",
+      enabledSkills: "",
       defaultLlmId: llms[0]?.id || 0,
       workspaceFolder: "",
     });
     setSelectedToolIds([]);
     setSelectedMcpToolIds([]);
+    setSelectedSkillNames([]);
     setAvatarPreview(null);
     setAvatarFile(null);
     setIsDialogOpen(true);
@@ -258,11 +278,13 @@ export const AgentManager: React.FC = () => {
       systemPrompt: "",
       enabledTools: "",
       enabledMcpTools: "",
+      enabledSkills: "",
       defaultLlmId: 0,
       workspaceFolder: "",
     });
     setSelectedToolIds([]);
     setSelectedMcpToolIds([]);
+    setSelectedSkillNames([]);
     setAvatarFile(null);
     setAvatarPreview(null);
   };
@@ -308,6 +330,14 @@ export const AgentManager: React.FC = () => {
   const getToolLabel = (toolId: string) => {
     const tool = tools.find((t) => t.id === toolId);
     return tool?.name || toolId;
+  };
+
+  const toggleSkill = (skillName: string) => {
+    setSelectedSkillNames((prev) =>
+      prev.includes(skillName)
+        ? prev.filter((name) => name !== skillName)
+        : [...prev, skillName],
+    );
   };
 
   return (
@@ -542,6 +572,61 @@ export const AgentManager: React.FC = () => {
                           </DropdownMenuCheckboxItem>
                         );
                       })
+                    )}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
+              <div className="space-y-2">
+                <Label>技能</Label>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className="w-full justify-between"
+                    >
+                      {selectedSkillNames.length > 0 ? (
+                        <div className="flex flex-wrap gap-1">
+                          {selectedSkillNames.slice(0, 3).map((skillName) => (
+                            <Badge key={skillName} variant="secondary">
+                              {skillName}
+                            </Badge>
+                          ))}
+                          {selectedSkillNames.length > 3 && (
+                            <Badge variant="secondary">
+                              +{selectedSkillNames.length - 3}
+                            </Badge>
+                          )}
+                        </div>
+                      ) : (
+                        <span className="text-muted-foreground">
+                          选择技能
+                        </span>
+                      )}
+                      <ChevronDown className="h-4 w-4 opacity-60" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="start">
+                    {skills.length === 0 ? (
+                      <div className="px-2 py-1.5 text-sm text-muted-foreground">
+                        暂无技能，请先在“技能”中上传
+                      </div>
+                    ) : (
+                      skills.map((skill) => (
+                        <DropdownMenuCheckboxItem
+                          key={skill.id || skill.name}
+                          checked={selectedSkillNames.includes(skill.name)}
+                          onCheckedChange={() => toggleSkill(skill.name)}
+                        >
+                          <div className="flex flex-col">
+                            <span>{skill.name}</span>
+                            {skill.description && (
+                              <span className="text-xs text-muted-foreground">
+                                {skill.description}
+                              </span>
+                            )}
+                          </div>
+                        </DropdownMenuCheckboxItem>
+                      ))
                     )}
                   </DropdownMenuContent>
                 </DropdownMenu>

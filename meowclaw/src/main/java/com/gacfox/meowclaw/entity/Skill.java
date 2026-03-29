@@ -5,16 +5,11 @@ import lombok.Data;
 import java.time.Instant;
 
 @Data
-public class AgentConfig {
+public class Skill {
     private Long id;
     private String name;
-    private String avatar;
-    private String systemPrompt;
-    private String enabledTools;
-    private String enabledMcpTools;
-    private String enabledSkills;
-    private Long defaultLlmId;
-    private String workspaceFolder;
+    private String description;
+    private String packageFile;
     private Long createdAt;
     private Long updatedAt;
 

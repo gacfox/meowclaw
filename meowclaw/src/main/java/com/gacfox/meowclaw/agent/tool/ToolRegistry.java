@@ -35,6 +35,7 @@ public class ToolRegistry {
         INTERNAL_TOOLS.put("todo", TodoTool.class);
         INTERNAL_TOOLS.put("glob", GlobTool.class);
         INTERNAL_TOOLS.put("grep", GrepTool.class);
+        INTERNAL_TOOLS.put("skill", SkillTool.class);
     }
 
     public ToolRegistry(McpConfigService mcpConfigService, McpClientManager mcpClientManager) {

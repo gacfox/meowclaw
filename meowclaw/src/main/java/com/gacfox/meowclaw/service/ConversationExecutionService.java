@@ -9,6 +9,7 @@ import com.gacfox.meowclaw.entity.AgentConfig;
 import com.gacfox.meowclaw.entity.Conversation;
 import com.gacfox.meowclaw.entity.LlmConfig;
 import com.gacfox.meowclaw.entity.Message;
+import com.gacfox.meowclaw.entity.Skill;
 import com.gacfox.meowclaw.exception.ServiceNotSatisfiedException;
 import com.gacfox.meowclaw.repository.AgentConfigRepository;
 import com.gacfox.meowclaw.repository.ConversationRepository;
@@ -32,6 +33,7 @@ public class ConversationExecutionService {
     private final LlmConfigRepository llmConfigRepository;
     private final MessageRepository messageRepository;
     private final TodoService todoService;
+    private final SkillService skillService;
 
     @Value("${agent.workspace.base-dir:./data/workspaces}")
     private String agentWorkspaceBaseDir;
@@ -41,13 +43,15 @@ public class ConversationExecutionService {
                                         AgentConfigRepository agentConfigRepository,
                                         LlmConfigRepository llmConfigRepository,
                                         MessageRepository messageRepository,
-                                        TodoService todoService) {
+                                        TodoService todoService,
+                                        SkillService skillService) {
         this.toolRegistry = toolRegistry;
         this.conversationRepository = conversationRepository;
         this.agentConfigRepository = agentConfigRepository;
         this.llmConfigRepository = llmConfigRepository;
         this.messageRepository = messageRepository;
         this.todoService = todoService;
+        this.skillService = skillService;
     }
 
     public Flux<ChatStreamEventDto> streamChat(Long conversationId, String userPrompt) {
@@ -77,9 +81,11 @@ public class ConversationExecutionService {
                 .orElseThrow(() -> new ServiceNotSatisfiedException("LLM配置不存在"));
 
         List<MessageDto> history = loadConversationHistory(conversationId);
-        List<Tool> tools = loadTools(agentConfig);
+        List<String> enabledSkillNames = skillService.parseEnabledSkills(agentConfig.getEnabledSkills());
+        List<Skill> skills = skillService.findByNames(enabledSkillNames);
+        List<Tool> tools = loadTools(agentConfig, enabledSkillNames);
 
-        return new ExecutionContext(conversationId, agentConfig, llmConfig, history, tools);
+        return new ExecutionContext(conversationId, agentConfig, llmConfig, history, tools, skills);
     }
 
     private ReActAgent buildAgent(ExecutionContext context) {
@@ -90,14 +96,21 @@ public class ConversationExecutionService {
                 context.tools(),
                 agentWorkspaceBaseDir,
                 context.conversationId(),
-                todoService
+                todoService,
+                context.skills()
         );
     }
 
-    private List<Tool> loadTools(AgentConfig agentConfig) {
+    private List<Tool> loadTools(AgentConfig agentConfig, List<String> enabledSkillNames) {
         List<Tool> tools = toolRegistry.parseAndLoadTools(agentConfig.getEnabledTools());
         List<Tool> mcpTools = toolRegistry.loadToolsWithMcp(agentConfig.getEnabledTools(), agentConfig.getEnabledMcpTools());
         tools.addAll(mcpTools);
+        if (enabledSkillNames != null && !enabledSkillNames.isEmpty()) {
+            boolean hasSkillTool = tools.stream().anyMatch(tool -> "skill".equals(tool.getName()));
+            if (!hasSkillTool) {
+                tools.addAll(toolRegistry.loadTools(List.of("skill")));
+            }
+        }
         log.info("AgentConfig '{}' 加载了 {} 个工具 (内置: {}, MCP: {})",
                 agentConfig.getName(), tools.size(), tools.size() - mcpTools.size(), mcpTools.size());
         return tools;
@@ -162,6 +175,7 @@ public class ConversationExecutionService {
                                     AgentConfig agentConfig,
                                     LlmConfig llmConfig,
                                     List<MessageDto> history,
-                                    List<Tool> tools) {
+                                    List<Tool> tools,
+                                    List<Skill> skills) {
     }
 }

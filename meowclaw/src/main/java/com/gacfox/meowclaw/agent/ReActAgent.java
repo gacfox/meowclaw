@@ -8,6 +8,7 @@ import com.gacfox.meowclaw.dto.ChatStreamEventDto;
 import com.gacfox.meowclaw.dto.MessageDto;
 import com.gacfox.meowclaw.entity.AgentConfig;
 import com.gacfox.meowclaw.entity.LlmConfig;
+import com.gacfox.meowclaw.entity.Skill;
 import com.gacfox.meowclaw.service.TodoService;
 import com.openai.client.OpenAIClient;
 import com.openai.client.okhttp.OpenAIOkHttpClient;
@@ -55,6 +56,7 @@ public class ReActAgent {
     private final ToolExecutionContext toolExecutionContext;
     private final Long conversationId;
     private final TodoService todoService;
+    private final List<Skill> skills;
 
     public ReActAgent(AgentConfig agentConfig,
                       LlmConfig llmConfig,
@@ -62,7 +64,8 @@ public class ReActAgent {
                       List<Tool> tools,
                       String workspaceBaseDir,
                       Long conversationId,
-                      TodoService todoService) {
+                      TodoService todoService,
+                      List<Skill> skills) {
         this.agentConfig = agentConfig;
         this.llmConfig = llmConfig;
         this.conversationHistory = conversationHistory;
@@ -77,6 +80,7 @@ public class ReActAgent {
         this.openAIClient = clientBuilder.build();
         this.conversationId = conversationId;
         this.todoService = todoService;
+        this.skills = skills;
         this.toolExecutionContext = new ToolExecutionContext(
                 agentConfig,
                 resolveWorkspaceDir(agentConfig, workspaceBaseDir),
@@ -264,6 +268,18 @@ public class ReActAgent {
             if (!todoSection.isEmpty()) {
                 prompt.append("\n").append(todoSection);
             }
+        }
+
+        if (skills != null && !skills.isEmpty()) {
+            prompt.append("\n可用技能：\n");
+            for (Skill skill : skills) {
+                String desc = skill.getDescription();
+                if (desc == null || desc.isBlank()) {
+                    desc = "无描述";
+                }
+                prompt.append("- ").append(skill.getName()).append(": ").append(desc).append("\n");
+            }
+            prompt.append("\n当需要使用技能时，先调用 skill 工具获取 SKILL.md 指引。\n");
         }
 
         return prompt.toString();

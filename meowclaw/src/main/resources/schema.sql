@@ -18,6 +18,7 @@ CREATE TABLE IF NOT EXISTS agent_configs
     system_prompt     TEXT,
     enabled_tools     TEXT,
     enabled_mcp_tools TEXT,
+    enabled_skills    TEXT,
     default_llm_id    BIGINT,
     workspace_folder  TEXT,
     created_at        BIGINT NOT NULL,
@@ -96,6 +97,19 @@ CREATE TABLE IF NOT EXISTS mcp_configs
     created_at     BIGINT NOT NULL,
     updated_at     BIGINT NOT NULL
 );
+
+-- 技能表
+CREATE TABLE IF NOT EXISTS skills
+(
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    name         TEXT   NOT NULL UNIQUE,
+    description  TEXT,
+    package_file TEXT   NOT NULL,
+    created_at   BIGINT NOT NULL,
+    updated_at   BIGINT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_skills_name ON skills (name);
 
 -- 定时任务表
 CREATE TABLE IF NOT EXISTS scheduled_tasks

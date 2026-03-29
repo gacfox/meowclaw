@@ -38,13 +38,14 @@ public class AgentConfigRepository {
     }
 
     private AgentConfig insert(AgentConfig agent) {
-        String sql = "INSERT INTO agent_configs (name, avatar, system_prompt, enabled_tools, enabled_mcp_tools, default_llm_id, workspace_folder, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)";
+        String sql = "INSERT INTO agent_configs (name, avatar, system_prompt, enabled_tools, enabled_mcp_tools, enabled_skills, default_llm_id, workspace_folder, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
         jdbcTemplate.update(sql,
                 agent.getName(),
                 agent.getAvatar(),
                 agent.getSystemPrompt(),
                 agent.getEnabledTools(),
                 agent.getEnabledMcpTools(),
+                agent.getEnabledSkills(),
                 agent.getDefaultLlmId(),
                 agent.getWorkspaceFolder(),
                 agent.getCreatedAt(),
@@ -56,13 +57,14 @@ public class AgentConfigRepository {
     }
 
     private AgentConfig update(AgentConfig agent) {
-        String sql = "UPDATE agent_configs SET name = ?, avatar = ?, system_prompt = ?, enabled_tools = ?, enabled_mcp_tools = ?, default_llm_id = ?, workspace_folder = ?, created_at = ?, updated_at = ? WHERE id = ?";
+        String sql = "UPDATE agent_configs SET name = ?, avatar = ?, system_prompt = ?, enabled_tools = ?, enabled_mcp_tools = ?, enabled_skills = ?, default_llm_id = ?, workspace_folder = ?, created_at = ?, updated_at = ? WHERE id = ?";
         jdbcTemplate.update(sql,
                 agent.getName(),
                 agent.getAvatar(),
                 agent.getSystemPrompt(),
                 agent.getEnabledTools(),
                 agent.getEnabledMcpTools(),
+                agent.getEnabledSkills(),
                 agent.getDefaultLlmId(),
                 agent.getWorkspaceFolder(),
                 agent.getCreatedAt(),
@@ -86,6 +88,7 @@ public class AgentConfigRepository {
             agent.setSystemPrompt(rs.getString("system_prompt"));
             agent.setEnabledTools(rs.getString("enabled_tools"));
             agent.setEnabledMcpTools(rs.getString("enabled_mcp_tools"));
+            agent.setEnabledSkills(rs.getString("enabled_skills"));
             agent.setDefaultLlmId(rs.getLong("default_llm_id"));
             agent.setWorkspaceFolder(rs.getString("workspace_folder"));
             agent.setCreatedAt(rs.getLong("created_at"));

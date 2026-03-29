@@ -20,12 +20,14 @@ import java.util.stream.Collectors;
 public class AgentConfigService {
     private final AgentConfigRepository agentRepository;
     private final FileStorageService fileStorageService;
+    private final SkillService skillService;
     @Value("${agent.workspace.base-dir:./data/workspaces}")
     private String agentWorkspaceBaseDir;
 
-    public AgentConfigService(AgentConfigRepository agentRepository, FileStorageService fileStorageService) {
+    public AgentConfigService(AgentConfigRepository agentRepository, FileStorageService fileStorageService, SkillService skillService) {
         this.agentRepository = agentRepository;
         this.fileStorageService = fileStorageService;
+        this.skillService = skillService;
     }
 
     public List<AgentConfigDto> findAll() {
@@ -56,6 +58,7 @@ public class AgentConfigService {
 
         AgentConfig ignored = agentRepository.save(agent);
         ensureWorkspaceDirectory(agent);
+        syncAgentSkills(agent);
         return toDto(agent);
     }
 
@@ -76,6 +79,7 @@ public class AgentConfigService {
 
         AgentConfig ignored = agentRepository.save(agent);
         ensureWorkspaceDirectory(agent);
+        syncAgentSkills(agent);
         return toDto(agent);
     }
 
@@ -108,6 +112,15 @@ public class AgentConfigService {
         try {
             Path workspaceDir = resolveWorkspaceDir(agent);
             Path ignored = Files.createDirectories(workspaceDir);
+        } catch (Exception e) {
+            // ignore
+        }
+    }
+
+    private void syncAgentSkills(AgentConfig agent) {
+        try {
+            Path workspaceDir = resolveWorkspaceDir(agent);
+            skillService.syncAgentSkills(agent, workspaceDir);
         } catch (Exception e) {
             // ignore
         }
