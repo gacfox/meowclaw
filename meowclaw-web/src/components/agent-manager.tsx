@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { Plus, Edit, Trash2, Upload, X, ChevronDown } from "lucide-react";
+import { Plus, Edit, Trash2, Upload, X, ChevronDown, Bot } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -315,7 +315,9 @@ export const AgentManager: React.FC = () => {
       <div className="flex justify-between items-center mb-6">
         <div>
           <h1 className="text-2xl font-bold">智能体</h1>
-          <p className="text-sm text-muted-foreground mt-1">配置AI助手的行为和工具</p>
+          <p className="text-sm text-muted-foreground mt-1">
+            配置AI助手的行为和工具
+          </p>
         </div>
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
           <DialogTrigger asChild>
@@ -367,8 +369,8 @@ export const AgentManager: React.FC = () => {
                     <AvatarImage
                       src={avatarPreview || formData.avatar || undefined}
                     />
-                    <AvatarFallback className="text-lg">
-                      {formData.name.slice(0, 2).toUpperCase() || "A"}
+                    <AvatarFallback className="bg-secondary">
+                      <Bot className="h-6 w-6" />
                     </AvatarFallback>
                   </Avatar>
                   <div className="flex gap-2">
@@ -593,8 +595,8 @@ export const AgentManager: React.FC = () => {
                   <TableCell>
                     <Avatar className="h-8 w-8">
                       <AvatarImage src={agent.avatar} />
-                      <AvatarFallback>
-                        {agent.name.slice(0, 2).toUpperCase()}
+                      <AvatarFallback className="bg-secondary">
+                        <Bot className="h-4 w-4" />
                       </AvatarFallback>
                     </Avatar>
                   </TableCell>
