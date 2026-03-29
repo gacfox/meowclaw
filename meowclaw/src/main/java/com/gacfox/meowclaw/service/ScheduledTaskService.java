@@ -29,19 +29,19 @@ public class ScheduledTaskService {
     private final AgentConfigRepository agentConfigRepository;
     private final ConversationRepository conversationRepository;
     private final ConversationService conversationService;
-    private final TaskSchedulerService taskSchedulerService;
+    private final BackendTaskSchedulerService backendTaskSchedulerService;
     private final CronParser cronParser;
 
     public ScheduledTaskService(ScheduledTaskRepository scheduledTaskRepository,
                                 AgentConfigRepository agentConfigRepository,
                                 ConversationRepository conversationRepository,
                                 ConversationService conversationService,
-                                TaskSchedulerService taskSchedulerService) {
+                                BackendTaskSchedulerService backendTaskSchedulerService) {
         this.scheduledTaskRepository = scheduledTaskRepository;
         this.agentConfigRepository = agentConfigRepository;
         this.conversationRepository = conversationRepository;
         this.conversationService = conversationService;
-        this.taskSchedulerService = taskSchedulerService;
+        this.backendTaskSchedulerService = backendTaskSchedulerService;
         this.cronParser = new CronParser(CronDefinitionBuilder.instanceDefinitionFor(CronType.QUARTZ));
     }
 
@@ -74,7 +74,7 @@ public class ScheduledTaskService {
         }
 
         ScheduledTask saved = scheduledTaskRepository.save(task);
-        taskSchedulerService.scheduleOrReschedule(saved);
+        backendTaskSchedulerService.scheduleOrReschedule(saved);
         return toDto(saved);
     }
 
@@ -109,7 +109,7 @@ public class ScheduledTaskService {
         }
 
         ScheduledTask saved = scheduledTaskRepository.save(task);
-        taskSchedulerService.scheduleOrReschedule(saved);
+        backendTaskSchedulerService.scheduleOrReschedule(saved);
         return toDto(saved);
     }
 
@@ -117,7 +117,7 @@ public class ScheduledTaskService {
         ScheduledTask task = scheduledTaskRepository.findById(id)
                 .orElseThrow(() -> new ServiceNotSatisfiedException("定时任务不存在"));
 
-        taskSchedulerService.cancelTask(id);
+        backendTaskSchedulerService.cancelTask(id);
 
         if (!task.isNewSessionEach() && task.getBoundConversationId() != null) {
             conversationRepository.deleteById(task.getBoundConversationId());
@@ -133,14 +133,14 @@ public class ScheduledTaskService {
         task.setEnabled(!task.isEnabled());
         task.setUpdatedAtInstant(Instant.now());
         ScheduledTask saved = scheduledTaskRepository.save(task);
-        taskSchedulerService.scheduleOrReschedule(saved);
+        backendTaskSchedulerService.scheduleOrReschedule(saved);
         return toDto(saved);
     }
 
     public void trigger(Long id) {
         ScheduledTask task = scheduledTaskRepository.findById(id)
                 .orElseThrow(() -> new ServiceNotSatisfiedException("定时任务不存在"));
-        taskSchedulerService.triggerTask(task);
+        backendTaskSchedulerService.triggerTask(task);
     }
 
     public String getNextExecutionTime(String cronExpression) {

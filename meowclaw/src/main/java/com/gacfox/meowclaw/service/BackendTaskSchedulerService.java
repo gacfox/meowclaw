@@ -28,25 +28,25 @@ import java.util.concurrent.ScheduledFuture;
 
 @Slf4j
 @Service
-public class TaskSchedulerService {
+public class BackendTaskSchedulerService {
     private final ConversationService conversationService;
     private final ConversationRepository conversationRepository;
-    private final AgentExecutionService agentExecutionService;
     private final ScheduledTaskRepository scheduledTaskRepository;
     private final TaskScheduler taskScheduler;
+    private final ConversationExecutionService conversationExecutionService;
     private final CronParser cronParser;
     private final Map<Long, ScheduledFuture<?>> scheduledFutures = new ConcurrentHashMap<>();
 
-    public TaskSchedulerService(ConversationService conversationService,
-                                ConversationRepository conversationRepository,
-                                AgentExecutionService agentExecutionService,
-                                ScheduledTaskRepository scheduledTaskRepository,
-                                TaskScheduler taskScheduler) {
+    public BackendTaskSchedulerService(ConversationService conversationService,
+                                       ConversationRepository conversationRepository,
+                                       ScheduledTaskRepository scheduledTaskRepository,
+                                       TaskScheduler taskScheduler,
+                                       ConversationExecutionService conversationExecutionService) {
         this.conversationService = conversationService;
         this.conversationRepository = conversationRepository;
-        this.agentExecutionService = agentExecutionService;
         this.scheduledTaskRepository = scheduledTaskRepository;
         this.taskScheduler = taskScheduler;
+        this.conversationExecutionService = conversationExecutionService;
         this.cronParser = new CronParser(CronDefinitionBuilder.instanceDefinitionFor(CronType.QUARTZ));
     }
 
@@ -68,7 +68,7 @@ public class TaskSchedulerService {
         }
         cancelTask(task.getId());
         try {
-            Trigger trigger = buildTrigger(task.getCronExpression());
+            Trigger trigger = buildTrigger(task.getCronExpression(), Instant.now().plusSeconds(1));
             ScheduledFuture<?> future = taskScheduler.schedule(() -> executeTaskById(task.getId()), trigger);
             if (future != null) {
                 scheduledFutures.put(task.getId(), future);
@@ -114,11 +114,7 @@ public class TaskSchedulerService {
         }
 
         try {
-            agentExecutionService.executeAgent(
-                    task.getAgentConfigId(),
-                    conversationId,
-                    task.getUserPrompt()
-            );
+            conversationExecutionService.execute(conversationId, task.getUserPrompt());
         } catch (Exception e) {
             log.error("定时任务执行智能体失败: taskId={}, error={}", task.getId(), e.getMessage(), e);
         }
@@ -151,19 +147,21 @@ public class TaskSchedulerService {
         return conversationId;
     }
 
-    private Trigger buildTrigger(String cronExpression) {
+    private Trigger buildTrigger(String cronExpression, Instant initialBaseInstant) {
         Cron cron = cronParser.parse(cronExpression);
         ExecutionTime executionTime = ExecutionTime.forCron(cron);
-        return new CronUtilsTrigger(executionTime, ZoneId.systemDefault());
+        return new CronUtilsTrigger(executionTime, ZoneId.systemDefault(), initialBaseInstant);
     }
 
     private static class CronUtilsTrigger implements Trigger {
         private final ExecutionTime executionTime;
         private final ZoneId zoneId;
+        private final Instant initialBaseInstant;
 
-        private CronUtilsTrigger(ExecutionTime executionTime, ZoneId zoneId) {
+        private CronUtilsTrigger(ExecutionTime executionTime, ZoneId zoneId, Instant initialBaseInstant) {
             this.executionTime = executionTime;
             this.zoneId = zoneId;
+            this.initialBaseInstant = initialBaseInstant;
         }
 
         @Override
@@ -171,7 +169,7 @@ public class TaskSchedulerService {
             Instant baseInstant = Optional.ofNullable(triggerContext.lastCompletion())
                     .or(() -> Optional.ofNullable(triggerContext.lastScheduledExecution()))
                     .or(() -> Optional.ofNullable(triggerContext.lastActualExecution()))
-                    .orElseGet(Instant::now);
+                    .orElse(initialBaseInstant);
             ZonedDateTime baseTime = baseInstant.atZone(zoneId);
             Optional<ZonedDateTime> next = executionTime.nextExecution(baseTime);
             return next.map(ZonedDateTime::toInstant).orElse(null);
