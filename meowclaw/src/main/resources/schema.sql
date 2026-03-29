@@ -56,6 +56,8 @@ CREATE TABLE IF NOT EXISTS messages
     role            TEXT   NOT NULL,
     content         TEXT   NOT NULL,
     embedding       BLOB,
+    api_url         TEXT,
+    model           TEXT,
     input_tokens    BIGINT,
     output_tokens   BIGINT,
     created_at      BIGINT NOT NULL

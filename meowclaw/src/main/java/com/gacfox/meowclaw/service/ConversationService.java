@@ -104,6 +104,8 @@ public class ConversationService {
             dto.setTimestamp(record.getCreatedAt());
             dto.setInputTokens(record.getInputTokens());
             dto.setOutputTokens(record.getOutputTokens());
+            dto.setApiUrl(record.getApiUrl());
+            dto.setModel(record.getModel());
             return dto;
         }).collect(Collectors.toList());
     }

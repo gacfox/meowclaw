@@ -105,6 +105,8 @@ public class ChatService {
                 dto.setTimestamp(record.getCreatedAt());
                 dto.setInputTokens(record.getInputTokens());
                 dto.setOutputTokens(record.getOutputTokens());
+                dto.setApiUrl(record.getApiUrl());
+                dto.setModel(record.getModel());
                 messages.add(dto);
             }
             return messages;
@@ -127,6 +129,8 @@ public class ChatService {
                             conversationId,
                             msg.getRole(),
                             msg.getContent(),
+                            msg.getApiUrl(),
+                            msg.getModel(),
                             msg.getInputTokens(),
                             msg.getOutputTokens(),
                             msg.getTimestamp());

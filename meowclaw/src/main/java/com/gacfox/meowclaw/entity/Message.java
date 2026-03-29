@@ -11,6 +11,8 @@ public class Message {
     private String role;
     private String content;
     private byte[] embedding;
+    private String apiUrl;
+    private String model;
     private Long inputTokens;
     private Long outputTokens;
     private Long createdAt;

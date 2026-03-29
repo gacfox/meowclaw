@@ -14,4 +14,6 @@ public class MessageDto {
     private Long timestamp;
     private Long inputTokens;
     private Long outputTokens;
+    private String apiUrl;
+    private String model;
 }

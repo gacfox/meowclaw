@@ -93,6 +93,8 @@ public class ReActAgent {
         userMsg.setTimestamp(Instant.now().toEpochMilli());
         userMsg.setInputTokens(0L);
         userMsg.setOutputTokens(0L);
+        userMsg.setApiUrl(llmConfig.getApiUrl());
+        userMsg.setModel(llmConfig.getModel());
         conversationHistory.add(userMsg);
 
         Mono.fromRunnable(() -> processChat(sink))
@@ -144,6 +146,8 @@ public class ReActAgent {
                         toolRecord.setTimestamp(Instant.now().toEpochMilli());
                         toolRecord.setInputTokens(0L);
                         toolRecord.setOutputTokens(0L);
+                        toolRecord.setApiUrl(llmConfig.getApiUrl());
+                        toolRecord.setModel(llmConfig.getModel());
                         conversationHistory.add(toolRecord);
 
                         ChatCompletionToolMessageParam toolMessage = ChatCompletionToolMessageParam.builder()
@@ -167,6 +171,8 @@ public class ReActAgent {
                 assistantMsg.setTimestamp(Instant.now().toEpochMilli());
                 assistantMsg.setInputTokens(totalInputTokens);
                 assistantMsg.setOutputTokens(totalOutputTokens);
+                assistantMsg.setApiUrl(llmConfig.getApiUrl());
+                assistantMsg.setModel(llmConfig.getModel());
                 conversationHistory.add(assistantMsg);
 
                 emitEvent(sink, ChatStreamEventDto.TYPE_FINISH, "");
