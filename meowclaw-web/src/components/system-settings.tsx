@@ -121,7 +121,10 @@ export const SystemSettings: React.FC = () => {
 
   return (
     <div className="p-6 max-w-4xl mx-auto">
-      <h1 className="text-2xl font-bold mb-6">系统设置</h1>
+      <div className="mb-6">
+        <h1 className="text-2xl font-bold">系统设置</h1>
+        <p className="text-sm text-muted-foreground mt-1">个人资料与安全设置</p>
+      </div>
 
       <Tabs defaultValue="profile" className="w-full">
         <TabsList className="grid w-full grid-cols-2 max-w-md">

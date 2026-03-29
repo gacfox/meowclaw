@@ -141,7 +141,10 @@ export const ConversationManager: React.FC = () => {
   return (
     <div className="p-6 max-w-6xl mx-auto">
       <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold">会话管理</h1>
+        <div>
+          <h1 className="text-2xl font-bold">会话</h1>
+          <p className="text-sm text-muted-foreground mt-1">管理所有对话会话历史</p>
+        </div>
         <div className="text-sm text-muted-foreground">共 {total} 条记录</div>
       </div>
 

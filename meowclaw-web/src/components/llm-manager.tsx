@@ -170,7 +170,10 @@ export const LlmManager: React.FC = () => {
   return (
     <div className="p-6 max-w-6xl mx-auto">
       <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold">LLM管理</h1>
+        <div>
+          <h1 className="text-2xl font-bold">大语言模型</h1>
+          <p className="text-sm text-muted-foreground mt-1">管理AI模型API配置</p>
+        </div>
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
           <DialogTrigger asChild>
             <Button onClick={handleAdd}>

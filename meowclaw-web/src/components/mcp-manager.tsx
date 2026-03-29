@@ -294,10 +294,8 @@ export const McpManager: React.FC = () => {
     <div className="p-6 max-w-6xl mx-auto">
       <div className="flex justify-between items-center mb-6">
         <div>
-          <h1 className="text-2xl font-bold">MCP配置</h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            配置MCP服务器供智能体调用
-          </p>
+          <h1 className="text-2xl font-bold">MCP</h1>
+          <p className="text-sm text-muted-foreground mt-1">配置Model Context Protocol服务器</p>
         </div>
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
           <DialogTrigger asChild>

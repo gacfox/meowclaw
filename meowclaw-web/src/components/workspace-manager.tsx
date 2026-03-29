@@ -429,8 +429,9 @@ export const WorkspaceManager: React.FC = () => {
   return (
     <div className="p-6 h-full flex flex-col min-h-0">
       <div className="flex items-center justify-between gap-4 mb-4">
-        <div className="flex items-center gap-2">
-          <h1 className="text-2xl font-bold">工作区管理</h1>
+        <div>
+          <h1 className="text-2xl font-bold">工作区</h1>
+          <p className="text-sm text-muted-foreground mt-1">管理智能体工作空间文件</p>
         </div>
         <Select
           value={selectedAgentId?.toString() || ""}

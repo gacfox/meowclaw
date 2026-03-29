@@ -313,7 +313,10 @@ export const AgentManager: React.FC = () => {
   return (
     <div className="p-6 max-w-6xl mx-auto">
       <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold">智能体管理</h1>
+        <div>
+          <h1 className="text-2xl font-bold">智能体</h1>
+          <p className="text-sm text-muted-foreground mt-1">配置AI助手的行为和工具</p>
+        </div>
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
           <DialogTrigger asChild>
             <Button onClick={handleAdd}>
