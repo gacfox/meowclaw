@@ -902,7 +902,7 @@ export const ChatInterface: React.FC = () => {
         <ScrollArea className="flex-1 min-h-0 p-4" ref={scrollRef}>
           <div className="space-y-6 max-w-3xl mx-auto">
             {messages.length === 0 && (
-              <div className="text-center text-muted-foreground py-20">
+              <div className="text-center text-muted-foreground py-40">
                 <Bot className="h-12 w-12 mx-auto mb-4 opacity-50" />
                 <p className="text-lg font-medium">开始一个新的对话</p>
                 <p className="text-sm">选择智能体并发送消息</p>
