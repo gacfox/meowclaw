@@ -39,6 +39,7 @@ import {
   PaginationContent,
   PaginationItem,
 } from "@/components/ui/pagination";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   conversationService,
   type ConversationDto,
@@ -134,6 +135,10 @@ export const ConversationManager: React.FC = () => {
     return agent?.name || "未知";
   };
 
+  const getAgent = (agentConfigId: number) => {
+    return agents.find((a) => a.id === agentConfigId);
+  };
+
   const filteredConversations = conversations.filter((conv) =>
     conv.title.toLowerCase().includes(searchQuery.toLowerCase()),
   );
@@ -209,7 +214,14 @@ export const ConversationManager: React.FC = () => {
                   </TableCell>
                   <TableCell className="text-center">
                     <div className="flex items-center justify-center gap-2">
-                      <Bot className="h-4 w-4 text-muted-foreground" />
+                      <Avatar className="h-6 w-6">
+                        <AvatarImage
+                          src={getAgent(conv.agentConfigId)?.avatar}
+                        />
+                        <AvatarFallback className="bg-secondary">
+                          <Bot className="h-3.5 w-3.5" />
+                        </AvatarFallback>
+                      </Avatar>
                       {getAgentName(conv.agentConfigId)}
                     </div>
                   </TableCell>
