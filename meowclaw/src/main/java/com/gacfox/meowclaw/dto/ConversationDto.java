@@ -11,4 +11,6 @@ public class ConversationDto {
     private Long agentConfigId;
     @NotBlank(message = "会话标题不能为空")
     private String title;
+    private String type;
+    private String agentName;
 }

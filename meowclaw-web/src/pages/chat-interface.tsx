@@ -56,6 +56,7 @@ import type { ChatStreamEvent } from "@/services/chat";
 import {
   conversationService,
   type ConversationDto,
+  TYPE_CHAT,
 } from "@/services/conversation";
 import {
   agentConfigService,
@@ -274,8 +275,9 @@ export const ChatInterface: React.FC = () => {
         pageSize: conversationPageSize,
       });
       if (response.code === 200 && response.data) {
-        const availableConversations =
-          response.data.items.filter(isConversationItem);
+        const availableConversations = response.data.items
+          .filter(isConversationItem)
+          .filter((conv) => !conv.type || conv.type === TYPE_CHAT);
         if (reset) {
           setConversations(availableConversations);
           const conversationIdFromUrl =
@@ -296,7 +298,9 @@ export const ChatInterface: React.FC = () => {
               if (
                 convResponse.code === 200 &&
                 convResponse.data &&
-                isConversationItem(convResponse.data)
+                isConversationItem(convResponse.data) &&
+                (!convResponse.data.type ||
+                  convResponse.data.type === TYPE_CHAT)
               ) {
                 setCurrentConversation(convResponse.data);
                 currentConversationIdRef.current = conversationIdFromUrl;

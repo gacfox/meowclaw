@@ -10,6 +10,7 @@ import { ConversationManager } from "@/pages/conversation-manager";
 import { SystemSettings } from "@/pages/system-settings";
 import { WorkspaceManager } from "@/pages/workspace-manager";
 import { McpManager } from "@/pages/mcp-manager";
+import { ScheduledTaskManager } from "@/pages/scheduled-task-manager";
 import { Layout } from "@/components/layout";
 import { useAuthStore } from "@/stores";
 
@@ -59,10 +60,7 @@ export function RoutesView() {
         <Route path="workspace" element={<WorkspaceManager />} />
         <Route path="mcp" element={<McpManager />} />
         <Route path="channel" element={<PlaceholderPage title="频道" />} />
-        <Route
-          path="scheduled"
-          element={<PlaceholderPage title="定时任务" />}
-        />
+        <Route path="scheduled" element={<ScheduledTaskManager />} />
         <Route path="skill" element={<PlaceholderPage title="技能" />} />
         <Route path="statistics" element={<StatisticsPage />} />
         <Route path="settings" element={<SystemSettings />} />

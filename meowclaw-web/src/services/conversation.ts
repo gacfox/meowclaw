@@ -4,7 +4,12 @@ export interface ConversationDto {
   id?: number;
   agentConfigId: number;
   title: string;
+  type?: string;
+  agentName?: string;
 }
+
+export const TYPE_CHAT = "CHAT";
+export const TYPE_SCHEDULED = "SCHEDULED";
 
 export interface PageDto<T> {
   items: T[];

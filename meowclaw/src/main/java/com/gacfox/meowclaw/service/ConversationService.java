@@ -66,6 +66,9 @@ public class ConversationService {
     public ConversationDto create(ConversationDto dto) {
         Conversation conversation = new Conversation();
         BeanUtils.copyProperties(dto, conversation);
+        if (conversation.getType() == null) {
+            conversation.setType(Conversation.TYPE_CHAT);
+        }
 
         Instant now = Instant.now();
         conversation.setCreatedAtInstant(now);
@@ -73,6 +76,20 @@ public class ConversationService {
 
         conversationRepository.save(conversation);
         return toDto(conversation);
+    }
+
+    public Conversation createScheduledConversation(Long agentConfigId) {
+        Conversation conversation = new Conversation();
+        conversation.setAgentConfigId(agentConfigId);
+        conversation.setTitle("定时任务会话");
+        conversation.setType(Conversation.TYPE_SCHEDULED);
+
+        Instant now = Instant.now();
+        conversation.setCreatedAtInstant(now);
+        conversation.setUpdatedAtInstant(now);
+
+        conversationRepository.save(conversation);
+        return conversation;
     }
 
     public ConversationDto update(Long id, ConversationDto dto) {
@@ -208,6 +225,10 @@ public class ConversationService {
     private ConversationDto toDto(Conversation conversation) {
         ConversationDto dto = new ConversationDto();
         BeanUtils.copyProperties(conversation, dto);
+        
+        Optional<AgentConfig> agentOpt = agentConfigRepository.findById(conversation.getAgentConfigId());
+        agentOpt.ifPresent(agent -> dto.setAgentName(agent.getName()));
+        
         return dto;
     }
 }

@@ -3,10 +3,14 @@ package com.gacfox.meowclaw.repository;
 import com.gacfox.meowclaw.entity.Conversation;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
+import org.springframework.jdbc.support.GeneratedKeyHolder;
+import org.springframework.jdbc.support.KeyHolder;
 import org.springframework.stereotype.Repository;
 
+import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.sql.Statement;
 import java.util.List;
 import java.util.Optional;
 
@@ -41,6 +45,18 @@ public class ConversationRepository {
         return count != null ? count : 0L;
     }
 
+    public List<Conversation> findByType(String type, int page, int pageSize) {
+        int offset = (page - 1) * pageSize;
+        String sql = "SELECT * FROM conversations WHERE type = ? ORDER BY updated_at DESC LIMIT ? OFFSET ?";
+        return jdbcTemplate.query(sql, rowMapper, type, pageSize, offset);
+    }
+
+    public long countByType(String type) {
+        String sql = "SELECT COUNT(*) FROM conversations WHERE type = ?";
+        Long count = jdbcTemplate.queryForObject(sql, Long.class, type);
+        return count != null ? count : 0L;
+    }
+
     public List<Conversation> findAll() {
         String sql = "SELECT * FROM conversations ORDER BY updated_at DESC";
         return jdbcTemplate.query(sql, rowMapper);
@@ -67,23 +83,31 @@ public class ConversationRepository {
     }
 
     private Conversation insert(Conversation conversation) {
-        String sql = "INSERT INTO conversations (agent_config_id, title, created_at, updated_at) VALUES (?, ?, ?, ?)";
-        jdbcTemplate.update(sql,
-                conversation.getAgentConfigId(),
-                conversation.getTitle(),
-                conversation.getCreatedAt(),
-                conversation.getUpdatedAt());
+        String sql = "INSERT INTO conversations (agent_config_id, title, type, created_at, updated_at) VALUES (?, ?, ?, ?, ?)";
+        KeyHolder keyHolder = new GeneratedKeyHolder();
+        jdbcTemplate.update(connection -> {
+            PreparedStatement statement = connection.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS);
+            statement.setLong(1, conversation.getAgentConfigId());
+            statement.setString(2, conversation.getTitle());
+            statement.setString(3, conversation.getType() != null ? conversation.getType() : Conversation.TYPE_CHAT);
+            statement.setLong(4, conversation.getCreatedAt());
+            statement.setLong(5, conversation.getUpdatedAt());
+            return statement;
+        }, keyHolder);
 
-        Long id = jdbcTemplate.queryForObject("SELECT last_insert_rowid()", Long.class);
-        conversation.setId(id);
+        Number key = keyHolder.getKey();
+        if (key != null) {
+            conversation.setId(key.longValue());
+        }
         return conversation;
     }
 
     private Conversation update(Conversation conversation) {
-        String sql = "UPDATE conversations SET agent_config_id = ?, title = ?, created_at = ?, updated_at = ? WHERE id = ?";
+        String sql = "UPDATE conversations SET agent_config_id = ?, title = ?, type = ?, created_at = ?, updated_at = ? WHERE id = ?";
         jdbcTemplate.update(sql,
                 conversation.getAgentConfigId(),
                 conversation.getTitle(),
+                conversation.getType(),
                 conversation.getCreatedAt(),
                 conversation.getUpdatedAt(),
                 conversation.getId());
@@ -102,6 +126,7 @@ public class ConversationRepository {
             conversation.setId(rs.getLong("id"));
             conversation.setAgentConfigId(rs.getLong("agent_config_id"));
             conversation.setTitle(rs.getString("title"));
+            conversation.setType(rs.getString("type"));
             conversation.setCreatedAt(rs.getLong("created_at"));
             conversation.setUpdatedAt(rs.getLong("updated_at"));
             return conversation;

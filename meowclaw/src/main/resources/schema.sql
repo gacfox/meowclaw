@@ -44,6 +44,7 @@ CREATE TABLE IF NOT EXISTS conversations
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
     agent_config_id BIGINT NOT NULL,
     title           TEXT,
+    type            TEXT   DEFAULT 'CHAT',
     created_at      BIGINT NOT NULL,
     updated_at      BIGINT NOT NULL
 );
@@ -95,6 +96,25 @@ CREATE TABLE IF NOT EXISTS mcp_configs
     created_at     BIGINT NOT NULL,
     updated_at     BIGINT NOT NULL
 );
+
+-- 定时任务表
+CREATE TABLE IF NOT EXISTS scheduled_tasks
+(
+    id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+    name                TEXT   NOT NULL,
+    agent_config_id     BIGINT NOT NULL,
+    user_prompt         TEXT   NOT NULL,
+    cron_expression     TEXT   NOT NULL,
+    new_session_each    INTEGER DEFAULT 0,
+    bound_conversation_id BIGINT,
+    enabled             INTEGER DEFAULT 1,
+    last_executed_at    BIGINT,
+    created_at          BIGINT NOT NULL,
+    updated_at          BIGINT NOT NULL
+);
+
+-- 创建索引
+CREATE INDEX IF NOT EXISTS idx_scheduled_tasks_enabled ON scheduled_tasks (enabled);
 
 -- 创建vec0虚拟表（如果sqlite-vec扩展已加载）
 -- 注意：这个表需要动态创建，在代码中检测扩展是否可用后再创建
