@@ -11,13 +11,17 @@ import {
   Settings,
   Brain,
   Users,
-  History,
   Folder,
   ChevronLeft,
   ChevronRight,
   type LucideIcon,
   Github,
   Plug,
+  Radio,
+  Clock,
+  Star,
+  Box,
+  BarChart3,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -121,12 +125,16 @@ interface NavItem {
 }
 
 const navItems: NavItem[] = [
-  { id: "chat", label: "对话", icon: MessageSquare },
+  { id: "chat", label: "聊天", icon: MessageSquare },
+  { id: "channel", label: "频道", icon: Radio },
+  { id: "conversation", label: "会话", icon: Users },
+  { id: "scheduled", label: "定时任务", icon: Clock },
   { id: "workspace", label: "工作区", icon: Folder },
-  { id: "llm", label: "LLM管理", icon: Brain },
-  { id: "agent", label: "智能体管理", icon: Users },
-  { id: "mcp", label: "MCP配置", icon: Plug },
-  { id: "conversation", label: "会话管理", icon: History },
+  { id: "agent", label: "智能体", icon: Brain },
+  { id: "mcp", label: "MCP", icon: Plug },
+  { id: "skill", label: "技能", icon: Star },
+  { id: "llm", label: "大语言模型", icon: Box },
+  { id: "statistics", label: "统计信息", icon: BarChart3 },
   { id: "settings", label: "系统设置", icon: Settings },
 ];
 
@@ -229,16 +237,44 @@ function MainContent({ activeTab }: MainContentProps) {
   switch (activeTab) {
     case "chat":
       return <ChatInterface />;
-    case "llm":
-      return <LlmManager />;
-    case "agent":
-      return <AgentManager />;
-    case "workspace":
-      return <WorkspaceManager />;
-    case "mcp":
-      return <McpManager />;
+    case "channel":
+      return (
+        <div className="p-6 max-w-6xl mx-auto">
+          <h1 className="text-2xl font-bold mb-2">频道</h1>
+          <p className="text-muted-foreground">频道管理（功能开发中）</p>
+        </div>
+      );
     case "conversation":
       return <ConversationManager />;
+    case "scheduled":
+      return (
+        <div className="p-6 max-w-6xl mx-auto">
+          <h1 className="text-2xl font-bold mb-2">定时任务</h1>
+          <p className="text-muted-foreground">定时任务管理（功能开发中）</p>
+        </div>
+      );
+    case "workspace":
+      return <WorkspaceManager />;
+    case "agent":
+      return <AgentManager />;
+    case "mcp":
+      return <McpManager />;
+    case "skill":
+      return (
+        <div className="p-6 max-w-6xl mx-auto">
+          <h1 className="text-2xl font-bold mb-2">技能</h1>
+          <p className="text-muted-foreground">技能管理（功能开发中）</p>
+        </div>
+      );
+    case "llm":
+      return <LlmManager />;
+    case "statistics":
+      return (
+        <div className="p-6 max-w-6xl mx-auto">
+          <h1 className="text-2xl font-bold mb-2">统计信息</h1>
+          <p className="text-muted-foreground">统计信息（功能开发中）</p>
+        </div>
+      );
     case "settings":
       return <SystemSettings />;
     default:
