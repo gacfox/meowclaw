@@ -19,9 +19,10 @@ import {
   Plug,
   Radio,
   Clock,
-  Star,
   Box,
   BarChart3,
+  Sparkles,
+  Network,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -124,8 +125,9 @@ const navItems: NavItem[] = [
   { path: "/scheduled", label: "定时任务", icon: Clock },
   { path: "/workspace", label: "工作区", icon: Folder },
   { path: "/agent", label: "智能体", icon: Brain },
+  { path: "/agent-team", label: "智能体团队", icon: Network },
   { path: "/mcp", label: "MCP", icon: Plug },
-  { path: "/skill", label: "技能", icon: Star },
+  { path: "/skill", label: "技能", icon: Sparkles },
   { path: "/llm", label: "大语言模型", icon: Box },
   { path: "/statistics", label: "统计信息", icon: BarChart3 },
   { path: "/settings", label: "系统设置", icon: Settings },

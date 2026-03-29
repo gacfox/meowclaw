@@ -49,6 +49,10 @@ export function RoutesView() {
           element={<ChatInterface />}
         />
         <Route path="agent" element={<AgentManager />} />
+        <Route
+          path="agent-team"
+          element={<PlaceholderPage title="智能体团队" />}
+        />
         <Route path="llm" element={<LlmManager />} />
         <Route path="conversation" element={<ConversationManager />} />
         <Route path="workspace" element={<WorkspaceManager />} />
