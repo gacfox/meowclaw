@@ -97,20 +97,6 @@ public class MessageRepository {
         return count != null ? count : 0L;
     }
 
-    public List<Long> findConversationIdsByKeyword(String keyword, int page, int pageSize) {
-        int offset = (page - 1) * pageSize;
-        String sql = "SELECT DISTINCT conversation_id FROM messages WHERE content LIKE ? ORDER BY conversation_id DESC LIMIT ? OFFSET ?";
-        String pattern = "%" + keyword + "%";
-        return jdbcTemplate.query(sql, (rs, rowNum) -> rs.getLong("conversation_id"), pattern, pageSize, offset);
-    }
-
-    public long countConversationsByKeyword(String keyword) {
-        String sql = "SELECT COUNT(DISTINCT conversation_id) FROM messages WHERE content LIKE ?";
-        String pattern = "%" + keyword + "%";
-        Long count = jdbcTemplate.queryForObject(sql, Long.class, pattern);
-        return count != null ? count : 0L;
-    }
-
     public List<String[]> findDistinctApiUrlModelPairs() {
         String sql = "SELECT DISTINCT api_url, model FROM messages WHERE model IS NOT NULL AND model != '' AND api_url IS NOT NULL AND api_url != '' ORDER BY api_url, model";
         return jdbcTemplate.query(sql, (rs, rowNum) -> new String[]{rs.getString("api_url"), rs.getString("model")});
@@ -124,16 +110,6 @@ public class MessageRepository {
             }
             return new long[]{0L, 0L, 0L};
         }, dayStart, dayEnd, apiUrl, model);
-    }
-
-    public long[] sumDailyTokensAllModels(Long dayStart, Long dayEnd) {
-        String sql = "SELECT COALESCE(SUM(input_tokens), 0), COALESCE(SUM(output_tokens), 0), COUNT(*) FROM messages WHERE created_at >= ? AND created_at <= ?";
-        return jdbcTemplate.query(sql, rs -> {
-            if (rs.next()) {
-                return new long[]{rs.getLong(1), rs.getLong(2), rs.getLong(3)};
-            }
-            return new long[]{0L, 0L, 0L};
-        }, dayStart, dayEnd);
     }
 
     private static class MessageRowMapper implements RowMapper<Message> {

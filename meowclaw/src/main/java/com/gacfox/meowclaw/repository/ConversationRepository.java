@@ -11,6 +11,7 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
@@ -28,35 +29,6 @@ public class ConversationRepository {
         return jdbcTemplate.query(sql, rowMapper, id).stream().findFirst();
     }
 
-    public List<Conversation> findByAgentConfigId(Long agentConfigId) {
-        String sql = "SELECT * FROM conversations WHERE agent_config_id = ? ORDER BY updated_at DESC";
-        return jdbcTemplate.query(sql, rowMapper, agentConfigId);
-    }
-
-    public List<Conversation> findByAgentConfigId(Long agentConfigId, int page, int pageSize) {
-        int offset = (page - 1) * pageSize;
-        String sql = "SELECT * FROM conversations WHERE agent_config_id = ? ORDER BY updated_at DESC LIMIT ? OFFSET ?";
-        return jdbcTemplate.query(sql, rowMapper, agentConfigId, pageSize, offset);
-    }
-
-    public long countByAgentConfigId(Long agentConfigId) {
-        String sql = "SELECT COUNT(*) FROM conversations WHERE agent_config_id = ?";
-        Long count = jdbcTemplate.queryForObject(sql, Long.class, agentConfigId);
-        return count != null ? count : 0L;
-    }
-
-    public List<Conversation> findByType(String type, int page, int pageSize) {
-        int offset = (page - 1) * pageSize;
-        String sql = "SELECT * FROM conversations WHERE type = ? ORDER BY updated_at DESC LIMIT ? OFFSET ?";
-        return jdbcTemplate.query(sql, rowMapper, type, pageSize, offset);
-    }
-
-    public long countByType(String type) {
-        String sql = "SELECT COUNT(*) FROM conversations WHERE type = ?";
-        Long count = jdbcTemplate.queryForObject(sql, Long.class, type);
-        return count != null ? count : 0L;
-    }
-
     public List<Conversation> findAll() {
         String sql = "SELECT * FROM conversations ORDER BY updated_at DESC";
         return jdbcTemplate.query(sql, rowMapper);
@@ -68,19 +40,52 @@ public class ConversationRepository {
         return jdbcTemplate.query(sql, rowMapper, pageSize, offset);
     }
 
-    public long countAll() {
-        String sql = "SELECT COUNT(*) FROM conversations";
-        Long count = jdbcTemplate.queryForObject(sql, Long.class);
-        return count != null ? count : 0L;
+    public List<Conversation> findByFilters(Long agentConfigId, String keyword, int page, int pageSize) {
+        int offset = (page - 1) * pageSize;
+        StringBuilder sql = new StringBuilder("SELECT DISTINCT c.* FROM conversations c");
+        List<Object> params = new ArrayList<>();
+
+        if (keyword != null && !keyword.isBlank()) {
+            sql.append(" JOIN messages m ON c.id = m.conversation_id");
+        }
+        sql.append(" WHERE 1=1");
+
+        if (agentConfigId != null) {
+            sql.append(" AND c.agent_config_id = ?");
+            params.add(agentConfigId);
+        }
+        if (keyword != null && !keyword.isBlank()) {
+            sql.append(" AND m.content LIKE ?");
+            params.add("%" + keyword + "%");
+        }
+
+        sql.append(" ORDER BY c.updated_at DESC LIMIT ? OFFSET ?");
+        params.add(pageSize);
+        params.add(offset);
+
+        return jdbcTemplate.query(sql.toString(), rowMapper, params.toArray());
     }
 
-    public List<Conversation> findByIds(List<Long> ids) {
-        if (ids == null || ids.isEmpty()) {
-            return List.of();
+    public long countByFilters(Long agentConfigId, String keyword) {
+        StringBuilder sql = new StringBuilder("SELECT COUNT(DISTINCT c.id) FROM conversations c");
+        List<Object> params = new ArrayList<>();
+
+        if (keyword != null && !keyword.isBlank()) {
+            sql.append(" JOIN messages m ON c.id = m.conversation_id");
         }
-        String placeholders = String.join(",", ids.stream().map(String::valueOf).toArray(String[]::new));
-        String sql = "SELECT * FROM conversations WHERE id IN (" + placeholders + ") ORDER BY updated_at DESC";
-        return jdbcTemplate.query(sql, rowMapper);
+        sql.append(" WHERE 1=1");
+
+        if (agentConfigId != null) {
+            sql.append(" AND c.agent_config_id = ?");
+            params.add(agentConfigId);
+        }
+        if (keyword != null && !keyword.isBlank()) {
+            sql.append(" AND m.content LIKE ?");
+            params.add("%" + keyword + "%");
+        }
+
+        Long count = jdbcTemplate.queryForObject(sql.toString(), Long.class, params.toArray());
+        return count != null ? count : 0L;
     }
 
     public Conversation save(Conversation conversation) {
