@@ -311,7 +311,7 @@ export const AgentManager: React.FC = () => {
   };
 
   return (
-    <div className="p-6 max-w-6xl mx-auto">
+    <div className="p-6 h-full flex flex-col min-h-0">
       <div className="flex justify-between items-center mb-6">
         <div>
           <h1 className="text-2xl font-bold">智能体</h1>

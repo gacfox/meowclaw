@@ -239,18 +239,22 @@ function MainContent({ activeTab }: MainContentProps) {
       return <ChatInterface />;
     case "channel":
       return (
-        <div className="p-6 max-w-6xl mx-auto">
-          <h1 className="text-2xl font-bold mb-2">频道</h1>
-          <p className="text-muted-foreground">频道管理（功能开发中）</p>
+        <div className="p-6 h-full flex flex-col min-h-0">
+          <div className="mb-6">
+            <h1 className="text-2xl font-bold">频道</h1>
+            <p className="text-sm text-muted-foreground mt-1">频道管理（功能开发中）</p>
+          </div>
         </div>
       );
     case "conversation":
       return <ConversationManager />;
     case "scheduled":
       return (
-        <div className="p-6 max-w-6xl mx-auto">
-          <h1 className="text-2xl font-bold mb-2">定时任务</h1>
-          <p className="text-muted-foreground">定时任务管理（功能开发中）</p>
+        <div className="p-6 h-full flex flex-col min-h-0">
+          <div className="mb-6">
+            <h1 className="text-2xl font-bold">定时任务</h1>
+            <p className="text-sm text-muted-foreground mt-1">定时任务管理（功能开发中）</p>
+          </div>
         </div>
       );
     case "workspace":
@@ -261,18 +265,22 @@ function MainContent({ activeTab }: MainContentProps) {
       return <McpManager />;
     case "skill":
       return (
-        <div className="p-6 max-w-6xl mx-auto">
-          <h1 className="text-2xl font-bold mb-2">技能</h1>
-          <p className="text-muted-foreground">技能管理（功能开发中）</p>
+        <div className="p-6 h-full flex flex-col min-h-0">
+          <div className="mb-6">
+            <h1 className="text-2xl font-bold">技能</h1>
+            <p className="text-sm text-muted-foreground mt-1">技能管理（功能开发中）</p>
+          </div>
         </div>
       );
     case "llm":
       return <LlmManager />;
     case "statistics":
       return (
-        <div className="p-6 max-w-6xl mx-auto">
-          <h1 className="text-2xl font-bold mb-2">统计信息</h1>
-          <p className="text-muted-foreground">统计信息（功能开发中）</p>
+        <div className="p-6 h-full flex flex-col min-h-0">
+          <div className="mb-6">
+            <h1 className="text-2xl font-bold">统计信息</h1>
+            <p className="text-sm text-muted-foreground mt-1">统计信息（功能开发中）</p>
+          </div>
         </div>
       );
     case "settings":

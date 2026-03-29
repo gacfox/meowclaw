@@ -120,7 +120,7 @@ export const SystemSettings: React.FC = () => {
   };
 
   return (
-    <div className="p-6 max-w-4xl mx-auto">
+    <div className="p-6 h-full flex flex-col min-h-0">
       <div className="mb-6">
         <h1 className="text-2xl font-bold">系统设置</h1>
         <p className="text-sm text-muted-foreground mt-1">个人资料与安全设置</p>
