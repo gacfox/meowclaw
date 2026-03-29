@@ -169,7 +169,7 @@ export const ChatInterface: React.FC = () => {
   const [isLoadingMoreConversations, setIsLoadingMoreConversations] =
     useState(false);
   const conversationListRef = useRef<HTMLDivElement>(null);
-  const conversationPageSize = 20;
+  const conversationPageSize = 50;
 
   useEffect(() => {
     loadAgents();
