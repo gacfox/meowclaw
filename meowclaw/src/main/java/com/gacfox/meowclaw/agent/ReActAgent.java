@@ -91,6 +91,8 @@ public class ReActAgent {
         userMsg.setRole(MessageDto.ROLE_USER);
         userMsg.setContent(userMessage);
         userMsg.setTimestamp(Instant.now().toEpochMilli());
+        userMsg.setInputTokens(0L);
+        userMsg.setOutputTokens(0L);
         conversationHistory.add(userMsg);
 
         Mono.fromRunnable(() -> processChat(sink))
@@ -104,10 +106,17 @@ public class ReActAgent {
         try {
             log.info("开始ReAct循环，可用工具数量: {}", tools.size());
 
+            long totalInputTokens = 0L;
+            long totalOutputTokens = 0L;
             List<ChatCompletionMessageParam> messages = buildMessagesFromHistory();
 
             while (true) {
                 ChatCompletion completion = callLLM(messages);
+                TokenUsage usage = extractUsage(completion);
+                if (usage != null) {
+                    totalInputTokens += usage.inputTokens();
+                    totalOutputTokens += usage.outputTokens();
+                }
                 ChatCompletionMessage message = completion.choices().get(0).message();
 
                 if (message.toolCalls().isPresent() && !message.toolCalls().get().isEmpty()) {
@@ -133,6 +142,8 @@ public class ReActAgent {
                         toolRecord.setRole(MessageDto.ROLE_TOOL);
                         toolRecord.setContent(buildToolStorePayload(toolName, toolArgs, observation));
                         toolRecord.setTimestamp(Instant.now().toEpochMilli());
+                        toolRecord.setInputTokens(0L);
+                        toolRecord.setOutputTokens(0L);
                         conversationHistory.add(toolRecord);
 
                         ChatCompletionToolMessageParam toolMessage = ChatCompletionToolMessageParam.builder()
@@ -145,12 +156,17 @@ public class ReActAgent {
                     continue;
                 }
 
-                String content = streamContentResponse(messages, sink);
+                StreamResult streamResult = streamContentResponse(messages, sink);
+                String content = streamResult.content();
+                totalInputTokens += streamResult.inputTokens();
+                totalOutputTokens += streamResult.outputTokens();
 
                 MessageDto assistantMsg = new MessageDto();
                 assistantMsg.setRole(MessageDto.ROLE_ASSISTANT);
                 assistantMsg.setContent(content);
                 assistantMsg.setTimestamp(Instant.now().toEpochMilli());
+                assistantMsg.setInputTokens(totalInputTokens);
+                assistantMsg.setOutputTokens(totalOutputTokens);
                 conversationHistory.add(assistantMsg);
 
                 emitEvent(sink, ChatStreamEventDto.TYPE_FINISH, "");
@@ -174,6 +190,7 @@ public class ReActAgent {
         if (llmConfig.getMaxContextLength() != null) {
             paramsBuilder.maxTokens(llmConfig.getMaxContextLength() / 2);
         }
+        enableStreamUsage(paramsBuilder);
 
         List<FunctionDefinition> functionDefinitions = buildFunctionDefinitions();
         for (FunctionDefinition functionDefinition : functionDefinitions) {
@@ -192,13 +209,20 @@ public class ReActAgent {
         }
     }
 
-    private String streamContentResponse(List<ChatCompletionMessageParam> messages, Sinks.Many<ChatStreamEventDto> sink) {
+    private StreamResult streamContentResponse(List<ChatCompletionMessageParam> messages, Sinks.Many<ChatStreamEventDto> sink) {
         StringBuilder contentBuilder = new StringBuilder();
         ChatCompletionAccumulator accumulator = ChatCompletionAccumulator.create();
+        java.util.concurrent.atomic.AtomicReference<TokenUsage> usageRef = new java.util.concurrent.atomic.AtomicReference<>();
 
         try (StreamResponse<ChatCompletionChunk> streamResponse = openAIClient.chat().completions().createStreaming(buildCompletionParams(messages))) {
             streamResponse.stream()
                     .peek(accumulator::accumulate)
+                    .peek(chunk -> {
+                        TokenUsage usage = extractUsage(chunk);
+                        if (usage != null) {
+                            usageRef.set(usage);
+                        }
+                    })
                     .flatMap(completion -> completion.choices().stream())
                     .flatMap(choice -> choice.delta().content().stream())
                     .forEach(delta -> {
@@ -209,7 +233,14 @@ public class ReActAgent {
             log.error("流式LLM调用失败", e);
             emitEvent(sink, ChatStreamEventDto.TYPE_ERROR, "流式响应失败: " + e.getMessage());
         }
-        return contentBuilder.toString();
+        TokenUsage usage = usageRef.get();
+        if (usage == null) {
+            usage = extractUsage(accumulator);
+        }
+        if (usage == null) {
+            usage = new TokenUsage(0L, 0L);
+        }
+        return new StreamResult(contentBuilder.toString(), usage.inputTokens(), usage.outputTokens());
     }
 
     private String buildSystemPrompt() {
@@ -350,5 +381,82 @@ public class ReActAgent {
 
     private String buildToolStorePayload(String toolName, String args, String result) {
         return buildToolEventPayload(toolName, args, result);
+    }
+
+    private void enableStreamUsage(ChatCompletionCreateParams.Builder paramsBuilder) {
+        try {
+            Class<?> optionsClass = Class.forName("com.openai.models.chat.completions.ChatCompletionStreamOptions");
+            Object optionsBuilder = optionsClass.getMethod("builder").invoke(null);
+            try {
+                optionsBuilder.getClass().getMethod("includeUsage", boolean.class)
+                        .invoke(optionsBuilder, true);
+            } catch (NoSuchMethodException e) {
+                optionsBuilder.getClass().getMethod("includeUsage", Boolean.class)
+                        .invoke(optionsBuilder, true);
+            }
+            Object options = optionsBuilder.getClass().getMethod("build").invoke(optionsBuilder);
+            paramsBuilder.getClass().getMethod("streamOptions", optionsClass).invoke(paramsBuilder, options);
+        } catch (Exception ignored) {
+            // ignore
+        }
+    }
+
+    private TokenUsage extractUsage(Object source) {
+        if (source == null) {
+            return null;
+        }
+        Object usage = invokeMethod(source, "usage");
+        if (usage == null) {
+            usage = invokeMethod(source, "getUsage");
+        }
+        if (usage instanceof java.util.Optional<?> opt) {
+            usage = opt.orElse(null);
+        }
+        if (usage == null) {
+            return null;
+        }
+        Long promptTokens = readUsageLong(usage,
+                "promptTokens",
+                "prompt_tokens",
+                "inputTokens",
+                "input_tokens");
+        Long completionTokens = readUsageLong(usage,
+                "completionTokens",
+                "completion_tokens",
+                "outputTokens",
+                "output_tokens");
+        if (promptTokens == null && completionTokens == null) {
+            return null;
+        }
+        return new TokenUsage(promptTokens == null ? 0L : promptTokens,
+                completionTokens == null ? 0L : completionTokens);
+    }
+
+    private Object invokeMethod(Object target, String methodName) {
+        try {
+            return target.getClass().getMethod(methodName).invoke(target);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private Long readUsageLong(Object usage, String... methodNames) {
+        for (String methodName : methodNames) {
+            try {
+                Object value = usage.getClass().getMethod(methodName).invoke(usage);
+                if (value instanceof Number number) {
+                    return number.longValue();
+                }
+            } catch (Exception ignored) {
+                // ignore
+            }
+        }
+        return null;
+    }
+
+    private record TokenUsage(long inputTokens, long outputTokens) {
+    }
+
+    private record StreamResult(String content, long inputTokens, long outputTokens) {
     }
 }

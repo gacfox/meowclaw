@@ -12,6 +12,8 @@ import {
   Copy,
   RefreshCw,
   Check,
+  ArrowUp,
+  ArrowDown,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -70,6 +72,8 @@ interface Message {
   isStreaming?: boolean;
   toolPayload?: ToolPayload;
   timestamp?: number;
+  inputTokens?: number;
+  outputTokens?: number;
 }
 
 interface ToolPayload {
@@ -360,6 +364,8 @@ export const ChatInterface: React.FC = () => {
             content: msg.role === "tool" ? undefined : msg.content,
             isStreaming: false,
             timestamp: msg.timestamp,
+            inputTokens: msg.inputTokens,
+            outputTokens: msg.outputTokens,
             toolPayload:
               msg.role === "tool" ? parseToolPayload(msg.content) : undefined,
           }));
@@ -1294,6 +1300,20 @@ export const ChatInterface: React.FC = () => {
               const tools = group.tools;
               const isUser = message?.role === "user";
               const isAssistant = message?.role === "assistant";
+              const groupInputTokens =
+                (message?.inputTokens ?? 0) +
+                tools.reduce((sum, tool) => sum + (tool.inputTokens ?? 0), 0);
+              const groupOutputTokens =
+                (message?.outputTokens ?? 0) +
+                tools.reduce((sum, tool) => sum + (tool.outputTokens ?? 0), 0);
+              const hasTokenInfo =
+                message?.inputTokens !== undefined ||
+                message?.outputTokens !== undefined ||
+                tools.some(
+                  (tool) =>
+                    tool.inputTokens !== undefined ||
+                    tool.outputTokens !== undefined,
+                );
 
               return (
                 <div
@@ -1484,6 +1504,14 @@ export const ChatInterface: React.FC = () => {
                         >
                           <RefreshCw className="h-3.5 w-3.5" />
                         </Button>
+                        {hasTokenInfo && (
+                          <span className="text-xs text-muted-foreground ml-1 inline-flex items-center gap-1">
+                            <ArrowUp className="h-3 w-3" />
+                            {groupInputTokens} tokens
+                            <ArrowDown className="h-3 w-3 ml-1" />
+                            {groupOutputTokens} tokens
+                          </span>
+                        )}
                         {message?.timestamp && (
                           <span className="text-xs text-muted-foreground ml-1">
                             {formatTimestamp(message.timestamp)}

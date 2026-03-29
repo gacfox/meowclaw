@@ -103,6 +103,8 @@ public class ChatService {
                 dto.setRole(record.getRole());
                 dto.setContent(record.getContent());
                 dto.setTimestamp(record.getCreatedAt());
+                dto.setInputTokens(record.getInputTokens());
+                dto.setOutputTokens(record.getOutputTokens());
                 messages.add(dto);
             }
             return messages;
@@ -121,7 +123,13 @@ public class ChatService {
                     .toList();
             for (MessageDto msg : messagesToSave) {
                 if (msg.getId() == null) {
-                    messageRepository.save(conversationId, msg.getRole(), msg.getContent(), msg.getTimestamp());
+                    messageRepository.save(
+                            conversationId,
+                            msg.getRole(),
+                            msg.getContent(),
+                            msg.getInputTokens(),
+                            msg.getOutputTokens(),
+                            msg.getTimestamp());
                 }
             }
             Conversation conversation = conversationRepository.findById(conversationId).orElse(null);

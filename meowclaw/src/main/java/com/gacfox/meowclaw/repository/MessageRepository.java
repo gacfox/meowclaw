@@ -38,12 +38,14 @@ public class MessageRepository {
     }
 
     private Message insert(Message record) {
-        String sql = "INSERT INTO messages (conversation_id, role, content, embedding, created_at) VALUES (?, ?, ?, ?, ?)";
+        String sql = "INSERT INTO messages (conversation_id, role, content, embedding, input_tokens, output_tokens, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)";
         jdbcTemplate.update(sql,
                 record.getConversationId(),
                 record.getRole(),
                 record.getContent(),
                 record.getEmbedding(),
+                record.getInputTokens(),
+                record.getOutputTokens(),
                 record.getCreatedAt());
 
         Long id = jdbcTemplate.queryForObject("SELECT last_insert_rowid()", Long.class);
@@ -52,12 +54,14 @@ public class MessageRepository {
     }
 
     private Message update(Message record) {
-        String sql = "UPDATE messages SET conversation_id = ?, role = ?, content = ?, embedding = ?, created_at = ? WHERE id = ?";
+        String sql = "UPDATE messages SET conversation_id = ?, role = ?, content = ?, embedding = ?, input_tokens = ?, output_tokens = ?, created_at = ? WHERE id = ?";
         jdbcTemplate.update(sql,
                 record.getConversationId(),
                 record.getRole(),
                 record.getContent(),
                 record.getEmbedding(),
+                record.getInputTokens(),
+                record.getOutputTokens(),
                 record.getCreatedAt(),
                 record.getId());
         return record;
@@ -68,9 +72,9 @@ public class MessageRepository {
         jdbcTemplate.update(sql, conversationId, messageId);
     }
 
-    public void save(Long conversationId, String role, String content, Long createdAt) {
-        String sql = "INSERT INTO messages (conversation_id, role, content, created_at) VALUES (?, ?, ?, ?)";
-        jdbcTemplate.update(sql, conversationId, role, content, createdAt);
+    public void save(Long conversationId, String role, String content, Long inputTokens, Long outputTokens, Long createdAt) {
+        String sql = "INSERT INTO messages (conversation_id, role, content, input_tokens, output_tokens, created_at) VALUES (?, ?, ?, ?, ?, ?)";
+        jdbcTemplate.update(sql, conversationId, role, content, inputTokens, outputTokens, createdAt);
     }
 
     private static class MessageRowMapper implements RowMapper<Message> {
@@ -82,6 +86,14 @@ public class MessageRepository {
             record.setRole(rs.getString("role"));
             record.setContent(rs.getString("content"));
             record.setEmbedding(rs.getBytes("embedding"));
+            record.setInputTokens(rs.getLong("input_tokens"));
+            if (rs.wasNull()) {
+                record.setInputTokens(null);
+            }
+            record.setOutputTokens(rs.getLong("output_tokens"));
+            if (rs.wasNull()) {
+                record.setOutputTokens(null);
+            }
             record.setCreatedAt(rs.getLong("created_at"));
             return record;
         }

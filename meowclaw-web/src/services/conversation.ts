@@ -39,7 +39,14 @@ export const conversationService = {
 
   async listMessages(id: number) {
     return request.request<
-      { id: number; role: string; content: string; timestamp: number }[]
+      {
+        id: number;
+        role: string;
+        content: string;
+        timestamp: number;
+        inputTokens?: number;
+        outputTokens?: number;
+      }[]
     >(`/api/conversations/${id}/messages`);
   },
 

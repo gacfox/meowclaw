@@ -12,4 +12,6 @@ public class MessageDto {
     private String role;
     private String content;
     private Long timestamp;
+    private Long inputTokens;
+    private Long outputTokens;
 }
