@@ -567,9 +567,9 @@ export const AgentManager: React.FC = () => {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>头像</TableHead>
-              <TableHead>名称</TableHead>
-              <TableHead>默认LLM</TableHead>
+              <TableHead className="text-center">头像</TableHead>
+              <TableHead className="text-center">名称</TableHead>
+              <TableHead className="text-center">默认LLM</TableHead>
               <TableHead className="text-center">操作</TableHead>
             </TableRow>
           </TableHeader>
@@ -592,17 +592,23 @@ export const AgentManager: React.FC = () => {
             ) : (
               agents.map((agent) => (
                 <TableRow key={agent.id}>
-                  <TableCell>
-                    <Avatar className="h-8 w-8">
-                      <AvatarImage src={agent.avatar} />
-                      <AvatarFallback className="bg-secondary">
-                        <Bot className="h-4 w-4" />
-                      </AvatarFallback>
-                    </Avatar>
+                  <TableCell className="text-center">
+                    <div className="flex items-center justify-center gap-2">
+                      <Avatar className="h-8 w-8">
+                        <AvatarImage src={agent.avatar} />
+                        <AvatarFallback className="bg-secondary">
+                          <Bot className="h-4 w-4" />
+                        </AvatarFallback>
+                      </Avatar>
+                    </div>
                   </TableCell>
-                  <TableCell className="font-medium">{agent.name}</TableCell>
-                  <TableCell>{getLlmName(agent.defaultLlmId)}</TableCell>
-                  <TableCell className="text-left">
+                  <TableCell className="font-medium text-center">
+                    {agent.name}
+                  </TableCell>
+                  <TableCell className="text-center">
+                    {getLlmName(agent.defaultLlmId)}
+                  </TableCell>
+                  <TableCell className="text-center">
                     <Button
                       variant="ghost"
                       size="icon"

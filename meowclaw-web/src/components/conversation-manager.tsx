@@ -143,7 +143,9 @@ export const ConversationManager: React.FC = () => {
       <div className="flex justify-between items-center mb-6">
         <div>
           <h1 className="text-2xl font-bold">会话</h1>
-          <p className="text-sm text-muted-foreground mt-1">管理所有对话会话历史</p>
+          <p className="text-sm text-muted-foreground mt-1">
+            管理所有对话会话历史
+          </p>
         </div>
         <div className="text-sm text-muted-foreground">共 {total} 条记录</div>
       </div>
@@ -175,8 +177,8 @@ export const ConversationManager: React.FC = () => {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>标题</TableHead>
-              <TableHead>智能体</TableHead>
+              <TableHead className="text-left">标题</TableHead>
+              <TableHead className="text-center">智能体</TableHead>
               <TableHead className="text-center">操作</TableHead>
             </TableRow>
           </TableHeader>
@@ -199,19 +201,19 @@ export const ConversationManager: React.FC = () => {
             ) : (
               filteredConversations.map((conv) => (
                 <TableRow key={conv.id}>
-                  <TableCell>
-                    <div className="flex items-center gap-2">
+                  <TableCell className="text-center">
+                    <div className="flex items-center justify-start gap-2">
                       <MessageSquare className="h-4 w-4 text-muted-foreground" />
                       <span className="font-medium">{conv.title}</span>
                     </div>
                   </TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-2">
+                  <TableCell className="text-center">
+                    <div className="flex items-center justify-center gap-2">
                       <Bot className="h-4 w-4 text-muted-foreground" />
                       {getAgentName(conv.agentConfigId)}
                     </div>
                   </TableCell>
-                  <TableCell className="text-left">
+                  <TableCell className="text-center">
                     <Button
                       variant="ghost"
                       size="icon"

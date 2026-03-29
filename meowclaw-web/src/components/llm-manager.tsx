@@ -332,9 +332,9 @@ export const LlmManager: React.FC = () => {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>名称</TableHead>
-              <TableHead>模型</TableHead>
-              <TableHead>API地址</TableHead>
+              <TableHead className="text-center">名称</TableHead>
+              <TableHead className="text-center">模型</TableHead>
+              <TableHead className="text-center">API地址</TableHead>
               <TableHead className="text-center">操作</TableHead>
             </TableRow>
           </TableHeader>
@@ -357,12 +357,12 @@ export const LlmManager: React.FC = () => {
             ) : (
               llms.map((llm) => (
                 <TableRow key={llm.id}>
-                  <TableCell className="font-medium">{llm.name}</TableCell>
-                  <TableCell>{llm.model}</TableCell>
-                  <TableCell className="max-w-xs truncate">
+                  <TableCell className="text-center font-medium">{llm.name}</TableCell>
+                  <TableCell className="text-center">{llm.model}</TableCell>
+                  <TableCell className="text-center max-w-xs truncate">
                     {llm.apiUrl}
                   </TableCell>
-                  <TableCell className="text-left">
+                  <TableCell className="text-center">
                     <Button
                       variant="ghost"
                       size="icon"
