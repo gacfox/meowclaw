@@ -43,14 +43,20 @@ public class ConversationService {
         this.llmConfigRepository = llmConfigRepository;
     }
 
-    public PageDto<ConversationDto> findByAgentConfigId(Long agentConfigId, int page, int pageSize) {
-        List<Conversation> conversations = conversationRepository.findByAgentConfigId(agentConfigId, page, pageSize);
-        long total = conversationRepository.countByAgentConfigId(agentConfigId);
-        List<ConversationDto> items = conversations.stream().map(this::toDto).collect(Collectors.toList());
-        return PageDto.of(items, total, page, pageSize);
-    }
-
-    public PageDto<ConversationDto> findAll(int page, int pageSize) {
+    public PageDto<ConversationDto> list(Long agentConfigId, String keyword, int page, int pageSize) {
+        if (keyword != null && !keyword.isBlank()) {
+            List<Long> conversationIds = messageRepository.findConversationIdsByKeyword(keyword, page, pageSize);
+            long total = messageRepository.countConversationsByKeyword(keyword);
+            List<Conversation> conversations = conversationRepository.findByIds(conversationIds);
+            List<ConversationDto> items = conversations.stream().map(this::toDto).collect(Collectors.toList());
+            return PageDto.of(items, total, page, pageSize);
+        }
+        if (agentConfigId != null) {
+            List<Conversation> conversations = conversationRepository.findByAgentConfigId(agentConfigId, page, pageSize);
+            long total = conversationRepository.countByAgentConfigId(agentConfigId);
+            List<ConversationDto> items = conversations.stream().map(this::toDto).collect(Collectors.toList());
+            return PageDto.of(items, total, page, pageSize);
+        }
         List<Conversation> conversations = conversationRepository.findAll(page, pageSize);
         long total = conversationRepository.countAll();
         List<ConversationDto> items = conversations.stream().map(this::toDto).collect(Collectors.toList());

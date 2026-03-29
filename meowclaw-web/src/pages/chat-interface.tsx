@@ -14,6 +14,7 @@ import {
   Check,
   ArrowUp,
   ArrowDown,
+  Search,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -51,6 +52,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { MarkdownRenderer } from "@/components/markdown-renderer";
+import { SearchConversationDialog } from "@/components/search-conversation-dialog";
 import { chatService } from "@/services/chat";
 import type { ChatStreamEvent } from "@/services/chat";
 import {
@@ -199,6 +201,7 @@ export const ChatInterface: React.FC = () => {
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const [editingContent, setEditingContent] = useState("");
   const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
+  const [searchDialogOpen, setSearchDialogOpen] = useState(false);
 
   useEffect(() => {
     loadAgents();
@@ -1105,7 +1108,7 @@ export const ChatInterface: React.FC = () => {
     <div className="flex h-full min-h-0">
       {/* 会话列表侧边栏 */}
       <div className="w-64 border-r bg-muted/30 flex flex-col min-h-0">
-        <div className="p-4 border-b">
+        <div className="p-4 border-b space-y-2">
           <Button
             variant="outline"
             className="w-full justify-start gap-2"
@@ -1117,6 +1120,14 @@ export const ChatInterface: React.FC = () => {
           >
             <Plus className="h-4 w-4" />
             新建对话
+          </Button>
+          <Button
+            variant="outline"
+            className="w-full justify-start gap-2"
+            onClick={() => setSearchDialogOpen(true)}
+          >
+            <Search className="h-4 w-4" />
+            搜索对话
           </Button>
         </div>
         <ScrollArea
@@ -1258,6 +1269,17 @@ export const ChatInterface: React.FC = () => {
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
+
+        <SearchConversationDialog
+          open={searchDialogOpen}
+          onOpenChange={setSearchDialogOpen}
+          onSelectConversation={(conv) => {
+            if (selectedAgent && conv.id !== currentConversation?.id) {
+              navigate(`/chat/${selectedAgent.id}/${conv.id}`);
+              loadConversations(selectedAgent.id, 1, true, conv.id);
+            }
+          }}
+        />
 
         <div className="p-4 border-t">
           <Select

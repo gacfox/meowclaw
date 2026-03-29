@@ -9,6 +9,7 @@ import {
   MessageCircle,
   Clock,
   Eye,
+  Search,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -78,7 +79,8 @@ export const ConversationManager: React.FC = () => {
   const [agents, setAgents] = useState<AgentConfigDto[]>([]);
   const [selectedAgent, setSelectedAgent] = useState<string>("all");
   const [selectedType, setSelectedType] = useState<string>("all");
-  const [searchQuery, setSearchQuery] = useState("");
+  const [searchInput, setSearchInput] = useState("");
+  const [searchKeyword, setSearchKeyword] = useState("");
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deletingConversationId, setDeletingConversationId] = useState<
     number | null
@@ -115,6 +117,7 @@ export const ConversationManager: React.FC = () => {
         page,
         pageSize,
         agentConfigId,
+        keyword: searchKeyword || undefined,
       });
       if (response.code === 200 && response.data) {
         let items = response.data.items;
@@ -130,7 +133,7 @@ export const ConversationManager: React.FC = () => {
     } finally {
       setIsInitialLoading(false);
     }
-  }, [page, selectedAgent, selectedType]);
+  }, [page, selectedAgent, selectedType, searchKeyword]);
 
   useEffect(() => {
     loadAgents();
@@ -142,7 +145,12 @@ export const ConversationManager: React.FC = () => {
 
   useEffect(() => {
     setPage(1);
-  }, [selectedAgent, selectedType]);
+  }, [selectedAgent, selectedType, searchKeyword]);
+
+  const handleSearch = () => {
+    setSearchKeyword(searchInput);
+    setPage(1);
+  };
 
   const handleDelete = (id: number) => {
     setDeletingConversationId(id);
@@ -192,10 +200,6 @@ export const ConversationManager: React.FC = () => {
     return agents.find((a) => a.id === agentConfigId);
   };
 
-  const filteredConversations = conversations.filter((conv) =>
-    conv.title.toLowerCase().includes(searchQuery.toLowerCase()),
-  );
-
   const formatTimestamp = (timestamp: number) => {
     return new Date(timestamp).toLocaleString("zh-CN");
   };
@@ -223,8 +227,13 @@ export const ConversationManager: React.FC = () => {
         <div className="flex-1">
           <Input
             placeholder="搜索会话..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                handleSearch();
+              }
+            }}
           />
         </div>
         <Select value={selectedType} onValueChange={setSelectedType}>
@@ -250,6 +259,10 @@ export const ConversationManager: React.FC = () => {
             ))}
           </SelectContent>
         </Select>
+        <Button onClick={handleSearch}>
+          <Search className="h-4 w-4" />
+          搜索
+        </Button>
       </div>
 
       <div className="border rounded-lg flex-1 overflow-auto">
@@ -269,7 +282,7 @@ export const ConversationManager: React.FC = () => {
                   <Spinner className="size-6 mx-auto" />
                 </TableCell>
               </TableRow>
-            ) : filteredConversations.length === 0 ? (
+            ) : conversations.length === 0 ? (
               <TableRow>
                 <TableCell
                   colSpan={4}
@@ -279,7 +292,7 @@ export const ConversationManager: React.FC = () => {
                 </TableCell>
               </TableRow>
             ) : (
-              filteredConversations.map((conv) => {
+              conversations.map((conv) => {
                 const isScheduled = conv.type === TYPE_SCHEDULED;
                 return (
                   <TableRow key={conv.id}>

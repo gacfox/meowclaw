@@ -74,6 +74,15 @@ public class ConversationRepository {
         return count != null ? count : 0L;
     }
 
+    public List<Conversation> findByIds(List<Long> ids) {
+        if (ids == null || ids.isEmpty()) {
+            return List.of();
+        }
+        String placeholders = String.join(",", ids.stream().map(String::valueOf).toArray(String[]::new));
+        String sql = "SELECT * FROM conversations WHERE id IN (" + placeholders + ") ORDER BY updated_at DESC";
+        return jdbcTemplate.query(sql, rowMapper);
+    }
+
     public Conversation save(Conversation conversation) {
         if (conversation.getId() == null) {
             return insert(conversation);

@@ -23,11 +23,9 @@ public class ConversationController {
     public ApiResponse<PageDto<ConversationDto>> list(
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "10") int pageSize,
-            @RequestParam(required = false) Long agentConfigId) {
-        if (agentConfigId != null) {
-            return ApiResponse.success(conversationService.findByAgentConfigId(agentConfigId, page, pageSize));
-        }
-        return ApiResponse.success(conversationService.findAll(page, pageSize));
+            @RequestParam(required = false) Long agentConfigId,
+            @RequestParam(required = false) String keyword) {
+        return ApiResponse.success(conversationService.list(agentConfigId, keyword, page, pageSize));
     }
 
     @GetMapping("/{id}")

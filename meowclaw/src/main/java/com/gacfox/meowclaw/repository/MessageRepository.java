@@ -97,6 +97,20 @@ public class MessageRepository {
         return count != null ? count : 0L;
     }
 
+    public List<Long> findConversationIdsByKeyword(String keyword, int page, int pageSize) {
+        int offset = (page - 1) * pageSize;
+        String sql = "SELECT DISTINCT conversation_id FROM messages WHERE content LIKE ? ORDER BY conversation_id DESC LIMIT ? OFFSET ?";
+        String pattern = "%" + keyword + "%";
+        return jdbcTemplate.query(sql, (rs, rowNum) -> rs.getLong("conversation_id"), pattern, pageSize, offset);
+    }
+
+    public long countConversationsByKeyword(String keyword) {
+        String sql = "SELECT COUNT(DISTINCT conversation_id) FROM messages WHERE content LIKE ?";
+        String pattern = "%" + keyword + "%";
+        Long count = jdbcTemplate.queryForObject(sql, Long.class, pattern);
+        return count != null ? count : 0L;
+    }
+
     public List<String[]> findDistinctApiUrlModelPairs() {
         String sql = "SELECT DISTINCT api_url, model FROM messages WHERE model IS NOT NULL AND model != '' AND api_url IS NOT NULL AND api_url != '' ORDER BY api_url, model";
         return jdbcTemplate.query(sql, (rs, rowNum) -> new String[]{rs.getString("api_url"), rs.getString("model")});

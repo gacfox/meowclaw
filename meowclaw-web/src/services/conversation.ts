@@ -24,6 +24,7 @@ export const conversationService = {
     page?: number;
     pageSize?: number;
     agentConfigId?: number;
+    keyword?: string;
   }) {
     const searchParams = new URLSearchParams();
     if (params?.page) searchParams.set("page", params.page.toString());
@@ -31,6 +32,7 @@ export const conversationService = {
       searchParams.set("pageSize", params.pageSize.toString());
     if (params?.agentConfigId)
       searchParams.set("agentConfigId", params.agentConfigId.toString());
+    if (params?.keyword) searchParams.set("keyword", params.keyword);
     const queryString = searchParams.toString();
     const url = queryString
       ? `/api/conversations?${queryString}`
