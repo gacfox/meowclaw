@@ -29,11 +29,6 @@ public class MessageRepository {
         return jdbcTemplate.query(sql, rowMapper, conversationId);
     }
 
-    public List<Message> findRecentByConversationId(Long conversationId, int limit) {
-        String sql = "SELECT * FROM messages WHERE conversation_id = ? ORDER BY created_at DESC LIMIT ?";
-        return jdbcTemplate.query(sql, rowMapper, conversationId, limit);
-    }
-
     public Message save(Message record) {
         if (record.getId() == null) {
             return insert(record);
