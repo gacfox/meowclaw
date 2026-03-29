@@ -3,14 +3,14 @@ import { InitPage } from "@/pages/init";
 import { LoginPage } from "@/pages/login";
 import { NotFoundPage } from "@/pages/not-found";
 import { StatisticsPage } from "@/pages/statistics";
+import { ChatInterface } from "@/pages/chat-interface";
+import { LlmManager } from "@/pages/llm-manager";
+import { AgentManager } from "@/pages/agent-manager";
+import { ConversationManager } from "@/pages/conversation-manager";
+import { SystemSettings } from "@/pages/system-settings";
+import { WorkspaceManager } from "@/pages/workspace-manager";
+import { McpManager } from "@/pages/mcp-manager";
 import { Layout } from "@/components/layout";
-import { ChatInterface } from "@/components/chat-interface";
-import { LlmManager } from "@/components/llm-manager";
-import { AgentManager } from "@/components/agent-manager";
-import { ConversationManager } from "@/components/conversation-manager";
-import { SystemSettings } from "@/components/system-settings";
-import { WorkspaceManager } from "@/components/workspace-manager";
-import { McpManager } from "@/components/mcp-manager";
 import { useAuthStore } from "@/stores";
 
 function PlaceholderPage({ title }: { title: string }) {

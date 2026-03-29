@@ -1,8 +1,8 @@
-import { ChatInterface } from "@/components/chat-interface";
-import { LlmManager } from "@/components/llm-manager";
-import { AgentManager } from "@/components/agent-manager";
-import { ConversationManager } from "@/components/conversation-manager";
-import { SystemSettings } from "@/components/system-settings";
+import { ChatInterface } from "@/pages/chat-interface";
+import { LlmManager } from "@/pages/llm-manager";
+import { AgentManager } from "@/pages/agent-manager";
+import { ConversationManager } from "@/pages/conversation-manager";
+import { SystemSettings } from "@/pages/system-settings";
 
 interface MainPageProps {
   activeTab: string;
