@@ -68,14 +68,9 @@ public class MessageRepository {
         return record;
     }
 
-    public void deleteById(Long id) {
-        String sql = "DELETE FROM messages WHERE id = ?";
-        jdbcTemplate.update(sql, id);
-    }
-
-    public void deleteByConversationId(Long conversationId) {
-        String sql = "DELETE FROM messages WHERE conversation_id = ?";
-        jdbcTemplate.update(sql, conversationId);
+    public void deleteAfterId(Long conversationId, Long messageId) {
+        String sql = "DELETE FROM messages WHERE conversation_id = ? AND id >= ?";
+        jdbcTemplate.update(sql, conversationId, messageId);
     }
 
     public void save(Long conversationId, String role, String content, Long createdAt) {

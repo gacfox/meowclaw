@@ -60,4 +60,10 @@ public class ConversationController {
     public ApiResponse<ConversationDto> generateTitle(@PathVariable Long id) {
         return ApiResponse.success(conversationService.generateTitle(id));
     }
+
+    @DeleteMapping("/{id}/messages/after/{messageId}")
+    public ApiResponse<Void> deleteMessagesAfter(@PathVariable Long id, @PathVariable Long messageId) {
+        conversationService.deleteMessagesAfter(id, messageId);
+        return ApiResponse.success();
+    }
 }

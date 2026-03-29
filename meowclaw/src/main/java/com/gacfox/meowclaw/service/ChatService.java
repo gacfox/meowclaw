@@ -99,6 +99,7 @@ public class ChatService {
             List<MessageDto> messages = new ArrayList<>();
             for (Message record : records) {
                 MessageDto dto = new MessageDto();
+                dto.setId(record.getId());
                 dto.setRole(record.getRole());
                 dto.setContent(record.getContent());
                 dto.setTimestamp(record.getCreatedAt());
@@ -118,9 +119,10 @@ public class ChatService {
                             || MessageDto.ROLE_ASSISTANT.equals(m.getRole())
                             || MessageDto.ROLE_TOOL.equals(m.getRole()))
                     .toList();
-            messageRepository.deleteByConversationId(conversationId);
             for (MessageDto msg : messagesToSave) {
-                messageRepository.save(conversationId, msg.getRole(), msg.getContent(), msg.getTimestamp());
+                if (msg.getId() == null) {
+                    messageRepository.save(conversationId, msg.getRole(), msg.getContent(), msg.getTimestamp());
+                }
             }
             Conversation conversation = conversationRepository.findById(conversationId).orElse(null);
             if (conversation != null) {

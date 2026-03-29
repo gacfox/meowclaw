@@ -90,10 +90,15 @@ public class ConversationService {
         conversationRepository.deleteById(id);
     }
 
+    public void deleteMessagesAfter(Long conversationId, Long messageId) {
+        messageRepository.deleteAfterId(conversationId, messageId);
+    }
+
     public List<MessageDto> listMessages(Long conversationId) {
         List<Message> records = messageRepository.findByConversationId(conversationId);
         return records.stream().map(record -> {
             MessageDto dto = new MessageDto();
+            dto.setId(record.getId());
             dto.setRole(record.getRole());
             dto.setContent(record.getContent());
             dto.setTimestamp(record.getCreatedAt());

@@ -8,6 +8,7 @@ public class MessageDto {
     public static final String ROLE_ASSISTANT = "assistant";
     public static final String ROLE_SYSTEM = "system";
     public static final String ROLE_TOOL = "tool";
+    private Long id;
     private String role;
     private String content;
     private Long timestamp;

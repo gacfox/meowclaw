@@ -9,6 +9,9 @@ import {
   Trash2,
   MoreHorizontal,
   Pencil,
+  Copy,
+  RefreshCw,
+  Check,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -61,10 +64,12 @@ import { useAppStore } from "@/stores/appStore";
 
 interface Message {
   id: string;
+  serverId?: number;
   role: "user" | "assistant" | "tool";
   content?: string;
   isStreaming?: boolean;
   toolPayload?: ToolPayload;
+  timestamp?: number;
 }
 
 interface ToolPayload {
@@ -121,6 +126,17 @@ const formatToolResult = (result?: string) => {
   return result;
 };
 
+const formatTimestamp = (timestamp?: number) => {
+  if (!timestamp) return "";
+  const date = new Date(timestamp);
+  return date.toLocaleString("zh-CN", {
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+};
+
 const buildMessageGroups = (messages: Message[]): MessageGroup[] => {
   const groups: MessageGroup[] = [];
   let pendingTools: Message[] = [];
@@ -175,6 +191,9 @@ export const ChatInterface: React.FC = () => {
     useState(false);
   const conversationListRef = useRef<HTMLDivElement>(null);
   const conversationPageSize = 50;
+  const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
+  const [editingContent, setEditingContent] = useState("");
+  const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
 
   useEffect(() => {
     loadAgents();
@@ -237,6 +256,7 @@ export const ChatInterface: React.FC = () => {
     agentId: number,
     page: number = 1,
     reset: boolean = false,
+    targetConversationId?: number,
   ) => {
     if (reset) {
       setIsConversationsLoading(true);
@@ -254,9 +274,9 @@ export const ChatInterface: React.FC = () => {
           response.data.items.filter(isConversationItem);
         if (reset) {
           setConversations(availableConversations);
-          const conversationIdFromUrl = conversationIdParam
-            ? parseInt(conversationIdParam)
-            : null;
+          const conversationIdFromUrl =
+            targetConversationId ??
+            (conversationIdParam ? parseInt(conversationIdParam) : null);
           if (conversationIdFromUrl) {
             const convFromUrl = availableConversations.find(
               (c) => c.id === conversationIdFromUrl,
@@ -333,11 +353,13 @@ export const ChatInterface: React.FC = () => {
               msg.role === "assistant" ||
               msg.role === "tool",
           )
-          .map((msg, idx) => ({
-            id: `${conversationId}-${msg.timestamp}-${idx}`,
+          .map((msg) => ({
+            id: msg.id.toString(),
+            serverId: msg.id,
             role: msg.role as "user" | "assistant" | "tool",
             content: msg.role === "tool" ? undefined : msg.content,
             isStreaming: false,
+            timestamp: msg.timestamp,
             toolPayload:
               msg.role === "tool" ? parseToolPayload(msg.content) : undefined,
           }));
@@ -375,7 +397,7 @@ export const ChatInterface: React.FC = () => {
         setMessages([]);
         setConversationPage(1);
         navigate(`/chat/${selectedAgent.id}/${response.data.id}`);
-        loadConversations(selectedAgent.id, 1, true);
+        loadConversations(selectedAgent.id, 1, true, response.data.id);
       }
     } catch (error) {
       console.error("创建会话失败", error);
@@ -458,6 +480,334 @@ export const ChatInterface: React.FC = () => {
     }
   };
 
+  const handleCopyMessage = async (messageId: string, content: string) => {
+    try {
+      await navigator.clipboard.writeText(content);
+      setCopiedMessageId(messageId);
+      setTimeout(() => setCopiedMessageId(null), 2000);
+    } catch (error) {
+      console.error("复制失败", error);
+    }
+  };
+
+  const handleEditMessage = (messageId: string, content: string) => {
+    setEditingMessageId(messageId);
+    setEditingContent(content || "");
+  };
+
+  const handleCancelEdit = () => {
+    setEditingMessageId(null);
+    setEditingContent("");
+  };
+
+  const handleConfirmEdit = async (messageId: string) => {
+    if (!editingContent.trim() || isLoading || !selectedAgent) return;
+    if (!currentConversationIdRef.current) return;
+
+    const conversationId = currentConversationIdRef.current;
+    const messageServerId = messages.find((m) => m.id === messageId)?.serverId;
+
+    if (!messageServerId) return;
+
+    setEditingMessageId(null);
+    setIsLoading(true);
+
+    try {
+      await conversationService.deleteMessagesAfter(
+        conversationId,
+        messageServerId,
+      );
+    } catch (error) {
+      console.error("删除后续消息失败", error);
+      setIsLoading(false);
+      return;
+    }
+
+    const messageIndex = messages.findIndex((m) => m.id === messageId);
+    const messagesBefore = messages.slice(0, messageIndex);
+    setMessages(messagesBefore);
+
+    const userMessage: Message = {
+      id: Date.now().toString(),
+      role: "user",
+      content: editingContent.trim(),
+      timestamp: Date.now(),
+    };
+
+    const assistantMessage: Message = {
+      id: (Date.now() + 1).toString(),
+      role: "assistant",
+      content: "",
+      isStreaming: true,
+      timestamp: Date.now(),
+    };
+
+    setMessages([...messagesBefore, userMessage, assistantMessage]);
+    setEditingContent("");
+
+    try {
+      const response = await chatService.chatStream({
+        conversationId,
+        content: userMessage.content || "",
+      });
+
+      if (!response.ok || !response.body) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+
+      const reader = response.body?.getReader();
+      const decoder = new TextDecoder();
+
+      if (reader) {
+        let buffer = "";
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split("\n");
+          buffer = lines.pop() || "";
+
+          for (const line of lines) {
+            if (line.startsWith("data:")) {
+              const data = line.slice(5).trimStart();
+
+              try {
+                const event: ChatStreamEvent = JSON.parse(data);
+
+                if (event.type === "tool_call") {
+                  const payload = parseToolPayload(event.content);
+                  setMessages((prev) =>
+                    insertToolMessage(
+                      prev,
+                      buildToolMessage(payload, event.timestamp),
+                    ),
+                  );
+                  continue;
+                }
+
+                if (event.type === "tool_result") {
+                  const payload = parseToolPayload(event.content);
+                  setMessages((prev) =>
+                    updateToolResult(prev, payload, event.timestamp),
+                  );
+                  continue;
+                }
+
+                setMessages((prev) => {
+                  const lastMsg = prev[prev.length - 1];
+                  if (lastMsg.role !== "assistant") return prev;
+
+                  const updatedMsg = { ...lastMsg };
+                  if (!updatedMsg.timestamp && event.timestamp) {
+                    updatedMsg.timestamp = event.timestamp;
+                  }
+
+                  switch (event.type) {
+                    case "content":
+                      updatedMsg.content =
+                        (updatedMsg.content || "") + event.content;
+                      break;
+                    case "finish":
+                      updatedMsg.isStreaming = false;
+                      break;
+                    case "error":
+                      updatedMsg.content =
+                        (updatedMsg.content || "") + "\n错误: " + event.content;
+                      updatedMsg.isStreaming = false;
+                      break;
+                  }
+
+                  return [...prev.slice(0, -1), updatedMsg];
+                });
+              } catch (e) {
+                console.error("解析流数据失败", e, data);
+              }
+            }
+          }
+        }
+
+        setMessages((prev) =>
+          prev.map((msg, idx) =>
+            idx === prev.length - 1 && msg.role === "assistant"
+              ? { ...msg, isStreaming: false }
+              : msg,
+          ),
+        );
+      }
+    } catch (error) {
+      console.error("发送消息失败", error);
+      setMessages((prev) =>
+        prev.map((msg) =>
+          msg.id === assistantMessage.id
+            ? { ...msg, content: "发送失败，请重试", isStreaming: false }
+            : msg,
+        ),
+      );
+    } finally {
+      setIsLoading(false);
+      loadConversationMessages(conversationId);
+    }
+  };
+
+  const handleRegenerate = async (assistantMessageId: string) => {
+    if (isLoading || !selectedAgent || !currentConversationIdRef.current)
+      return;
+
+    const conversationId = currentConversationIdRef.current;
+    const assistantIndex = messages.findIndex(
+      (m) => m.id === assistantMessageId,
+    );
+    if (assistantIndex <= 0) return;
+
+    const userMessageIndex = findPreviousUserIndex(messages, assistantIndex);
+    if (userMessageIndex < 0) return;
+    const userMessage = messages[userMessageIndex];
+    if (userMessage.role !== "user") return;
+
+    const userMessageId = userMessage.serverId;
+    if (!userMessageId) return;
+
+    setIsLoading(true);
+
+    try {
+      await conversationService.deleteMessagesAfter(
+        conversationId,
+        userMessageId,
+      );
+    } catch (error) {
+      console.error("删除后续消息失败", error);
+      setIsLoading(false);
+      return;
+    }
+
+    const messagesBefore = messages.slice(0, userMessageIndex);
+    setMessages(messagesBefore);
+
+    const regeneratedUserMessage: Message = {
+      id: Date.now().toString(),
+      role: "user",
+      content: userMessage.content || "",
+      timestamp: Date.now(),
+    };
+
+    const assistantMessage: Message = {
+      id: (Date.now() + 1).toString(),
+      role: "assistant",
+      content: "",
+      isStreaming: true,
+      timestamp: Date.now(),
+    };
+
+    setMessages([...messagesBefore, regeneratedUserMessage, assistantMessage]);
+
+    try {
+      const response = await chatService.chatStream({
+        conversationId,
+        content: userMessage.content || "",
+      });
+
+      if (!response.ok || !response.body) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+
+      const reader = response.body?.getReader();
+      const decoder = new TextDecoder();
+
+      if (reader) {
+        let buffer = "";
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split("\n");
+          buffer = lines.pop() || "";
+
+          for (const line of lines) {
+            if (line.startsWith("data:")) {
+              const data = line.slice(5).trimStart();
+
+              try {
+                const event: ChatStreamEvent = JSON.parse(data);
+
+                if (event.type === "tool_call") {
+                  const payload = parseToolPayload(event.content);
+                  setMessages((prev) =>
+                    insertToolMessage(
+                      prev,
+                      buildToolMessage(payload, event.timestamp),
+                    ),
+                  );
+                  continue;
+                }
+
+                if (event.type === "tool_result") {
+                  const payload = parseToolPayload(event.content);
+                  setMessages((prev) =>
+                    updateToolResult(prev, payload, event.timestamp),
+                  );
+                  continue;
+                }
+
+                setMessages((prev) => {
+                  const lastMsg = prev[prev.length - 1];
+                  if (lastMsg.role !== "assistant") return prev;
+
+                  const updatedMsg = { ...lastMsg };
+                  if (!updatedMsg.timestamp && event.timestamp) {
+                    updatedMsg.timestamp = event.timestamp;
+                  }
+
+                  switch (event.type) {
+                    case "content":
+                      updatedMsg.content =
+                        (updatedMsg.content || "") + event.content;
+                      break;
+                    case "finish":
+                      updatedMsg.isStreaming = false;
+                      break;
+                    case "error":
+                      updatedMsg.content =
+                        (updatedMsg.content || "") + "\n错误: " + event.content;
+                      updatedMsg.isStreaming = false;
+                      break;
+                  }
+
+                  return [...prev.slice(0, -1), updatedMsg];
+                });
+              } catch (e) {
+                console.error("解析流数据失败", e, data);
+              }
+            }
+          }
+        }
+
+        setMessages((prev) =>
+          prev.map((msg, idx) =>
+            idx === prev.length - 1 && msg.role === "assistant"
+              ? { ...msg, isStreaming: false }
+              : msg,
+          ),
+        );
+      }
+    } catch (error) {
+      console.error("发送消息失败", error);
+      setMessages((prev) =>
+        prev.map((msg) =>
+          msg.id === assistantMessage.id
+            ? { ...msg, content: "发送失败，请重试", isStreaming: false }
+            : msg,
+        ),
+      );
+    } finally {
+      setIsLoading(false);
+      loadConversationMessages(conversationId);
+    }
+  };
+
   const handleSubmit = async () => {
     if (!input.trim() || isLoading || !selectedAgent) return;
 
@@ -465,6 +815,7 @@ export const ChatInterface: React.FC = () => {
       id: Date.now().toString(),
       role: "user",
       content: input.trim(),
+      timestamp: Date.now(),
     };
 
     setMessages((prev) => [...prev, userMessage]);
@@ -506,6 +857,7 @@ export const ChatInterface: React.FC = () => {
       role: "assistant",
       content: "",
       isStreaming: true,
+      timestamp: Date.now(),
     };
 
     setMessages((prev) => [...prev, assistantMessage]);
@@ -544,14 +896,19 @@ export const ChatInterface: React.FC = () => {
                 if (event.type === "tool_call") {
                   const payload = parseToolPayload(event.content);
                   setMessages((prev) =>
-                    insertToolMessage(prev, buildToolMessage(payload)),
+                    insertToolMessage(
+                      prev,
+                      buildToolMessage(payload, event.timestamp),
+                    ),
                   );
                   continue;
                 }
 
                 if (event.type === "tool_result") {
                   const payload = parseToolPayload(event.content);
-                  setMessages((prev) => updateToolResult(prev, payload));
+                  setMessages((prev) =>
+                    updateToolResult(prev, payload, event.timestamp),
+                  );
                   continue;
                 }
 
@@ -560,6 +917,9 @@ export const ChatInterface: React.FC = () => {
                   if (lastMsg.role !== "assistant") return prev;
 
                   const updatedMsg = { ...lastMsg };
+                  if (!updatedMsg.timestamp && event.timestamp) {
+                    updatedMsg.timestamp = event.timestamp;
+                  }
 
                   switch (event.type) {
                     case "content":
@@ -625,6 +985,9 @@ export const ChatInterface: React.FC = () => {
       );
     } finally {
       setIsLoading(false);
+      if (conversationId) {
+        loadConversationMessages(conversationId);
+      }
       if (selectedAgent) {
         loadConversations(selectedAgent.id, 1, true);
         setConversationPage(1);
@@ -665,10 +1028,14 @@ export const ChatInterface: React.FC = () => {
     }
   };
 
-  const buildToolMessage = (payload: ToolPayload): Message => ({
+  const buildToolMessage = (
+    payload: ToolPayload,
+    timestamp?: number,
+  ): Message => ({
     id: `${Date.now()}-${Math.random()}`,
     role: "tool",
     toolPayload: payload,
+    timestamp,
   });
 
   const insertToolMessage = (prev: Message[], toolMessage: Message) => {
@@ -687,7 +1054,11 @@ export const ChatInterface: React.FC = () => {
     return next;
   };
 
-  const updateToolResult = (prev: Message[], payload: ToolPayload) => {
+  const updateToolResult = (
+    prev: Message[],
+    payload: ToolPayload,
+    timestamp?: number,
+  ) => {
     const next = [...prev];
     for (let i = next.length - 1; i >= 0; i -= 1) {
       const message = next[i];
@@ -702,12 +1073,22 @@ export const ChatInterface: React.FC = () => {
               ...message.toolPayload,
               result: payload.result,
             },
+            timestamp: message.timestamp ?? timestamp,
           };
           return next;
         }
       }
     }
-    return insertToolMessage(prev, buildToolMessage(payload));
+    return insertToolMessage(prev, buildToolMessage(payload, timestamp));
+  };
+
+  const findPreviousUserIndex = (items: Message[], startIndex: number) => {
+    for (let i = startIndex - 1; i >= 0; i -= 1) {
+      if (items[i].role === "user") {
+        return i;
+      }
+    }
+    return -1;
   };
 
   return (
@@ -937,71 +1318,176 @@ export const ChatInterface: React.FC = () => {
                       </>
                     )}
                   </Avatar>
-                  <div
-                    className={`max-w-[80%] rounded-2xl px-4 py-3 ${
-                      isUser
-                        ? "bg-primary text-primary-foreground rounded-br-sm"
-                        : "bg-muted rounded-bl-sm"
-                    }`}
-                  >
-                    {isUser ? (
-                      <p className="text-sm whitespace-pre-wrap">
-                        {message?.content}
-                      </p>
-                    ) : (
-                      <div className="text-sm">
-                        {tools.length > 0 && (
-                          <div className="space-y-2 mb-3">
-                            {tools.map((toolMessage) => (
-                              <Collapsible key={toolMessage.id}>
-                                <div className="rounded-lg border border-amber-200 bg-amber-50">
-                                  <CollapsibleTrigger className="w-full text-left px-3 py-2 flex items-center justify-between text-xs font-medium text-amber-700">
-                                    <span className="flex items-center gap-2">
-                                      <Terminal className="h-3 w-3" />
-                                      工具:{" "}
-                                      <span className="font-mono">
-                                        {toolMessage.toolPayload?.toolName ||
-                                          "unknown"}
+                  <div className="max-w-[80%]">
+                    <div
+                      className={`rounded-2xl px-4 py-3 ${
+                        isUser
+                          ? "bg-primary text-primary-foreground rounded-br-sm"
+                          : "bg-muted rounded-bl-sm"
+                      }`}
+                    >
+                      {isUser ? (
+                        <>
+                          {editingMessageId === message?.id ? (
+                            <div className="space-y-2">
+                              <Textarea
+                                value={editingContent}
+                                onChange={(e) =>
+                                  setEditingContent(e.target.value)
+                                }
+                                className="min-h-20 resize-none bg-background text-foreground"
+                                autoFocus
+                              />
+                              <div className="flex gap-2 justify-end">
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={handleCancelEdit}
+                                >
+                                  取消
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  onClick={() =>
+                                    message?.id && handleConfirmEdit(message.id)
+                                  }
+                                  disabled={!editingContent.trim() || isLoading}
+                                >
+                                  发送
+                                </Button>
+                              </div>
+                            </div>
+                          ) : (
+                            <p className="text-sm whitespace-pre-wrap">
+                              {message?.content}
+                            </p>
+                          )}
+                        </>
+                      ) : (
+                        <div className="text-sm">
+                          {tools.length > 0 && (
+                            <div className="space-y-2 mb-3">
+                              {tools.map((toolMessage) => (
+                                <Collapsible key={toolMessage.id}>
+                                  <div className="rounded-lg border border-amber-200 bg-amber-50">
+                                    <CollapsibleTrigger className="w-full text-left px-3 py-2 flex items-center justify-between text-xs font-medium text-amber-700">
+                                      <span className="flex items-center gap-2">
+                                        <Terminal className="h-3 w-3" />
+                                        工具:{" "}
+                                        <span className="font-mono">
+                                          {toolMessage.toolPayload?.toolName ||
+                                            "unknown"}
+                                        </span>
                                       </span>
-                                    </span>
-                                    <span className="text-amber-600/70">
-                                      详情
-                                    </span>
-                                  </CollapsibleTrigger>
-                                  <CollapsibleContent className="px-3 pb-3 text-xs space-y-2">
-                                    <div>
-                                      <div className="text-amber-700/80">
-                                        参数
+                                      <span className="text-amber-600/70">
+                                        详情
+                                      </span>
+                                    </CollapsibleTrigger>
+                                    <CollapsibleContent className="px-3 pb-3 text-xs space-y-2">
+                                      <div>
+                                        <div className="text-amber-700/80">
+                                          参数
+                                        </div>
+                                        <pre className="mt-1 rounded-md bg-background/70 p-2 text-xs whitespace-pre-wrap overflow-x-auto">
+                                          {formatToolArgs(
+                                            toolMessage.toolPayload?.args,
+                                          )}
+                                        </pre>
                                       </div>
-                                      <pre className="mt-1 rounded-md bg-background/70 p-2 text-xs whitespace-pre-wrap overflow-x-auto">
-                                        {formatToolArgs(
-                                          toolMessage.toolPayload?.args,
-                                        )}
-                                      </pre>
-                                    </div>
-                                    <div>
-                                      <div className="text-amber-700/80">
-                                        结果
+                                      <div>
+                                        <div className="text-amber-700/80">
+                                          结果
+                                        </div>
+                                        <pre className="mt-1 rounded-md bg-background/70 p-2 text-xs whitespace-pre-wrap overflow-x-auto">
+                                          {toolMessage.toolPayload?.result
+                                            ? formatToolResult(
+                                                toolMessage.toolPayload?.result,
+                                              )
+                                            : "等待结果..."}
+                                        </pre>
                                       </div>
-                                      <pre className="mt-1 rounded-md bg-background/70 p-2 text-xs whitespace-pre-wrap overflow-x-auto">
-                                        {toolMessage.toolPayload?.result
-                                          ? formatToolResult(
-                                              toolMessage.toolPayload?.result,
-                                            )
-                                          : "等待结果..."}
-                                      </pre>
-                                    </div>
-                                  </CollapsibleContent>
-                                </div>
-                              </Collapsible>
-                            ))}
-                          </div>
-                        )}
-                        {isAssistant && (
-                          <MarkdownRenderer content={message?.content || ""} />
-                        )}
-                        {isAssistant && message?.isStreaming && (
-                          <span className="inline-block w-2 h-4 ml-1 bg-current animate-pulse" />
+                                    </CollapsibleContent>
+                                  </div>
+                                </Collapsible>
+                              ))}
+                            </div>
+                          )}
+                          {isAssistant && (
+                            <MarkdownRenderer
+                              content={message?.content || ""}
+                            />
+                          )}
+                          {isAssistant && message?.isStreaming && (
+                            <span className="inline-block w-2 h-4 ml-1 bg-current animate-pulse" />
+                          )}
+                        </div>
+                      )}
+                    </div>
+                    {isUser && editingMessageId !== message?.id && (
+                      <div className="flex items-center gap-1 mt-1 justify-end">
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="h-7 w-7 opacity-60 hover:opacity-100"
+                          onClick={() =>
+                            message?.id &&
+                            message.content &&
+                            handleCopyMessage(message.id, message.content)
+                          }
+                        >
+                          {copiedMessageId === message?.id ? (
+                            <Check className="h-3.5 w-3.5" />
+                          ) : (
+                            <Copy className="h-3.5 w-3.5" />
+                          )}
+                        </Button>
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="h-7 w-7 opacity-60 hover:opacity-100"
+                          onClick={() =>
+                            message?.id &&
+                            handleEditMessage(message.id, message.content || "")
+                          }
+                          disabled={isLoading || !message?.serverId}
+                        >
+                          <Pencil className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
+                    )}
+                    {isAssistant && !message?.isStreaming && (
+                      <div className="flex items-center gap-1 mt-1">
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="h-7 w-7 opacity-60 hover:opacity-100"
+                          onClick={() =>
+                            message?.id &&
+                            message.content &&
+                            handleCopyMessage(message.id, message.content)
+                          }
+                        >
+                          {copiedMessageId === message?.id ? (
+                            <Check className="h-3.5 w-3.5" />
+                          ) : (
+                            <Copy className="h-3.5 w-3.5" />
+                          )}
+                        </Button>
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="h-7 w-7 opacity-60 hover:opacity-100"
+                          onClick={() =>
+                            message?.id && handleRegenerate(message.id)
+                          }
+                          disabled={isLoading || !message?.serverId}
+                        >
+                          <RefreshCw className="h-3.5 w-3.5" />
+                        </Button>
+                        {message?.timestamp && (
+                          <span className="text-xs text-muted-foreground ml-1">
+                            {formatTimestamp(message.timestamp)}
+                          </span>
                         )}
                       </div>
                     )}

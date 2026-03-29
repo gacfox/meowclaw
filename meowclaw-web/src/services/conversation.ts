@@ -39,7 +39,7 @@ export const conversationService = {
 
   async listMessages(id: number) {
     return request.request<
-      { role: string; content: string; timestamp: number }[]
+      { id: number; role: string; content: string; timestamp: number }[]
     >(`/api/conversations/${id}/messages`);
   },
 
@@ -68,6 +68,15 @@ export const conversationService = {
       `/api/conversations/${id}/generate-title`,
       {
         method: "POST",
+      },
+    );
+  },
+
+  async deleteMessagesAfter(conversationId: number, messageId: number) {
+    return request.request<void>(
+      `/api/conversations/${conversationId}/messages/after/${messageId}`,
+      {
+        method: "DELETE",
       },
     );
   },
