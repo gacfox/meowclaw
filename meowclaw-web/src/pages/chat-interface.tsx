@@ -1560,7 +1560,7 @@ export const ChatInterface: React.FC = () => {
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
               placeholder="输入消息... (Shift+Enter换行)"
-              className="min-h-15 pr-14 resize-none"
+              className="min-h-15 max-h-48 pr-14 resize-none overflow-y-auto"
               disabled={isLoading}
             />
             <Button
