@@ -545,7 +545,7 @@ export const WorkspaceManager: React.FC = () => {
         )}
       </div>
 
-      <div className="border rounded-lg flex-1 min-h-0">
+      <div className="border rounded-lg min-h-0">
         <ScrollArea className="h-full">
           <div className="min-w-180">
             <div className="grid grid-cols-[2fr_1fr_1fr] gap-3 border-b px-4 py-2 text-xs text-muted-foreground bg-muted/30">

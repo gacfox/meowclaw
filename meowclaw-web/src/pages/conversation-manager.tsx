@@ -265,7 +265,7 @@ export const ConversationManager: React.FC = () => {
         </Button>
       </div>
 
-      <div className="border rounded-lg flex-1 overflow-auto">
+      <div className="border rounded-lg overflow-auto">
         <Table>
           <TableHeader>
             <TableRow>
