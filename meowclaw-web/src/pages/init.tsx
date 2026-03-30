@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Cat } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -11,6 +10,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { Logo } from "@/components/logo";
 import { authService } from "@/services/auth";
 import { useAppStore } from "@/stores";
 
@@ -58,7 +58,7 @@ export function InitPage() {
       <Card className="w-full max-w-md">
         <CardHeader className="space-y-1">
           <div className="flex items-center justify-center gap-2 mb-4">
-            <Cat className="h-8 w-8" />
+            <Logo className="h-10 w-10" />
           </div>
           <CardTitle className="text-2xl text-center">系统初始化</CardTitle>
           <CardDescription className="text-center">
