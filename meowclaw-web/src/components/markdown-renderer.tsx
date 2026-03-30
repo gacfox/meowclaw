@@ -36,24 +36,28 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
       );
     },
     table: ({ children }) => (
-      <div className="overflow-x-auto">
-        <table className="border-collapse border border-border">
+      <div className="overflow-x-auto rounded-lg border border-border my-3">
+        <table className="w-full border-separate border-spacing-0">
           {children}
         </table>
       </div>
     ),
+    thead: ({ children }) => <thead className="bg-muted">{children}</thead>,
     th: ({ children }) => (
-      <th className="border border-border px-4 py-2 bg-muted font-semibold">
+      <th className="px-4 py-2.5 text-left font-semibold border-b border-r border-border last:border-r-0">
         {children}
       </th>
     ),
     td: ({ children }) => (
-      <td className="border border-border px-4 py-2">{children}</td>
+      <td className="px-4 py-2 border-b border-r border-border last:border-r-0">
+        {children}
+      </td>
     ),
+    tr: ({ children }) => <tr>{children}</tr>,
   };
 
   return (
-    <div className="prose prose-sm dark:prose-invert max-w-none">
+    <div className="markdown-body">
       <ReactMarkdown remarkPlugins={[remarkGfm]} components={components}>
         {content}
       </ReactMarkdown>
