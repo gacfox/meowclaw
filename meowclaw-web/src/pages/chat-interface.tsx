@@ -1351,8 +1351,7 @@ export const ChatInterface: React.FC = () => {
                       <>
                         <AvatarImage src={user?.avatarUrl} />
                         <AvatarFallback className="bg-primary text-primary-foreground">
-                          {user?.displayUsername?.slice(0, 2).toUpperCase() ||
-                            "U"}
+                          {(user?.username || "U").charAt(0).toUpperCase()}
                         </AvatarFallback>
                       </>
                     ) : (

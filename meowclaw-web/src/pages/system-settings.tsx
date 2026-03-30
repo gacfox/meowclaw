@@ -68,7 +68,7 @@ export const SystemSettings: React.FC = () => {
     try {
       const response = await userService.updateProfile(
         { displayUsername },
-        avatarFile || undefined
+        avatarFile || undefined,
       );
 
       if (response.code === 200 && response.data) {
@@ -150,9 +150,7 @@ export const SystemSettings: React.FC = () => {
                   disabled
                   className="bg-muted"
                 />
-                <p className="text-xs text-muted-foreground">
-                  用户名不可修改
-                </p>
+                <p className="text-xs text-muted-foreground">用户名不可修改</p>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="displayUsername">显示名称</Label>
@@ -169,7 +167,7 @@ export const SystemSettings: React.FC = () => {
                   <Avatar className="h-20 w-20">
                     <AvatarImage src={avatarPreview || undefined} />
                     <AvatarFallback className="text-2xl">
-                      {user?.username?.slice(0, 2).toUpperCase() || "U"}
+                      {(user?.username || "U").charAt(0).toUpperCase()}
                     </AvatarFallback>
                   </Avatar>
                   <div className="flex gap-2">
