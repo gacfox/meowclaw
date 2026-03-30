@@ -2,7 +2,6 @@ import { useEffect } from "react";
 import { useNavigate, useLocation, Outlet } from "react-router-dom";
 import { useTheme } from "next-themes";
 import {
-  Cat,
   Moon,
   Sun,
   Monitor,
@@ -24,6 +23,7 @@ import {
   Sparkles,
   Network,
 } from "lucide-react";
+import { Logo } from "@/components/logo";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
@@ -151,11 +151,11 @@ function Sidebar({ activePath, collapsed, onToggle }: SidebarProps) {
       <div className="p-4 border-b flex items-center justify-between">
         {!collapsed && (
           <div className="flex items-center gap-2">
-            <Cat className="h-6 w-6" />
+            <Logo className="h-6 w-6" />
             <span className="font-bold">MeowClaw</span>
           </div>
         )}
-        {collapsed && <Cat className="h-6 w-6 mx-auto" />}
+        {collapsed && <Logo className="h-6 w-6 mx-auto" />}
         <Button
           variant="ghost"
           size="icon"
