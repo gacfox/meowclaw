@@ -1,5 +1,13 @@
 import React, { useEffect, useState } from "react";
-import { Upload, Trash2, Plus, Pencil, Sparkles, Download, Eye } from "lucide-react";
+import {
+  Upload,
+  Trash2,
+  Plus,
+  Pencil,
+  Sparkles,
+  Download,
+  Eye,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -202,15 +210,13 @@ export const SkillManager: React.FC = () => {
       <div className="mb-6 flex items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold">技能</h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            上传并管理技能包
-          </p>
+          <p className="text-sm text-muted-foreground mt-1">上传并管理技能包</p>
         </div>
         <Dialog open={isUploadDialogOpen} onOpenChange={setIsUploadDialogOpen}>
           <DialogTrigger asChild>
             <Button>
               <Plus className="h-4 w-4 mr-2" />
-              添加技能
+              导入技能
             </Button>
           </DialogTrigger>
           <DialogContent className="max-w-lg">
@@ -242,17 +248,28 @@ export const SkillManager: React.FC = () => {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="skill-file">技能包（zip）</Label>
-                <div className="relative">
-                  <Upload className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Label htmlFor="skill-file">zip技能包</Label>
+                <div className="flex items-center gap-2">
+                  <label
+                    htmlFor="skill-file"
+                    className="inline-flex items-center gap-2 px-3 py-2 border rounded-md cursor-pointer hover:bg-muted transition-colors"
+                  >
+                    <Upload className="h-4 w-4" />
+                    <span>选择文件</span>
+                  </label>
                   <Input
                     id="skill-file"
                     type="file"
                     accept=".zip"
                     onChange={(e) => setFile(e.target.files?.[0] || null)}
-                    className="pl-9"
+                    className="hidden"
                     required
                   />
+                  {file && (
+                    <span className="text-sm text-muted-foreground">
+                      {file.name}
+                    </span>
+                  )}
                 </div>
                 <p className="text-xs text-muted-foreground">
                   zip 根目录必须包含 SKILL.md
@@ -268,14 +285,7 @@ export const SkillManager: React.FC = () => {
                   取消
                 </Button>
                 <Button type="submit" disabled={isUploading}>
-                  {isUploading ? (
-                    <>上传中...</>
-                  ) : (
-                    <>
-                      <Upload className="h-4 w-4 mr-2" />
-                      确认上传
-                    </>
-                  )}
+                  {isUploading ? "导入中..." : "导入"}
                 </Button>
               </div>
             </form>
