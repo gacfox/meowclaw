@@ -197,3 +197,21 @@ export interface TokenStatsDTO {
   dates: string[];
   modelSeries: TokenModelSeries[];
 }
+
+export type FileKind = "TEXT" | "IMAGE" | "UNSUPPORTED";
+export type CreateEntryType = "FILE" | "DIR";
+
+export interface FileEntry {
+  name: string;
+  path: string;
+  directory: boolean;
+  size: number;
+  lastModified: number;
+}
+
+export interface FileContent {
+  kind: FileKind;
+  mimeType: string | null;
+  content: string | null;
+  dataUrl: string | null;
+}

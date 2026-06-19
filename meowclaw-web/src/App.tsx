@@ -15,6 +15,7 @@ import { ScheduledTaskPage } from "@/pages/ScheduledTaskPage";
 import { McpServicePage } from "@/pages/McpServicePage";
 import { SkillPage } from "@/pages/SkillPage";
 import { TokensStatisticsPage } from "@/pages/TokensStatisticsPage";
+import { WorkspacePage } from "@/pages/WorkspacePage";
 import { useEffect, useState } from "react";
 
 function AuthGuard({ children }: { children: React.ReactNode }) {
@@ -120,6 +121,7 @@ function AppRoutes() {
         <Route path="mcp-service" element={<McpServicePage />} />
         <Route path="skill" element={<SkillPage />} />
         <Route path="tokens" element={<TokensStatisticsPage />} />
+        <Route path="workspace" element={<WorkspacePage />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

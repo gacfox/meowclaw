@@ -1,5 +1,5 @@
 import { Link, useLocation } from "react-router-dom";
-import { MessageSquare, Cpu, Sparkles, Clock, Plug, Package, BarChart3 } from "lucide-react";
+import { MessageSquare, Cpu, Sparkles, Clock, Plug, Package, BarChart3, FolderTree } from "lucide-react";
 import {
   Sidebar,
   SidebarContent,
@@ -44,10 +44,10 @@ export function AppSidebar() {
                 </SidebarMenuButton>
               </SidebarMenuItem>
               <SidebarMenuItem>
-                <SidebarMenuButton tooltip="LLM 配置" asChild isActive={location.pathname === "/llm"}>
-                  <Link to="/llm">
-                    <Cpu />
-                    <span>LLM 配置</span>
+                <SidebarMenuButton tooltip="工作区管理" asChild isActive={location.pathname === "/workspace"}>
+                  <Link to="/workspace">
+                    <FolderTree />
+                    <span>工作区管理</span>
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
@@ -56,14 +56,6 @@ export function AppSidebar() {
                   <Link to="/agent">
                     <Sparkles />
                     <span>智能体</span>
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-              <SidebarMenuItem>
-                <SidebarMenuButton tooltip="定时任务" asChild isActive={location.pathname === "/scheduled-task"}>
-                  <Link to="/scheduled-task">
-                    <Clock />
-                    <span>定时任务</span>
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
@@ -80,6 +72,22 @@ export function AppSidebar() {
                   <Link to="/skill">
                     <Package />
                     <span>SKILL</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              <SidebarMenuItem>
+                <SidebarMenuButton tooltip="定时任务" asChild isActive={location.pathname === "/scheduled-task"}>
+                  <Link to="/scheduled-task">
+                    <Clock />
+                    <span>定时任务</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              <SidebarMenuItem>
+                <SidebarMenuButton tooltip="LLM 配置" asChild isActive={location.pathname === "/llm"}>
+                  <Link to="/llm">
+                    <Cpu />
+                    <span>LLM 配置</span>
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
