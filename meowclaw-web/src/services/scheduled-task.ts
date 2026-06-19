@@ -1,74 +1,58 @@
-import { request } from "@/services/request";
+import type { ScheduledTaskDTO, ScheduledTaskExecutionDTO } from "@/types";
+import { request } from "./request";
 
-export interface ScheduledTaskDto {
-  id?: number;
+export async function listScheduledTasks(): Promise<ScheduledTaskDTO[]> {
+  const res = await request<ScheduledTaskDTO[]>("/api/scheduled-task");
+  return res.data;
+}
+
+export async function createScheduledTask(data: {
   name: string;
-  agentConfigId: number;
+  agentId: number;
   userPrompt: string;
   cronExpression: string;
-  newSessionEach: boolean;
-  boundConversationId?: number;
-  enabled: boolean;
-  lastExecutedAt?: number;
-  agentName?: string;
+  createNewSession?: boolean;
+}): Promise<ScheduledTaskDTO> {
+  const res = await request<ScheduledTaskDTO>("/api/scheduled-task", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+  return res.data;
 }
 
-export interface PageDto<T> {
-  items: T[];
-  total: number;
-  page: number;
-  pageSize: number;
+export async function updateScheduledTask(
+  id: number,
+  data: {
+    name?: string;
+    agentId?: number;
+    userPrompt?: string;
+    cronExpression?: string;
+    createNewSession?: boolean;
+  }
+): Promise<ScheduledTaskDTO> {
+  const res = await request<ScheduledTaskDTO>(`/api/scheduled-task/${id}`, {
+    method: "PUT",
+    body: JSON.stringify(data),
+  });
+  return res.data;
 }
 
-export const scheduledTaskService = {
-  async list(page = 1, pageSize = 20) {
-    return request.request<PageDto<ScheduledTaskDto>>(
-      `/api/scheduled-tasks?page=${page}&pageSize=${pageSize}`,
-    );
-  },
+export async function deleteScheduledTask(id: number) {
+  return request(`/api/scheduled-task/${id}`, { method: "DELETE" });
+}
 
-  async getById(id: number) {
-    return request.request<ScheduledTaskDto>(`/api/scheduled-tasks/${id}`);
-  },
+export async function toggleScheduledTask(id: number): Promise<ScheduledTaskDTO> {
+  const res = await request<ScheduledTaskDTO>(`/api/scheduled-task/${id}/toggle`, {
+    method: "PUT",
+  });
+  return res.data;
+}
 
-  async create(data: ScheduledTaskDto) {
-    return request.request<ScheduledTaskDto>("/api/scheduled-tasks", {
-      method: "POST",
-      body: JSON.stringify(data),
-    });
-  },
+export async function triggerScheduledTask(id: number) {
+  return request(`/api/scheduled-task/${id}/trigger`, { method: "POST" });
+}
 
-  async update(id: number, data: ScheduledTaskDto) {
-    return request.request<ScheduledTaskDto>(`/api/scheduled-tasks/${id}`, {
-      method: "PUT",
-      body: JSON.stringify(data),
-    });
-  },
-
-  async delete(id: number) {
-    return request.request<void>(`/api/scheduled-tasks/${id}`, {
-      method: "DELETE",
-    });
-  },
-
-  async toggleEnabled(id: number) {
-    return request.request<ScheduledTaskDto>(
-      `/api/scheduled-tasks/${id}/toggle`,
-      {
-        method: "POST",
-      },
-    );
-  },
-
-  async trigger(id: number) {
-    return request.request<void>(`/api/scheduled-tasks/${id}/trigger`, {
-      method: "POST",
-    });
-  },
-
-  async getNextExecution(cronExpression: string) {
-    return request.request<string>(
-      `/api/scheduled-tasks/next-execution?cronExpression=${encodeURIComponent(cronExpression)}`,
-    );
-  },
-};
+export async function listScheduledTaskExecutions(taskId: number): Promise<ScheduledTaskExecutionDTO[]> {
+  const res = await request<ScheduledTaskExecutionDTO[]>(`/api/scheduled-task/${taskId}/execution`);
+  return res.data;
+}

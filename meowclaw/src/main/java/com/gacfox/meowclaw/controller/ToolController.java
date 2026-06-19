@@ -1,8 +1,10 @@
 package com.gacfox.meowclaw.controller;
 
-import com.gacfox.meowclaw.dto.ApiResponse;
-import com.gacfox.meowclaw.dto.ToolDto;
-import com.gacfox.meowclaw.service.ToolService;
+import com.gacfox.meowclaw.dto.ToolInfoDTO;
+import com.gacfox.proarc.agentic.tool.AgenticTool;
+import com.gacfox.proarc.agentic.tool.ToolRegistry;
+import com.gacfox.proarc.common.model.ApiResult;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -10,17 +12,21 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.List;
 
 @RestController
-@RequestMapping("/api/tools")
+@RequestMapping("/api/tool")
 public class ToolController {
-    private final ToolService toolService;
+    private final ToolRegistry toolRegistry;
 
-    public ToolController(ToolService toolService) {
-        this.toolService = toolService;
+    @Autowired
+    public ToolController(ToolRegistry toolRegistry) {
+        this.toolRegistry = toolRegistry;
     }
 
     @GetMapping
-    public ApiResponse<List<ToolDto>> listTools() {
-        return ApiResponse.success(toolService.listTools());
+    public ApiResult<List<ToolInfoDTO>> list() {
+        List<ToolInfoDTO> tools = toolRegistry.getAllTools().stream()
+                .filter(def -> !def.getToolName().contains("__"))
+                .map(def -> new ToolInfoDTO(def.getToolName(), def.getDescription()))
+                .toList();
+        return ApiResult.success(tools);
     }
 }
-

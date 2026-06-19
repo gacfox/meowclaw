@@ -1,24 +1,26 @@
 package com.gacfox.meowclaw.controller;
 
-import com.gacfox.meowclaw.dto.ApiResponse;
-import com.gacfox.meowclaw.dto.SkillDto;
-import com.gacfox.meowclaw.dto.SkillUpdateDto;
+import com.gacfox.meowclaw.dto.SkillInstallRequest;
+import com.gacfox.meowclaw.dto.SkillInstallResultDTO;
+import com.gacfox.meowclaw.dto.SkillPackageDTO;
 import com.gacfox.meowclaw.service.SkillService;
-import jakarta.validation.constraints.NotBlank;
+import com.gacfox.proarc.common.model.ApiResult;
 import jakarta.validation.Valid;
-import org.springframework.core.io.FileSystemResource;
-import org.springframework.core.io.Resource;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.MediaType;
-import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.nio.file.Path;
+import java.io.IOException;
 import java.util.List;
 
 @RestController
-@RequestMapping("/api/skills")
+@RequestMapping("/api/skill")
 public class SkillController {
     private final SkillService skillService;
 
@@ -27,41 +29,24 @@ public class SkillController {
     }
 
     @GetMapping
-    public ApiResponse<List<SkillDto>> list() {
-        return ApiResponse.success(skillService.list());
+    public ApiResult<List<SkillPackageDTO>> list() {
+        return ApiResult.success(skillService.list());
     }
 
-    @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    public ApiResponse<SkillDto> upload(@RequestParam @NotBlank String name,
-                                        @RequestParam(required = false) String description,
-                                        @RequestParam("file") MultipartFile file) {
-        return ApiResponse.success(skillService.upload(name, description, file));
+    @PostMapping
+    public ApiResult<SkillPackageDTO> upload(@RequestParam("file") MultipartFile file) throws IOException {
+        return ApiResult.success(skillService.upload(file));
     }
 
     @DeleteMapping("/{id}")
-    public ApiResponse<Void> delete(@PathVariable Long id) {
+    public ApiResult<?> delete(@PathVariable Long id) {
         skillService.delete(id);
-        return ApiResponse.success();
+        return ApiResult.success();
     }
 
-    @PutMapping("/{id}")
-    public ApiResponse<SkillDto> update(@PathVariable Long id, @Valid @RequestBody SkillUpdateDto dto) {
-        return ApiResponse.success(skillService.update(id, dto.getName(), dto.getDescription()));
-    }
-
-    @GetMapping("/{id}/download")
-    public ResponseEntity<Resource> download(@PathVariable Long id) {
-        Path packagePath = skillService.getSkillPackagePath(id);
-        Resource resource = new FileSystemResource(packagePath);
-        return ResponseEntity.ok()
-                .header(HttpHeaders.CONTENT_DISPOSITION,
-                        "attachment; filename=\"" + packagePath.getFileName().toString() + "\"")
-                .contentType(MediaType.APPLICATION_OCTET_STREAM)
-                .body(resource);
-    }
-
-    @GetMapping("/{id}/preview")
-    public ApiResponse<String> preview(@PathVariable Long id) {
-        return ApiResponse.success(skillService.readSkillPrompt(id));
+    @PostMapping("/{id}/install")
+    public ApiResult<SkillInstallResultDTO> install(@PathVariable Long id,
+                                                    @RequestBody @Valid SkillInstallRequest req) throws IOException {
+        return ApiResult.success(skillService.install(id, req));
     }
 }

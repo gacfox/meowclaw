@@ -1,14 +1,7 @@
-import { request } from "@/services/request";
+import type { ToolInfoDTO } from "@/types";
+import { request } from "./request";
 
-export interface ToolDto {
-  id: string;
-  name: string;
-  description?: string;
+export async function listTools(): Promise<ToolInfoDTO[]> {
+  const res = await request<ToolInfoDTO[]>("/api/tool");
+  return res.data;
 }
-
-export const toolService = {
-  async list() {
-    return request.request<ToolDto[]>("/api/tools");
-  },
-};
-

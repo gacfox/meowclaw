@@ -1,80 +1,138 @@
 package com.gacfox.meowclaw.service;
 
-import com.gacfox.meowclaw.dto.UpdatePasswordDto;
-import com.gacfox.meowclaw.dto.UpdateProfileDto;
-import com.gacfox.meowclaw.dto.UserDto;
+import com.gacfox.meowclaw.converter.UserConverter;
+import com.gacfox.meowclaw.dto.ChangePasswordRequest;
+import com.gacfox.meowclaw.dto.InitRequest;
+import com.gacfox.meowclaw.dto.LoginRequest;
+import com.gacfox.meowclaw.dto.UpdateProfileRequest;
+import com.gacfox.meowclaw.dto.UserDTO;
 import com.gacfox.meowclaw.entity.User;
-import com.gacfox.meowclaw.exception.ServiceNotSatisfiedException;
 import com.gacfox.meowclaw.repository.UserRepository;
-import com.gacfox.meowclaw.security.CurrentUserHolder;
-import com.gacfox.meowclaw.util.PasswordUtil;
-import org.springframework.beans.BeanUtils;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
+
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 
 @Service
 public class UserService {
     private final UserRepository userRepository;
-    private final FileStorageService fileStorageService;
-    private final PasswordUtil passwordUtil;
+    private final UserConverter userConverter;
+    private final PasswordEncoder passwordEncoder;
 
-    public UserService(UserRepository userRepository, FileStorageService fileStorageService, PasswordUtil passwordUtil) {
+    @Value("${meowclaw.data-dir}")
+    private String dataDir;
+
+    @Autowired
+    public UserService(UserRepository userRepository, UserConverter userConverter, PasswordEncoder passwordEncoder) {
         this.userRepository = userRepository;
-        this.fileStorageService = fileStorageService;
-        this.passwordUtil = passwordUtil;
+        this.userConverter = userConverter;
+        this.passwordEncoder = passwordEncoder;
     }
 
-    public UserDto getCurrentUser() {
-        Long userId = CurrentUserHolder.getUserId();
-        if (userId == null) {
-            throw new ServiceNotSatisfiedException("用户未登录");
-        }
-
-        User user = userRepository.findById(userId)
-                .orElseThrow(() -> new ServiceNotSatisfiedException("用户不存在"));
-
-        return toDto(user);
+    public boolean isSystemInitialized() {
+        return userRepository.count() > 0;
     }
 
-    public UserDto updateProfile(UpdateProfileDto dto, MultipartFile avatar) {
-        Long userId = CurrentUserHolder.getUserId();
-        if (userId == null) {
-            throw new ServiceNotSatisfiedException("用户未登录");
+    @Transactional
+    public void initSystem(InitRequest req) {
+        if (isSystemInitialized()) {
+            throw new IllegalArgumentException("系统已初始化");
         }
-
-        User user = userRepository.findById(userId)
-                .orElseThrow(() -> new ServiceNotSatisfiedException("用户不存在"));
-
-        if (dto.getDisplayUsername() != null) {
-            user.setDisplayUsername(dto.getDisplayUsername());
-        }
-
-        if (avatar != null && !avatar.isEmpty()) {
-            String oldAvatarUrl = user.getAvatarUrl();
-            String newAvatarUrl = fileStorageService.updateFile(avatar, oldAvatarUrl, "avatars/users");
-            user.setAvatarUrl(newAvatarUrl);
-        }
-
-        userRepository.save(user);
-        return toDto(user);
-    }
-
-    public void updatePassword(UpdatePasswordDto dto) {
-        Long userId = CurrentUserHolder.getUserId();
-        if (userId == null) {
-            throw new ServiceNotSatisfiedException("用户未登录");
-        }
-
-        User user = userRepository.findById(userId)
-                .orElseThrow(() -> new ServiceNotSatisfiedException("用户不存在"));
-
-        user.setPassword(passwordUtil.encode(dto.getPassword()));
+        User user = new User();
+        user.setUsername(req.getUsername());
+        user.setPasswordHash(passwordEncoder.encode(req.getPassword()));
+        user.setDisplayName(req.getUsername());
+        long now = System.currentTimeMillis();
+        user.setCreatedAt(now);
+        user.setUpdatedAt(now);
         userRepository.save(user);
     }
 
-    private UserDto toDto(User user) {
-        UserDto dto = new UserDto();
-        BeanUtils.copyProperties(user, dto);
-        return dto;
+    @Transactional(readOnly = true)
+    public UserDTO login(LoginRequest req) {
+        User user = userRepository.findByUsername(req.getUsername())
+                .orElseThrow(() -> new IllegalArgumentException("用户名或密码错误"));
+        if (!passwordEncoder.matches(req.getPassword(), user.getPasswordHash())) {
+            throw new IllegalArgumentException("用户名或密码错误");
+        }
+        return userConverter.toDTO(user);
+    }
+
+    @Transactional(readOnly = true)
+    public UserDTO getCurrentUser(Long userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new IllegalArgumentException("用户不存在"));
+        return userConverter.toDTO(user);
+    }
+
+    @Transactional
+    public UserDTO updateProfile(Long userId, UpdateProfileRequest req) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new IllegalArgumentException("用户不存在"));
+        if (req.getUsername() != null && !req.getUsername().equals(user.getUsername())) {
+            userRepository.findByUsername(req.getUsername()).ifPresent(u -> {
+                throw new IllegalArgumentException("用户名已存在");
+            });
+            user.setUsername(req.getUsername());
+        }
+        if (req.getDisplayName() != null) {
+            user.setDisplayName(req.getDisplayName());
+        }
+        user.setUpdatedAt(System.currentTimeMillis());
+        return userConverter.toDTO(userRepository.save(user));
+    }
+
+    @Transactional
+    public void changePassword(Long userId, ChangePasswordRequest req) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new IllegalArgumentException("用户不存在"));
+        if (!passwordEncoder.matches(req.getOldPassword(), user.getPasswordHash())) {
+            throw new IllegalArgumentException("旧密码错误");
+        }
+        user.setPasswordHash(passwordEncoder.encode(req.getNewPassword()));
+        user.setUpdatedAt(System.currentTimeMillis());
+        userRepository.save(user);
+    }
+
+    @Transactional
+    public String updateAvatar(Long userId, MultipartFile file) throws IOException {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new IllegalArgumentException("用户不存在"));
+
+        deleteAvatarFile(user.getAvatarUrl());
+
+        Path avatarDir = Paths.get(dataDir, "upload", "avatar").toAbsolutePath();
+        Files.createDirectories(avatarDir);
+
+        String originalName = file.getOriginalFilename();
+        String ext = "";
+        if (originalName != null && originalName.contains(".")) {
+            ext = originalName.substring(originalName.lastIndexOf("."));
+        }
+        String filename = userId + "_" + System.currentTimeMillis() + ext;
+        Path targetPath = avatarDir.resolve(filename);
+        file.transferTo(targetPath);
+
+        String avatarUrl = "/upload/avatar/" + filename;
+        user.setAvatarUrl(avatarUrl);
+        user.setUpdatedAt(System.currentTimeMillis());
+        userRepository.save(user);
+        return avatarUrl;
+    }
+
+    private void deleteAvatarFile(String avatarUrl) {
+        if (avatarUrl == null || avatarUrl.isBlank()) return;
+        try {
+            Path file = Paths.get(dataDir, avatarUrl).toAbsolutePath();
+            Files.deleteIfExists(file);
+        } catch (IOException ignored) {
+        }
     }
 }

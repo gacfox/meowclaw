@@ -1,62 +1,68 @@
 package com.gacfox.meowclaw.controller;
 
-import com.gacfox.meowclaw.dto.ApiResponse;
-import com.gacfox.meowclaw.dto.PageDto;
-import com.gacfox.meowclaw.dto.ScheduledTaskDto;
+import com.gacfox.meowclaw.dto.CreateScheduledTaskRequest;
+import com.gacfox.meowclaw.dto.ScheduledTaskDTO;
+import com.gacfox.meowclaw.dto.ScheduledTaskExecutionDTO;
+import com.gacfox.meowclaw.dto.UpdateScheduledTaskRequest;
 import com.gacfox.meowclaw.service.ScheduledTaskService;
+import com.gacfox.proarc.common.model.ApiResult;
 import jakarta.validation.Valid;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+import java.util.List;
 
 @RestController
-@RequestMapping("/api/scheduled-tasks")
+@RequestMapping("/api/scheduled-task")
 public class ScheduledTaskController {
     private final ScheduledTaskService scheduledTaskService;
 
+    @Autowired
     public ScheduledTaskController(ScheduledTaskService scheduledTaskService) {
         this.scheduledTaskService = scheduledTaskService;
     }
 
     @GetMapping
-    public ApiResponse<PageDto<ScheduledTaskDto>> list(
-            @RequestParam(defaultValue = "1") int page,
-            @RequestParam(defaultValue = "20") int pageSize) {
-        return ApiResponse.success(scheduledTaskService.findAll(page, pageSize));
-    }
-
-    @GetMapping("/{id}")
-    public ApiResponse<ScheduledTaskDto> getById(@PathVariable Long id) {
-        return ApiResponse.success(scheduledTaskService.findById(id));
+    public ApiResult<List<ScheduledTaskDTO>> list() {
+        return ApiResult.success(scheduledTaskService.list());
     }
 
     @PostMapping
-    public ApiResponse<ScheduledTaskDto> create(@Valid @RequestBody ScheduledTaskDto dto) {
-        return ApiResponse.success(scheduledTaskService.create(dto));
+    public ApiResult<ScheduledTaskDTO> create(@RequestBody @Valid CreateScheduledTaskRequest req) {
+        return ApiResult.success(scheduledTaskService.create(req));
     }
 
     @PutMapping("/{id}")
-    public ApiResponse<ScheduledTaskDto> update(@PathVariable Long id, @Valid @RequestBody ScheduledTaskDto dto) {
-        return ApiResponse.success(scheduledTaskService.update(id, dto));
+    public ApiResult<ScheduledTaskDTO> update(@PathVariable Long id, @RequestBody @Valid UpdateScheduledTaskRequest req) {
+        return ApiResult.success(scheduledTaskService.update(id, req));
     }
 
     @DeleteMapping("/{id}")
-    public ApiResponse<Void> delete(@PathVariable Long id) {
+    public ApiResult<?> delete(@PathVariable Long id) {
         scheduledTaskService.delete(id);
-        return ApiResponse.success();
+        return ApiResult.success();
     }
 
-    @PostMapping("/{id}/toggle")
-    public ApiResponse<ScheduledTaskDto> toggleEnabled(@PathVariable Long id) {
-        return ApiResponse.success(scheduledTaskService.toggleEnabled(id));
+    @PutMapping("/{id}/toggle")
+    public ApiResult<ScheduledTaskDTO> toggleEnabled(@PathVariable Long id) {
+        return ApiResult.success(scheduledTaskService.toggleEnabled(id));
     }
 
     @PostMapping("/{id}/trigger")
-    public ApiResponse<Void> trigger(@PathVariable Long id) {
-        scheduledTaskService.trigger(id);
-        return ApiResponse.success();
+    public ApiResult<?> triggerOnce(@PathVariable Long id) {
+        scheduledTaskService.triggerOnce(id);
+        return ApiResult.success();
     }
 
-    @GetMapping("/next-execution")
-    public ApiResponse<String> getNextExecution(@RequestParam String cronExpression) {
-        return ApiResponse.success(scheduledTaskService.getNextExecutionTime(cronExpression));
+    @GetMapping("/{id}/execution")
+    public ApiResult<List<ScheduledTaskExecutionDTO>> listExecutions(@PathVariable Long id) {
+        return ApiResult.success(scheduledTaskService.listExecutions(id));
     }
 }

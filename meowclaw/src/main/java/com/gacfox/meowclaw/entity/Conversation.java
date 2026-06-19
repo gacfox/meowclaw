@@ -1,34 +1,42 @@
 package com.gacfox.meowclaw.entity;
 
-import lombok.Data;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.Table;
+import lombok.AllArgsConstructor;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
 
-import java.time.Instant;
-
-@Data
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
+@Entity
+@Table(name = "mc_conversation")
 public class Conversation {
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
-    private Long agentConfigId;
+
+    @Column(name = "agent_id", nullable = false)
+    private Long agentId;
+
+    @Column(name = "title", length = 500)
     private String title;
+
+    @Column(name = "type", length = 50)
     private String type;
+
+    @Column(name = "context_json")
+    private String contextJson;
+
+    @Column(name = "created_at", nullable = false)
     private Long createdAt;
+
+    @Column(name = "updated_at", nullable = false)
     private Long updatedAt;
-
-    public static final String TYPE_CHAT = "CHAT";
-    public static final String TYPE_SCHEDULED = "SCHEDULED";
-
-    public Instant getCreatedAtInstant() {
-        return Instant.ofEpochMilli(createdAt);
-    }
-
-    public void setCreatedAtInstant(Instant instant) {
-        this.createdAt = instant.toEpochMilli();
-    }
-
-    public Instant getUpdatedAtInstant() {
-        return Instant.ofEpochMilli(updatedAt);
-    }
-
-    public void setUpdatedAtInstant(Instant instant) {
-        this.updatedAt = instant.toEpochMilli();
-    }
 }

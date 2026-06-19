@@ -1,64 +1,52 @@
-import { useAuthStore } from "@/stores/authStore";
-import { toast } from "sonner";
+import type { ApiResult } from "@/types";
 
-export interface ApiResponse<T> {
-  code: number;
-  message: string;
-  data: T;
+const TOKEN_KEY = "meowclaw_token";
+
+export function getToken(): string | null {
+  return localStorage.getItem(TOKEN_KEY);
 }
 
-class RequestClient {
-  async request<T>(
-    endpoint: string,
-    options?: RequestInit,
-  ): Promise<ApiResponse<T>> {
-    const headers: Record<string, string> = {
-      ...((options?.headers as Record<string, string>) || {}),
-    };
-
-    const body = options?.body;
-    if (!(body instanceof FormData)) {
-      headers["Content-Type"] = "application/json";
-    }
-
-    const token = useAuthStore.getState().token;
-    if (token) {
-      headers["Authorization"] = `Bearer ${token}`;
-    }
-
-    const response = await fetch(endpoint, {
-      ...options,
-      headers,
-    });
-
-    const data = await response.json();
-
-    if (data.code === 401) {
-      useAuthStore.getState().clearToken();
-      window.location.href = "/login";
-      throw new Error("登录状态已失效");
-    }
-
-    if (!response.ok) {
-      const errorMessage = data.message || `请求失败 (${response.status})`;
-      toast.error(errorMessage);
-      throw new Error(errorMessage);
-    }
-
-    return data;
-  }
-
-  setToken(token: string) {
-    useAuthStore.getState().setToken(token);
-  }
-
-  clearToken() {
-    useAuthStore.getState().clearToken();
-  }
-
-  getToken() {
-    return useAuthStore.getState().token;
-  }
+export function setToken(token: string) {
+  localStorage.setItem(TOKEN_KEY, token);
 }
 
-export const request = new RequestClient();
+export function removeToken() {
+  localStorage.removeItem(TOKEN_KEY);
+}
+
+export async function request<T>(url: string, options?: RequestInit): Promise<ApiResult<T>> {
+  const token = getToken();
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  if (token) {
+    headers["Authorization"] = `Bearer ${token}`;
+  }
+  const res = await fetch(url, {
+    headers,
+    ...options,
+  });
+  const json: ApiResult<T> = await res.json();
+  if (json.code !== "0") {
+    throw new Error(json.message);
+  }
+  return json;
+}
+
+export async function uploadRequest<T = string>(url: string, file: File): Promise<T> {
+  const token = getToken();
+  const headers: Record<string, string> = {};
+  if (token) {
+    headers["Authorization"] = `Bearer ${token}`;
+  }
+  const formData = new FormData();
+  formData.append("file", file);
+  const res = await fetch(url, {
+    method: "POST",
+    headers,
+    body: formData,
+  });
+  const json: ApiResult<T> = await res.json();
+  if (json.code !== "0") {
+    throw new Error(json.message);
+  }
+  return json.data;
+}

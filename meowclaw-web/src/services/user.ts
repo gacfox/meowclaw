@@ -1,38 +1,21 @@
-import { request } from "@/services/request";
+import type { UserDTO } from "@/types";
+import { request, uploadRequest } from "./request";
 
-export interface UserDto {
-  id: number;
-  username: string;
-  displayUsername?: string;
-  avatarUrl?: string;
+export async function updateProfile(data: { username?: string; displayName?: string }): Promise<UserDTO> {
+  const res = await request<UserDTO>("/api/user/profile", {
+    method: "PUT",
+    body: JSON.stringify(data),
+  });
+  return res.data;
 }
 
-export interface UpdateProfileDto {
-  displayUsername?: string;
+export async function changePassword(oldPassword: string, newPassword: string) {
+  return request("/api/user/password", {
+    method: "PUT",
+    body: JSON.stringify({ oldPassword, newPassword }),
+  });
 }
 
-export const userService = {
-  async getCurrentUser() {
-    return request.request<UserDto>("/api/users/me");
-  },
-
-  async updateProfile(data: UpdateProfileDto, avatar?: File) {
-    const formData = new FormData();
-    formData.append("data", JSON.stringify(data));
-    if (avatar) {
-      formData.append("avatar", avatar);
-    }
-
-    return request.request<UserDto>("/api/users/me/profile", {
-      method: "PUT",
-      body: formData,
-    });
-  },
-
-  async updatePassword(password: string) {
-    return request.request<void>("/api/users/me/password", {
-      method: "PUT",
-      body: JSON.stringify({ password }),
-    });
-  },
-};
+export async function uploadAvatar(file: File): Promise<string> {
+  return uploadRequest("/api/user/avatar", file);
+}

@@ -1,16 +1,19 @@
 package com.gacfox.meowclaw.dto;
 
-import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
-import lombok.Data;
+import lombok.AllArgsConstructor;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
 
-@Data
-public class ConversationDto {
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
+public class ConversationDTO {
     private Long id;
-    @NotNull(message = "智能体配置ID不能为空")
-    private Long agentConfigId;
-    @NotBlank(message = "会话标题不能为空")
+    private Long agentId;
     private String title;
     private String type;
-    private String agentName;
+    private Long createdAt;
+    private Long updatedAt;
 }

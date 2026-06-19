@@ -1,50 +1,46 @@
 package com.gacfox.meowclaw.interceptor;
 
-import com.gacfox.meowclaw.dto.UserTokenDto;
-import com.gacfox.meowclaw.security.CurrentUserHolder;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.gacfox.meowclaw.dto.UserDTO;
 import com.gacfox.meowclaw.util.JwtUtil;
+import com.gacfox.proarc.common.model.ApiResult;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import org.springframework.web.servlet.HandlerInterceptor;
 
 @Component
 public class AuthInterceptor implements HandlerInterceptor {
 
+    private static final String AUTH_HEADER = "Authorization";
+    private static final String BEARER_PREFIX = "Bearer ";
+    private static final String USER_ATTR = "currentUser";
+
+    private final ObjectMapper objectMapper;
     private final JwtUtil jwtUtil;
 
-    public AuthInterceptor(JwtUtil jwtUtil) {
+    @Autowired
+    public AuthInterceptor(ObjectMapper objectMapper, JwtUtil jwtUtil) {
+        this.objectMapper = objectMapper;
         this.jwtUtil = jwtUtil;
     }
 
     @Override
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) throws Exception {
-        String authHeader = request.getHeader("Authorization");
-        if (authHeader == null || !authHeader.startsWith("Bearer ")) {
-            response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
-            response.setContentType("application/json;charset=UTF-8");
-            response.getWriter().write("{\"code\":401,\"message\":\"未提供有效的认证令牌\"}");
-            return false;
+        String authHeader = request.getHeader(AUTH_HEADER);
+        if (authHeader != null && authHeader.startsWith(BEARER_PREFIX)) {
+            try {
+                String token = authHeader.substring(BEARER_PREFIX.length());
+                UserDTO user = jwtUtil.parseToken(token);
+                request.setAttribute(USER_ATTR, user);
+                return true;
+            } catch (Exception ignored) {
+            }
         }
-
-        String token = authHeader.substring(7);
-        if (!jwtUtil.validateToken(token)) {
-            response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
-            response.setContentType("application/json;charset=UTF-8");
-            response.getWriter().write("{\"code\":401,\"message\":\"认证令牌无效或已过期\"}");
-            return false;
-        }
-
-        UserTokenDto user = new UserTokenDto();
-        user.setUserId(jwtUtil.getUserIdFromToken(token));
-        user.setUsername(jwtUtil.getUsernameFromToken(token));
-        CurrentUserHolder.set(user);
-
-        return true;
-    }
-
-    @Override
-    public void afterCompletion(HttpServletRequest request, HttpServletResponse response, Object handler, Exception ex) throws Exception {
-        CurrentUserHolder.clear();
+        response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+        response.setContentType("application/json;charset=UTF-8");
+        response.getWriter().write(objectMapper.writeValueAsString(ApiResult.failure("未登录")));
+        return false;
     }
 }

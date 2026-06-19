@@ -1,42 +1,48 @@
 package com.gacfox.meowclaw.controller;
 
-import com.gacfox.meowclaw.dto.ApiResponse;
-import com.gacfox.meowclaw.dto.UpdatePasswordDto;
-import com.gacfox.meowclaw.dto.UpdateProfileDto;
-import com.gacfox.meowclaw.dto.UserDto;
+import com.gacfox.meowclaw.dto.ChangePasswordRequest;
+import com.gacfox.meowclaw.dto.UpdateProfileRequest;
+import com.gacfox.meowclaw.dto.UserDTO;
 import com.gacfox.meowclaw.service.UserService;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import com.gacfox.meowclaw.util.AuthUtil;
+import com.gacfox.proarc.common.model.ApiResult;
 import jakarta.validation.Valid;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
+
 @RestController
-@RequestMapping("/api/users")
+@RequestMapping("/api/user")
 public class UserController {
     private final UserService userService;
-    private final ObjectMapper objectMapper;
 
-    public UserController(UserService userService, ObjectMapper objectMapper) {
+    @Autowired
+    public UserController(UserService userService) {
         this.userService = userService;
-        this.objectMapper = objectMapper;
     }
 
-    @GetMapping("/me")
-    public ApiResponse<UserDto> getCurrentUser() {
-        return ApiResponse.success(userService.getCurrentUser());
+    @PutMapping("/profile")
+    public ApiResult<UserDTO> updateProfile(@RequestBody @Valid UpdateProfileRequest req) {
+        UserDTO user = userService.updateProfile(AuthUtil.getCurrentUserId(), req);
+        return ApiResult.success(user);
     }
 
-    @PutMapping("/me/profile")
-    public ApiResponse<UserDto> updateProfile(
-            @RequestParam("data") String dataJson,
-            @RequestParam(value = "avatar", required = false) MultipartFile avatar) throws Exception {
-        UpdateProfileDto dto = objectMapper.readValue(dataJson, UpdateProfileDto.class);
-        return ApiResponse.success(userService.updateProfile(dto, avatar));
+    @PutMapping("/password")
+    public ApiResult<?> changePassword(@RequestBody @Valid ChangePasswordRequest req) {
+        userService.changePassword(AuthUtil.getCurrentUserId(), req);
+        return ApiResult.success();
     }
 
-    @PutMapping("/me/password")
-    public ApiResponse<Void> updatePassword(@Valid @RequestBody UpdatePasswordDto dto) {
-        userService.updatePassword(dto);
-        return ApiResponse.success(null);
+    @PostMapping("/avatar")
+    public ApiResult<String> uploadAvatar(@RequestParam("file") MultipartFile file) throws IOException {
+        String avatarUrl = userService.updateAvatar(AuthUtil.getCurrentUserId(), file);
+        return ApiResult.success("success", avatarUrl);
     }
 }

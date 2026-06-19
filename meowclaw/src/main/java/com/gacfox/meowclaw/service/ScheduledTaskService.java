@@ -1,196 +1,154 @@
 package com.gacfox.meowclaw.service;
 
-import com.cronutils.model.Cron;
-import com.cronutils.model.CronType;
-import com.cronutils.model.definition.CronDefinitionBuilder;
-import com.cronutils.model.time.ExecutionTime;
-import com.cronutils.parser.CronParser;
-import com.gacfox.meowclaw.dto.PageDto;
-import com.gacfox.meowclaw.dto.ScheduledTaskDto;
-import com.gacfox.meowclaw.entity.AgentConfig;
-import com.gacfox.meowclaw.entity.Conversation;
+import com.gacfox.meowclaw.converter.ScheduledTaskConverter;
+import com.gacfox.meowclaw.converter.ScheduledTaskExecutionConverter;
+import com.gacfox.meowclaw.dto.CreateScheduledTaskRequest;
+import com.gacfox.meowclaw.dto.ScheduledTaskDTO;
+import com.gacfox.meowclaw.dto.ScheduledTaskExecutionDTO;
+import com.gacfox.meowclaw.dto.UpdateScheduledTaskRequest;
 import com.gacfox.meowclaw.entity.ScheduledTask;
-import com.gacfox.meowclaw.exception.ServiceNotSatisfiedException;
-import com.gacfox.meowclaw.repository.AgentConfigRepository;
-import com.gacfox.meowclaw.repository.ConversationRepository;
+import com.gacfox.meowclaw.repository.ScheduledTaskExecutionRepository;
 import com.gacfox.meowclaw.repository.ScheduledTaskRepository;
-import org.springframework.beans.BeanUtils;
+import jakarta.annotation.PostConstruct;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.scheduling.support.CronExpression;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
-import java.time.Instant;
-import java.time.ZonedDateTime;
 import java.util.List;
-import java.util.Optional;
-import java.util.stream.Collectors;
 
+@Slf4j
 @Service
 public class ScheduledTaskService {
     private final ScheduledTaskRepository scheduledTaskRepository;
-    private final AgentConfigRepository agentConfigRepository;
-    private final ConversationRepository conversationRepository;
-    private final ConversationService conversationService;
-    private final BackendTaskSchedulerService backendTaskSchedulerService;
-    private final CronParser cronParser;
+    private final ScheduledTaskExecutionRepository scheduledTaskExecutionRepository;
+    private final ScheduledTaskConverter scheduledTaskConverter;
+    private final ScheduledTaskExecutionConverter scheduledTaskExecutionConverter;
+    private final SchedulerManager schedulerManager;
+    private final ScheduledTaskExecutor scheduledTaskExecutor;
 
     public ScheduledTaskService(ScheduledTaskRepository scheduledTaskRepository,
-                                AgentConfigRepository agentConfigRepository,
-                                ConversationRepository conversationRepository,
-                                ConversationService conversationService,
-                                BackendTaskSchedulerService backendTaskSchedulerService) {
+                                ScheduledTaskExecutionRepository scheduledTaskExecutionRepository,
+                                ScheduledTaskConverter scheduledTaskConverter,
+                                ScheduledTaskExecutionConverter scheduledTaskExecutionConverter,
+                                SchedulerManager schedulerManager,
+                                ScheduledTaskExecutor scheduledTaskExecutor) {
         this.scheduledTaskRepository = scheduledTaskRepository;
-        this.agentConfigRepository = agentConfigRepository;
-        this.conversationRepository = conversationRepository;
-        this.conversationService = conversationService;
-        this.backendTaskSchedulerService = backendTaskSchedulerService;
-        this.cronParser = new CronParser(CronDefinitionBuilder.instanceDefinitionFor(CronType.QUARTZ));
+        this.scheduledTaskExecutionRepository = scheduledTaskExecutionRepository;
+        this.scheduledTaskConverter = scheduledTaskConverter;
+        this.scheduledTaskExecutionConverter = scheduledTaskExecutionConverter;
+        this.schedulerManager = schedulerManager;
+        this.scheduledTaskExecutor = scheduledTaskExecutor;
     }
 
-    public PageDto<ScheduledTaskDto> findAll(int page, int pageSize) {
-        List<ScheduledTask> tasks = scheduledTaskRepository.findAll();
-        List<ScheduledTaskDto> items = tasks.stream().map(this::toDto).collect(Collectors.toList());
-        return PageDto.of(items, tasks.size(), 1, tasks.size());
+    @PostConstruct
+    public void init() {
+        scheduledTaskRepository.findByEnabledTrue().forEach(task -> {
+            try {
+                Long taskId = task.getId();
+                schedulerManager.schedule(taskId, task.getCronExpression(),
+                        () -> scheduledTaskExecutor.execute(taskId));
+                log.info("Loaded scheduled task {} on startup", taskId);
+            } catch (Exception e) {
+                log.error("Failed to load scheduled task {} on startup", task.getId(), e);
+            }
+        });
     }
 
-    public ScheduledTaskDto findById(Long id) {
-        ScheduledTask task = scheduledTaskRepository.findById(id)
-                .orElseThrow(() -> new ServiceNotSatisfiedException("定时任务不存在"));
-        return toDto(task);
+    @Transactional(readOnly = true)
+    public List<ScheduledTaskDTO> list() {
+        return scheduledTaskRepository.findAll().stream().map(scheduledTaskConverter::toDTO).toList();
     }
 
-    public ScheduledTaskDto create(ScheduledTaskDto dto) {
-        validateAgentConfig(dto.getAgentConfigId());
-        validateCronExpression(dto.getCronExpression());
+    @Transactional
+    public ScheduledTaskDTO create(CreateScheduledTaskRequest req) {
+        validateCron(req.getCronExpression());
 
         ScheduledTask task = new ScheduledTask();
-        BeanUtils.copyProperties(dto, task);
+        task.setName(req.getName());
+        task.setAgentId(req.getAgentId());
+        task.setUserPrompt(req.getUserPrompt());
+        task.setCronExpression(req.getCronExpression());
+        task.setCreateNewSession(Boolean.TRUE.equals(req.getCreateNewSession()));
+        task.setEnabled(true);
+        long now = System.currentTimeMillis();
+        task.setCreatedAt(now);
+        task.setUpdatedAt(now);
+        task = scheduledTaskRepository.save(task);
 
-        Instant now = Instant.now();
-        task.setCreatedAtInstant(now);
-        task.setUpdatedAtInstant(now);
+        Long taskId = task.getId();
+        schedulerManager.schedule(taskId, task.getCronExpression(),
+                () -> scheduledTaskExecutor.execute(taskId));
 
-        if (!task.isNewSessionEach()) {
-            Conversation conversation = conversationService.createScheduledConversation(dto.getAgentConfigId());
-            task.setBoundConversationId(conversation.getId());
-        }
-
-        ScheduledTask saved = scheduledTaskRepository.save(task);
-        backendTaskSchedulerService.scheduleOrReschedule(saved);
-        return toDto(saved);
+        return scheduledTaskConverter.toDTO(task);
     }
 
-    public ScheduledTaskDto update(Long id, ScheduledTaskDto dto) {
+    @Transactional
+    public ScheduledTaskDTO update(Long id, UpdateScheduledTaskRequest req) {
         ScheduledTask task = scheduledTaskRepository.findById(id)
-                .orElseThrow(() -> new ServiceNotSatisfiedException("定时任务不存在"));
+                .orElseThrow(() -> new IllegalArgumentException("定时任务不存在"));
 
-        validateAgentConfig(dto.getAgentConfigId());
-        validateCronExpression(dto.getCronExpression());
+        if (req.getName() != null) task.setName(req.getName());
+        if (req.getAgentId() != null) task.setAgentId(req.getAgentId());
+        if (req.getUserPrompt() != null) task.setUserPrompt(req.getUserPrompt());
+        if (req.getCronExpression() != null) {
+            validateCron(req.getCronExpression());
+            task.setCronExpression(req.getCronExpression());
+        }
+        if (req.getCreateNewSession() != null) task.setCreateNewSession(req.getCreateNewSession());
+        task.setUpdatedAt(System.currentTimeMillis());
 
-        boolean wasNewSessionEach = task.isNewSessionEach();
-        boolean isNewSessionEach = dto.isNewSessionEach();
-        Long previousAgentConfigId = task.getAgentConfigId();
+        task = scheduledTaskRepository.save(task);
 
-        task.setName(dto.getName());
-        task.setAgentConfigId(dto.getAgentConfigId());
-        task.setUserPrompt(dto.getUserPrompt());
-        task.setCronExpression(dto.getCronExpression());
-        task.setNewSessionEach(isNewSessionEach);
-        task.setEnabled(dto.isEnabled());
-        task.setUpdatedAtInstant(Instant.now());
-
-        if (!wasNewSessionEach && isNewSessionEach) {
-            if (task.getBoundConversationId() != null) {
-                task.setBoundConversationId(null);
-            }
-        } else if (wasNewSessionEach && !isNewSessionEach) {
-            Conversation conversation = conversationService.createScheduledConversation(dto.getAgentConfigId());
-            task.setBoundConversationId(conversation.getId());
-        } else if (!isNewSessionEach) {
-            updateBoundConversationAgent(task, previousAgentConfigId);
+        if (task.getEnabled()) {
+            Long taskId = task.getId();
+            schedulerManager.schedule(taskId, task.getCronExpression(),
+                    () -> scheduledTaskExecutor.execute(taskId));
         }
 
-        ScheduledTask saved = scheduledTaskRepository.save(task);
-        backendTaskSchedulerService.scheduleOrReschedule(saved);
-        return toDto(saved);
+        return scheduledTaskConverter.toDTO(task);
     }
 
+    @Transactional
     public void delete(Long id) {
-        ScheduledTask task = scheduledTaskRepository.findById(id)
-                .orElseThrow(() -> new ServiceNotSatisfiedException("定时任务不存在"));
-
-        backendTaskSchedulerService.cancelTask(id);
-
-        if (!task.isNewSessionEach() && task.getBoundConversationId() != null) {
-            conversationRepository.deleteById(task.getBoundConversationId());
-        }
-
+        schedulerManager.cancel(id);
+        scheduledTaskExecutionRepository.deleteByScheduledTaskId(id);
         scheduledTaskRepository.deleteById(id);
     }
 
-    public ScheduledTaskDto toggleEnabled(Long id) {
+    @Transactional
+    public ScheduledTaskDTO toggleEnabled(Long id) {
         ScheduledTask task = scheduledTaskRepository.findById(id)
-                .orElseThrow(() -> new ServiceNotSatisfiedException("定时任务不存在"));
+                .orElseThrow(() -> new IllegalArgumentException("定时任务不存在"));
 
-        task.setEnabled(!task.isEnabled());
-        task.setUpdatedAtInstant(Instant.now());
-        ScheduledTask saved = scheduledTaskRepository.save(task);
-        backendTaskSchedulerService.scheduleOrReschedule(saved);
-        return toDto(saved);
-    }
+        task.setEnabled(!task.getEnabled());
+        task.setUpdatedAt(System.currentTimeMillis());
+        task = scheduledTaskRepository.save(task);
 
-    public void trigger(Long id) {
-        ScheduledTask task = scheduledTaskRepository.findById(id)
-                .orElseThrow(() -> new ServiceNotSatisfiedException("定时任务不存在"));
-        backendTaskSchedulerService.triggerTask(task);
-    }
-
-    public String getNextExecutionTime(String cronExpression) {
-        try {
-            Cron cron = cronParser.parse(cronExpression);
-            ExecutionTime executionTime = ExecutionTime.forCron(cron);
-            Optional<ZonedDateTime> next = executionTime.nextExecution(ZonedDateTime.now());
-            return next.map(zdt -> zdt.toString()).orElse("无法计算");
-        } catch (Exception e) {
-            return "表达式无效";
+        if (task.getEnabled()) {
+            Long taskId = task.getId();
+            schedulerManager.schedule(taskId, task.getCronExpression(),
+                    () -> scheduledTaskExecutor.execute(taskId));
+        } else {
+            schedulerManager.cancel(task.getId());
         }
+
+        return scheduledTaskConverter.toDTO(task);
     }
 
-    private void validateAgentConfig(Long agentConfigId) {
-        agentConfigRepository.findById(agentConfigId)
-                .orElseThrow(() -> new ServiceNotSatisfiedException("智能体配置不存在"));
+    public void triggerOnce(Long id) {
+        scheduledTaskExecutor.execute(id);
     }
 
-    private void validateCronExpression(String cronExpression) {
-        try {
-            cronParser.parse(cronExpression);
-        } catch (Exception e) {
-            throw new ServiceNotSatisfiedException("Cron表达式格式无效: " + e.getMessage());
-        }
+    @Transactional(readOnly = true)
+    public List<ScheduledTaskExecutionDTO> listExecutions(Long taskId) {
+        return scheduledTaskExecutionRepository.findByScheduledTaskIdOrderByExecutedAtDesc(taskId)
+                .stream().map(scheduledTaskExecutionConverter::toDTO).toList();
     }
 
-    private ScheduledTaskDto toDto(ScheduledTask task) {
-        ScheduledTaskDto dto = new ScheduledTaskDto();
-        BeanUtils.copyProperties(task, dto);
-
-        Optional<AgentConfig> agentOpt = agentConfigRepository.findById(task.getAgentConfigId());
-        agentOpt.ifPresent(agent -> dto.setAgentName(agent.getName()));
-
-        return dto;
-    }
-
-    private void updateBoundConversationAgent(ScheduledTask task, Long previousAgentConfigId) {
-        if (task.getBoundConversationId() == null) {
-            return;
+    private void validateCron(String cronExpression) {
+        if (!CronExpression.isValidExpression(cronExpression)) {
+            throw new IllegalArgumentException("无效的Cron表达式: " + cronExpression);
         }
-        if (previousAgentConfigId != null && previousAgentConfigId.equals(task.getAgentConfigId())) {
-            return;
-        }
-        Optional<Conversation> conversationOpt = conversationRepository.findById(task.getBoundConversationId());
-        if (conversationOpt.isEmpty()) {
-            return;
-        }
-        Conversation conversation = conversationOpt.get();
-        conversation.setAgentConfigId(task.getAgentConfigId());
-        conversation.setUpdatedAtInstant(Instant.now());
-        Conversation ignored = conversationRepository.save(conversation);
     }
 }

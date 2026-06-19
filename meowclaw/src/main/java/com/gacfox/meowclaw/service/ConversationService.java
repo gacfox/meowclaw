@@ -1,227 +1,169 @@
 package com.gacfox.meowclaw.service;
 
-import com.gacfox.meowclaw.dto.ConversationDto;
-import com.gacfox.meowclaw.dto.MessageDto;
-import com.gacfox.meowclaw.dto.PageDto;
-import com.gacfox.meowclaw.entity.AgentConfig;
+import com.gacfox.meowclaw.converter.ChatEventBatchConverter;
+import com.gacfox.meowclaw.converter.ChatEventConverter;
+import com.gacfox.meowclaw.converter.ConversationConverter;
+import com.gacfox.meowclaw.dto.ChatEventBatchDTO;
+import com.gacfox.meowclaw.dto.ConversationDTO;
+import com.gacfox.meowclaw.entity.ChatEventBatch;
 import com.gacfox.meowclaw.entity.Conversation;
-import com.gacfox.meowclaw.entity.LlmConfig;
-import com.gacfox.meowclaw.entity.Message;
-import com.gacfox.meowclaw.exception.ServiceNotSatisfiedException;
-import com.gacfox.meowclaw.repository.AgentConfigRepository;
+import com.gacfox.meowclaw.repository.ChatEventBatchRepository;
+import com.gacfox.meowclaw.repository.ChatEventRepository;
 import com.gacfox.meowclaw.repository.ConversationRepository;
-import com.gacfox.meowclaw.repository.LlmConfigRepository;
 import com.gacfox.meowclaw.repository.MessageRepository;
-import com.openai.client.OpenAIClient;
-import com.openai.client.okhttp.OpenAIOkHttpClient;
-import com.openai.models.chat.completions.ChatCompletion;
-import com.openai.models.chat.completions.ChatCompletionCreateParams;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.BeanUtils;
+import com.gacfox.proarc.common.model.Pagination;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
-import java.time.Instant;
 import java.util.List;
-import java.util.Optional;
-import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
-@Slf4j
 @Service
 public class ConversationService {
     private final ConversationRepository conversationRepository;
     private final MessageRepository messageRepository;
-    private final AgentConfigRepository agentConfigRepository;
-    private final LlmConfigRepository llmConfigRepository;
+    private final ChatEventBatchRepository chatEventBatchRepository;
+    private final ChatEventRepository chatEventRepository;
+    private final ConversationConverter conversationConverter;
+    private final ChatEventBatchConverter chatEventBatchConverter;
+    private final ChatEventConverter chatEventConverter;
 
+    @Autowired
     public ConversationService(ConversationRepository conversationRepository,
                                MessageRepository messageRepository,
-                               AgentConfigRepository agentConfigRepository,
-                               LlmConfigRepository llmConfigRepository) {
+                               ChatEventBatchRepository chatEventBatchRepository,
+                               ChatEventRepository chatEventRepository,
+                               ConversationConverter conversationConverter,
+                               ChatEventBatchConverter chatEventBatchConverter,
+                               ChatEventConverter chatEventConverter) {
         this.conversationRepository = conversationRepository;
         this.messageRepository = messageRepository;
-        this.agentConfigRepository = agentConfigRepository;
-        this.llmConfigRepository = llmConfigRepository;
+        this.chatEventBatchRepository = chatEventBatchRepository;
+        this.chatEventRepository = chatEventRepository;
+        this.conversationConverter = conversationConverter;
+        this.chatEventBatchConverter = chatEventBatchConverter;
+        this.chatEventConverter = chatEventConverter;
     }
 
-    public PageDto<ConversationDto> list(Long agentConfigId, String keyword, int page, int pageSize) {
-        List<Conversation> conversations = conversationRepository.findByFilters(agentConfigId, keyword, page, pageSize);
-        long total = conversationRepository.countByFilters(agentConfigId, keyword);
-        List<ConversationDto> items = conversations.stream().map(this::toDto).collect(Collectors.toList());
-        return PageDto.of(items, total, page, pageSize);
+    @Transactional(readOnly = true)
+    public Pagination<ConversationDTO> listByAgent(Long agentId, int page, int size) {
+        Page<Conversation> pageResult = conversationRepository.findByAgentIdOrderByUpdatedAtDesc(agentId, PageRequest.of(page - 1, size));
+        List<ConversationDTO> list = pageResult.getContent().stream().map(conversationConverter::toDTO).toList();
+        int total = (int) pageResult.getTotalElements();
+        int totalPages = (int) Math.ceil((double) total / size);
+        return new Pagination<>(list, total, totalPages, page, size);
     }
 
-    public ConversationDto findById(Long id) {
-        Conversation conversation = conversationRepository.findById(id)
-                .orElseThrow(() -> new ServiceNotSatisfiedException("会话不存在"));
-        return toDto(conversation);
+    @Transactional(readOnly = true)
+    public Pagination<ConversationDTO> listByAgentAndType(Long agentId, String type, int page, int size) {
+        Page<Conversation> pageResult = conversationRepository.findByAgentIdAndTypeOrderByUpdatedAtDesc(agentId, type, PageRequest.of(page - 1, size));
+        List<ConversationDTO> list = pageResult.getContent().stream().map(conversationConverter::toDTO).toList();
+        int total = (int) pageResult.getTotalElements();
+        int totalPages = (int) Math.ceil((double) total / size);
+        return new Pagination<>(list, total, totalPages, page, size);
     }
 
-    public ConversationDto create(ConversationDto dto) {
-        Conversation conversation = new Conversation();
-        BeanUtils.copyProperties(dto, conversation);
-        if (conversation.getType() == null) {
-            conversation.setType(Conversation.TYPE_CHAT);
-        }
-
-        Instant now = Instant.now();
-        conversation.setCreatedAtInstant(now);
-        conversation.setUpdatedAtInstant(now);
-
-        conversationRepository.save(conversation);
-        return toDto(conversation);
+    @Transactional
+    public ConversationDTO create(Long agentId) {
+        return create(agentId, "CHAT");
     }
 
-    public Conversation createScheduledConversation(Long agentConfigId) {
-        Conversation conversation = new Conversation();
-        conversation.setAgentConfigId(agentConfigId);
-        conversation.setTitle("定时任务会话");
-        conversation.setType(Conversation.TYPE_SCHEDULED);
-
-        Instant now = Instant.now();
-        conversation.setCreatedAtInstant(now);
-        conversation.setUpdatedAtInstant(now);
-
-        conversationRepository.save(conversation);
-        return conversation;
+    @Transactional
+    public ConversationDTO create(Long agentId, String type) {
+        Conversation conv = new Conversation();
+        conv.setAgentId(agentId);
+        conv.setType(type);
+        long now = System.currentTimeMillis();
+        conv.setCreatedAt(now);
+        conv.setUpdatedAt(now);
+        return conversationConverter.toDTO(conversationRepository.save(conv));
     }
 
-    public ConversationDto update(Long id, ConversationDto dto) {
-        Conversation conversation = conversationRepository.findById(id)
-                .orElseThrow(() -> new ServiceNotSatisfiedException("会话不存在"));
-
-        BeanUtils.copyProperties(dto, conversation, "id", "createdAt");
-        conversation.setUpdatedAtInstant(Instant.now());
-
-        conversationRepository.save(conversation);
-        return toDto(conversation);
-    }
-
+    @Transactional
     public void delete(Long id) {
-        conversationRepository.deleteById(id);
+        Conversation conv = conversationRepository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("会话不存在"));
+        // Cascade delete: events (by batch) -> batches -> messages -> conversation
+        List<Long> batchIds = chatEventBatchRepository.findByConversationIdOrderByCreatedAtAsc(id)
+                .stream().map(ChatEventBatch::getId).toList();
+        if (!batchIds.isEmpty()) {
+            chatEventRepository.deleteByBatchIdIn(batchIds);
+        }
+        chatEventBatchRepository.deleteByConversationId(id);
+        messageRepository.deleteByConversationId(id);
+        conversationRepository.delete(conv);
     }
 
-    public void deleteMessagesAfter(Long conversationId, Long messageId) {
-        messageRepository.deleteAfterId(conversationId, messageId);
-    }
-
-    public List<MessageDto> listMessages(Long conversationId) {
-        List<Message> records = messageRepository.findByConversationId(conversationId);
-        return records.stream().map(record -> {
-            MessageDto dto = new MessageDto();
-            dto.setId(record.getId());
-            dto.setRole(record.getRole());
-            dto.setContent(record.getContent());
-            dto.setTimestamp(record.getCreatedAt());
-            dto.setInputTokens(record.getInputTokens());
-            dto.setOutputTokens(record.getOutputTokens());
-            dto.setApiUrl(record.getApiUrl());
-            dto.setModel(record.getModel());
+    @Transactional(readOnly = true)
+    public List<ChatEventBatchDTO> listBatches(Long conversationId) {
+        List<ChatEventBatch> batches = chatEventBatchRepository
+                .findByConversationIdOrderByCreatedAtAsc(conversationId);
+        return batches.stream().map(batch -> {
+            ChatEventBatchDTO dto = chatEventBatchConverter.toDTO(batch);
+            dto.setEvents(chatEventRepository.findByBatchIdOrderByEventOrderAsc(batch.getId())
+                    .stream().map(chatEventConverter::toDTO).toList());
             return dto;
-        }).collect(Collectors.toList());
+        }).toList();
     }
 
-    public ConversationDto generateTitle(Long conversationId) {
-        Conversation conversation = conversationRepository.findById(conversationId)
-                .orElseThrow(() -> new ServiceNotSatisfiedException("会话不存在"));
-
-        List<Message> records = messageRepository.findByConversationId(conversationId);
-        String firstAssistant = records.stream()
-                .filter(m -> MessageDto.ROLE_ASSISTANT.equals(m.getRole()))
-                .map(Message::getContent)
-                .filter(c -> c != null && !c.isBlank())
-                .findFirst()
-                .orElse(null);
-
-        if (firstAssistant == null || firstAssistant.isBlank()) {
-            return toDto(conversation);
-        }
-
-        String title = generateTitleByLlm(conversation, firstAssistant);
-        conversation.setTitle(title);
-        conversation.setUpdatedAt(Instant.now().toEpochMilli());
-        conversationRepository.save(conversation);
-        return toDto(conversation);
+    @Transactional
+    public ConversationDTO updateTitle(Long id, String title) {
+        Conversation conv = conversationRepository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("会话不存在"));
+        conv.setTitle(title);
+        conv.setUpdatedAt(System.currentTimeMillis());
+        return conversationConverter.toDTO(conversationRepository.save(conv));
     }
 
-    private String generateTitleByLlm(Conversation conversation, String firstAssistant) {
-        try {
-            LlmConfig llmConfig = getLlmConfig(conversation);
-            if (llmConfig == null) {
-                return toTitle(firstAssistant);
-            }
-
-            OpenAIOkHttpClient.Builder clientBuilder = OpenAIOkHttpClient.builder()
-                    .baseUrl(llmConfig.getApiUrl());
-            if (llmConfig.getApiKey() != null && !llmConfig.getApiKey().isBlank()) {
-                clientBuilder.apiKey(llmConfig.getApiKey());
-            }
-            OpenAIClient client = clientBuilder.build();
-
-            ChatCompletionCreateParams params = ChatCompletionCreateParams.builder()
-                    .model(llmConfig.getModel())
-                    .addSystemMessage("""
-                            你是对话标题生成器。根据首条助手回复生成简短标题。只输出标题，避免引号，不超过20个字符。
-                            
-                            示例：
-                            用户：你好！我是你的AI助手，有什么可以帮助你的吗？
-                            标题：初识问候
-                            
-                            用户：好的，我来帮你分析这段代码的问题。首先，这个函数的时间复杂度是O(n²)，可以通过使用哈希表优化到O(n)...
-                            标题：代码优化建议
-                            
-                            用户：今天北京的天气晴朗，气温15-25℃，空气质量良好，适合户外活动。
-                            标题：北京天气查询
-                            
-                            用户：这是一个关于Python列表操作的问题。在Python中，你可以使用append()方法向列表末尾添加元素...
-                            标题：Python列表操作
-                            """)
-                    .addUserMessage(firstAssistant)
-                    .temperature(0.2)
-                    .build();
-
-            ChatCompletion completion = client.chat().completions().create(params);
-            String title = completion.choices().get(0).message().content().orElse("");
-            String normalized = title.replace("\"", "").replace("\n", "").trim();
-            if (normalized.isBlank()) {
-                return toTitle(firstAssistant);
-            }
-            if (normalized.length() > 20) {
-                return normalized.substring(0, 20) + "...";
-            }
-            return normalized;
-        } catch (Exception e) {
-            log.warn("生成标题失败: {}", e.getMessage());
-            return toTitle(firstAssistant);
-        }
+    @Transactional
+    public void updateContextJson(Long id, String contextJson) {
+        Conversation conv = conversationRepository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("会话不存在"));
+        conv.setContextJson(contextJson);
+        conv.setUpdatedAt(System.currentTimeMillis());
+        conversationRepository.save(conv);
     }
 
-    private LlmConfig getLlmConfig(Conversation conversation) {
-        Optional<AgentConfig> agentOpt = agentConfigRepository.findById(conversation.getAgentConfigId());
-        if (agentOpt.isEmpty()) {
-            return null;
-        }
-        AgentConfig agent = agentOpt.get();
-        if (agent.getDefaultLlmId() != null) {
-            return llmConfigRepository.findById(agent.getDefaultLlmId()).orElse(null);
-        }
-        return null;
+    @Transactional
+    public ConversationDTO touch(Long id) {
+        Conversation conv = conversationRepository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("会话不存在"));
+        conv.setUpdatedAt(System.currentTimeMillis());
+        return conversationConverter.toDTO(conversationRepository.save(conv));
     }
 
-    private String toTitle(String content) {
-        String trimmed = content.trim();
-        if (trimmed.length() <= 20) {
-            return trimmed;
-        }
-        return trimmed.substring(0, 20) + "...";
+    @Transactional(readOnly = true)
+    public Conversation getById(Long id) {
+        return conversationRepository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("会话不存在"));
     }
 
-    private ConversationDto toDto(Conversation conversation) {
-        ConversationDto dto = new ConversationDto();
-        BeanUtils.copyProperties(conversation, dto);
-        
-        Optional<AgentConfig> agentOpt = agentConfigRepository.findById(conversation.getAgentConfigId());
-        agentOpt.ifPresent(agent -> dto.setAgentName(agent.getName()));
-        
-        return dto;
+    @Transactional(readOnly = true)
+    public ConversationDTO getDTO(Long id) {
+        return conversationConverter.toDTO(getById(id));
+    }
+
+    @Transactional(readOnly = true)
+    public boolean existsById(Long id) {
+        return conversationRepository.existsById(id);
+    }
+
+    @Transactional
+    public void truncateAfterBatch(Long conversationId, Long batchId, boolean includeSelf) {
+        List<ChatEventBatch> allBatches = chatEventBatchRepository
+                .findByConversationIdOrderByCreatedAtAsc(conversationId);
+        Stream<ChatEventBatch> stream = allBatches.stream()
+                .dropWhile(b -> !b.getId().equals(batchId));
+        if (!includeSelf) {
+            stream = stream.skip(1);
+        }
+        List<Long> batchIdsToDelete = stream.map(ChatEventBatch::getId).toList();
+        if (batchIdsToDelete.isEmpty()) return;
+        chatEventRepository.deleteByBatchIdIn(batchIdsToDelete);
+        messageRepository.deleteByBatchIdIn(batchIdsToDelete);
+        chatEventBatchRepository.deleteAllById(batchIdsToDelete);
     }
 }

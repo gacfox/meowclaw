@@ -1,67 +1,117 @@
 package com.gacfox.meowclaw.controller;
 
-import com.gacfox.meowclaw.dto.ApiResponse;
-import com.gacfox.meowclaw.dto.ConversationDto;
-import com.gacfox.meowclaw.dto.MessageDto;
-import com.gacfox.meowclaw.dto.PageDto;
+import com.gacfox.meowclaw.dto.ChatEventBatchDTO;
+import com.gacfox.meowclaw.dto.ChatEventDTO;
+import com.gacfox.meowclaw.dto.ConversationDTO;
+import com.gacfox.meowclaw.dto.SendMessageRequest;
+import com.gacfox.meowclaw.entity.Conversation;
+import com.gacfox.meowclaw.service.ChatService;
 import com.gacfox.meowclaw.service.ConversationService;
+import com.gacfox.meowclaw.service.TitleGenerationRegistry;
+import com.gacfox.proarc.common.model.ApiResult;
+import com.gacfox.proarc.common.model.Pagination;
 import jakarta.validation.Valid;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.MediaType;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.context.request.async.DeferredResult;
+import reactor.core.publisher.Flux;
 
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 
 @RestController
-@RequestMapping("/api/conversations")
+@RequestMapping("/api/conversation")
 public class ConversationController {
-    private final ConversationService conversationService;
+    private static final long TITLE_WAIT_TIMEOUT_MS = 30_000L;
 
-    public ConversationController(ConversationService conversationService) {
+    private final ConversationService conversationService;
+    private final ChatService chatService;
+    private final TitleGenerationRegistry titleGenerationRegistry;
+
+    @Autowired
+    public ConversationController(ConversationService conversationService,
+                                  ChatService chatService,
+                                  TitleGenerationRegistry titleGenerationRegistry) {
         this.conversationService = conversationService;
+        this.chatService = chatService;
+        this.titleGenerationRegistry = titleGenerationRegistry;
     }
 
     @GetMapping
-    public ApiResponse<PageDto<ConversationDto>> list(
+    public ApiResult<Pagination<ConversationDTO>> list(
+            @RequestParam Long agentId,
+            @RequestParam(required = false) String type,
             @RequestParam(defaultValue = "1") int page,
-            @RequestParam(defaultValue = "10") int pageSize,
-            @RequestParam(required = false) Long agentConfigId,
-            @RequestParam(required = false) String keyword) {
-        return ApiResponse.success(conversationService.list(agentConfigId, keyword, page, pageSize));
-    }
-
-    @GetMapping("/{id}")
-    public ApiResponse<ConversationDto> getById(@PathVariable Long id) {
-        return ApiResponse.success(conversationService.findById(id));
-    }
-
-    @GetMapping("/{id}/messages")
-    public ApiResponse<List<MessageDto>> listMessages(@PathVariable Long id) {
-        return ApiResponse.success(conversationService.listMessages(id));
+            @RequestParam(defaultValue = "20") int size) {
+        if (type != null) {
+            return ApiResult.success(conversationService.listByAgentAndType(agentId, type, page, size));
+        }
+        return ApiResult.success(conversationService.listByAgent(agentId, page, size));
     }
 
     @PostMapping
-    public ApiResponse<ConversationDto> create(@Valid @RequestBody ConversationDto dto) {
-        return ApiResponse.success(conversationService.create(dto));
+    public ApiResult<ConversationDTO> create(@RequestBody Map<String, Long> body) {
+        return ApiResult.success(conversationService.create(body.get("agentId")));
     }
 
-    @PutMapping("/{id}")
-    public ApiResponse<ConversationDto> update(@PathVariable Long id, @Valid @RequestBody ConversationDto dto) {
-        return ApiResponse.success(conversationService.update(id, dto));
+    @GetMapping("/{id}")
+    public ApiResult<ConversationDTO> get(@PathVariable Long id) {
+        return ApiResult.success(conversationService.getDTO(id));
     }
 
     @DeleteMapping("/{id}")
-    public ApiResponse<Void> delete(@PathVariable Long id) {
+    public ApiResult<?> delete(@PathVariable Long id) {
         conversationService.delete(id);
-        return ApiResponse.success();
+        return ApiResult.success();
     }
 
-    @PostMapping("/{id}/generate-title")
-    public ApiResponse<ConversationDto> generateTitle(@PathVariable Long id) {
-        return ApiResponse.success(conversationService.generateTitle(id));
+    @GetMapping("/{id}/batch")
+    public ApiResult<List<ChatEventBatchDTO>> listBatches(@PathVariable Long id) {
+        return ApiResult.success(conversationService.listBatches(id));
     }
 
-    @DeleteMapping("/{id}/messages/after/{messageId}")
-    public ApiResponse<Void> deleteMessagesAfter(@PathVariable Long id, @PathVariable Long messageId) {
-        conversationService.deleteMessagesAfter(id, messageId);
-        return ApiResponse.success();
+    @DeleteMapping("/{id}/batch/{batchId}/truncate")
+    public ApiResult<?> truncateAfterBatch(
+            @PathVariable Long id,
+            @PathVariable Long batchId,
+            @RequestParam(defaultValue = "false") boolean includeSelf) {
+        conversationService.truncateAfterBatch(id, batchId, includeSelf);
+        return ApiResult.success();
+    }
+
+    @PostMapping(value = "/{id}/chat", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    public Flux<ChatEventDTO> chat(@PathVariable Long id, @RequestBody @Valid SendMessageRequest req) {
+        return chatService.chat(id, req.getContent());
+    }
+
+    @GetMapping("/{id}/title-wait")
+    public DeferredResult<ApiResult<Map<String, String>>> waitTitle(@PathVariable Long id) {
+        DeferredResult<ApiResult<Map<String, String>>> result = new DeferredResult<>(TITLE_WAIT_TIMEOUT_MS);
+        result.onTimeout(() -> result.setResult(ApiResult.success(Map.of("title", ""))));
+
+        CompletableFuture<String> future = titleGenerationRegistry.get(id);
+        if (future == null) {
+            Conversation conv = conversationService.getById(id);
+            String currentTitle = conv.getTitle() == null ? "" : conv.getTitle();
+            result.setResult(ApiResult.success(Map.of("title", currentTitle)));
+            return result;
+        }
+        future.whenComplete((title, ex) -> {
+            if (ex != null) {
+                result.setResult(ApiResult.success(Map.of("title", "")));
+            } else {
+                result.setResult(ApiResult.success(Map.of("title", title == null ? "" : title)));
+            }
+        });
+        return result;
     }
 }

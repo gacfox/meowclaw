@@ -1,97 +1,70 @@
-import { request } from "@/services/request";
+import type { ConversationDTO, ChatEventBatchDTO, PageResult } from "@/types";
+import { getToken } from "./request";
+import { request } from "./request";
 
-export interface ConversationDto {
-  id?: number;
-  agentConfigId: number;
-  title: string;
-  type?: string;
-  agentName?: string;
+export async function listConversations(agentId: number, page: number, size: number, type?: string): Promise<PageResult<ConversationDTO>> {
+  const params = new URLSearchParams({ agentId: String(agentId), page: String(page), size: String(size) });
+  if (type) params.set("type", type);
+  const res = await request<PageResult<ConversationDTO>>(`/api/conversation?${params}`);
+  return res.data;
 }
 
-export const TYPE_CHAT = "CHAT";
-export const TYPE_SCHEDULED = "SCHEDULED";
-
-export interface PageDto<T> {
-  items: T[];
-  total: number;
-  page: number;
-  pageSize: number;
-  totalPages: number;
+export async function createConversation(agentId: number): Promise<ConversationDTO> {
+  const res = await request<ConversationDTO>("/api/conversation", {
+    method: "POST",
+    body: JSON.stringify({ agentId }),
+  });
+  return res.data;
 }
 
-export const conversationService = {
-  async list(params?: {
-    page?: number;
-    pageSize?: number;
-    agentConfigId?: number;
-    keyword?: string;
-  }) {
-    const searchParams = new URLSearchParams();
-    if (params?.page) searchParams.set("page", params.page.toString());
-    if (params?.pageSize)
-      searchParams.set("pageSize", params.pageSize.toString());
-    if (params?.agentConfigId)
-      searchParams.set("agentConfigId", params.agentConfigId.toString());
-    if (params?.keyword) searchParams.set("keyword", params.keyword);
-    const queryString = searchParams.toString();
-    const url = queryString
-      ? `/api/conversations?${queryString}`
-      : "/api/conversations";
-    return request.request<PageDto<ConversationDto>>(url);
-  },
+export async function getConversation(id: number): Promise<ConversationDTO> {
+  const res = await request<ConversationDTO>(`/api/conversation/${id}`);
+  return res.data;
+}
 
-  async getById(id: number) {
-    return request.request<ConversationDto>(`/api/conversations/${id}`);
-  },
+export async function deleteConversation(id: number) {
+  return request(`/api/conversation/${id}`, { method: "DELETE" });
+}
 
-  async listMessages(id: number) {
-    return request.request<
-      {
-        id: number;
-        role: string;
-        content: string;
-        timestamp: number;
-        inputTokens?: number;
-        outputTokens?: number;
-      }[]
-    >(`/api/conversations/${id}/messages`);
-  },
+export async function listBatches(conversationId: number): Promise<ChatEventBatchDTO[]> {
+  const res = await request<ChatEventBatchDTO[]>(`/api/conversation/${conversationId}/batch`);
+  return res.data;
+}
 
-  async create(data: ConversationDto) {
-    return request.request<ConversationDto>("/api/conversations", {
-      method: "POST",
-      body: JSON.stringify(data),
-    });
-  },
+export async function chatStream(conversationId: number, content: string, signal?: AbortSignal): Promise<ReadableStream<Uint8Array>> {
+  const token = getToken();
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  if (token) {
+    headers["Authorization"] = `Bearer ${token}`;
+  }
+  const res = await fetch(`/api/conversation/${conversationId}/chat`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({ content }),
+    signal,
+  });
+  return res.body!;
+}
 
-  async update(id: number, data: ConversationDto) {
-    return request.request<ConversationDto>(`/api/conversations/${id}`, {
-      method: "PUT",
-      body: JSON.stringify(data),
-    });
-  },
+export async function truncateAfterBatch(conversationId: number, batchId: number, includeSelf = false) {
+  return request(`/api/conversation/${conversationId}/batch/${batchId}/truncate?includeSelf=${includeSelf}`, {
+    method: "DELETE",
+  });
+}
 
-  async delete(id: number) {
-    return request.request<void>(`/api/conversations/${id}`, {
-      method: "DELETE",
-    });
-  },
-
-  async generateTitle(id: number) {
-    return request.request<ConversationDto>(
-      `/api/conversations/${id}/generate-title`,
-      {
-        method: "POST",
-      },
-    );
-  },
-
-  async deleteMessagesAfter(conversationId: number, messageId: number) {
-    return request.request<void>(
-      `/api/conversations/${conversationId}/messages/after/${messageId}`,
-      {
-        method: "DELETE",
-      },
-    );
-  },
-};
+export async function waitForTitle(id: number, timeoutMs = 35_000): Promise<string | null> {
+  const token = getToken();
+  const headers: Record<string, string> = {};
+  if (token) headers["Authorization"] = `Bearer ${token}`;
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    const res = await fetch(`/api/conversation/${id}/title-wait`, { headers, signal: controller.signal });
+    clearTimeout(timer);
+    if (!res.ok) return null;
+    const json = await res.json();
+    return json.data?.title || null;
+  } catch {
+    return null;
+  }
+}

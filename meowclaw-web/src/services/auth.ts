@@ -1,47 +1,32 @@
-import { request } from "@/services/request";
+import type { UserDTO } from "@/types";
+import { request, setToken, removeToken } from "./request";
 
-export interface InitStatus {
-  initialized: boolean;
+export async function checkInit(): Promise<boolean> {
+  const res = await request<boolean>("/api/auth/check-init");
+  return res.data;
 }
 
-export interface LoginDto {
-  username: string;
-  password: string;
+export async function initSystem(username: string, password: string) {
+  return request("/api/auth/init", {
+    method: "POST",
+    body: JSON.stringify({ username, password }),
+  });
 }
 
-export interface InitDto {
-  username: string;
-  password: string;
+export async function login(username: string, password: string): Promise<UserDTO> {
+  const res = await request<{ user: UserDTO; token: string }>("/api/auth/login", {
+    method: "POST",
+    body: JSON.stringify({ username, password }),
+  });
+  setToken(res.data.token);
+  return res.data.user;
 }
 
-export interface TokenDto {
-  token: string;
+export async function logout() {
+  removeToken();
 }
 
-export const authService = {
-  async getInitStatus() {
-    return request.request<InitStatus>("/api/auth/init/status");
-  },
-
-  async initSystem(data: InitDto) {
-    return request.request<void>("/api/auth/init", {
-      method: "POST",
-      body: JSON.stringify(data),
-    });
-  },
-
-  async login(data: LoginDto) {
-    const response = await request.request<TokenDto>("/api/auth/login", {
-      method: "POST",
-      body: JSON.stringify(data),
-    });
-    if (response.data?.token) {
-      request.setToken(response.data.token);
-    }
-    return response;
-  },
-
-  logout() {
-    request.clearToken();
-  },
-};
+export async function getCurrentUser(): Promise<UserDTO> {
+  const res = await request<UserDTO>("/api/auth/me");
+  return res.data;
+}
