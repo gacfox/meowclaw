@@ -13,6 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Plus, Send, Trash2, Loader2, Wrench, ChevronRight, Copy, Pencil, RefreshCw, ArrowUp, ArrowDown, Check, Clock } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { MarkdownRenderer } from "@/components/markdown/MarkdownRenderer";
 
 interface StreamStep {
   type: "thinking" | "tool_call";
@@ -66,7 +67,7 @@ function BatchBubble({ events }: { events: ChatEventDTO[] }) {
         }
         return null;
       })}
-      {finalAnswer?.content && <div className="whitespace-pre-wrap">{finalAnswer.content}</div>}
+      {finalAnswer?.content && <MarkdownRenderer content={finalAnswer.content} />}
     </div>
   );
 }
@@ -102,7 +103,7 @@ function StreamBubble({ steps, content, thinking }: { steps: StreamStep[]; conte
           </details>
         )
       )}
-      {content && <div className="whitespace-pre-wrap">{content}</div>}
+      {content && <MarkdownRenderer content={content} />}
     </div>
   );
 }

@@ -62,8 +62,28 @@ import {
   Upload,
 } from "lucide-react";
 import { toast } from "sonner";
+import { MarkdownRenderer } from "@/components/markdown/MarkdownRenderer";
 
 const IMAGE_EXTS = new Set(["png", "jpg", "jpeg", "gif", "webp", "bmp", "ico", "svg"]);
+const MD_EXTS = new Set(["md", "markdown"]);
+const EXT_TO_LANG: Record<string, string> = {
+  ts: "typescript", tsx: "typescript", mjs: "javascript", cjs: "javascript", js: "javascript", jsx: "javascript",
+  java: "java", kt: "kotlin", py: "python", go: "go", rs: "rust", c: "c", h: "c", cpp: "cpp", cc: "cpp", hpp: "cpp",
+  cs: "csharp", rb: "ruby", php: "php", swift: "swift",
+  css: "css", scss: "scss", less: "less", html: "html", htm: "html", xml: "xml",
+  json: "json", yml: "yaml", yaml: "yaml", toml: "toml", ini: "ini", properties: "properties",
+  sh: "bash", bash: "bash", zsh: "bash", bat: "bat", ps1: "powershell",
+  sql: "sql", graphql: "graphql", gql: "graphql", vue: "vue", svelte: "svelte",
+};
+
+function isMarkdown(name: string): boolean {
+  return MD_EXTS.has(extOf(name));
+}
+
+function codeFence(name: string, code: string): string {
+  const lang = EXT_TO_LANG[extOf(name)] ?? "";
+  return (lang ? "```" + lang + "\n" : "```\n") + code + "\n```";
+}
 
 function extOf(name: string): string {
   const dot = name.lastIndexOf(".");
@@ -143,6 +163,7 @@ export function WorkspacePage() {
   const [editText, setEditText] = useState("");
   const [editModified, setEditModified] = useState(false);
   const [editSaving, setEditSaving] = useState(false);
+  const [previewMode, setPreviewMode] = useState<"view" | "edit">("view");
 
   const openPreview = async (entry: FileEntry) => {
     if (selectedAgentId == null) return;
@@ -151,6 +172,7 @@ export function WorkspacePage() {
     setPreviewError(null);
     setEditText("");
     setEditModified(false);
+    setPreviewMode("view");
     setPreviewLoading(true);
     try {
       const c = await readWorkspaceFile(selectedAgentId, entry.path);
@@ -176,6 +198,7 @@ export function WorkspacePage() {
       await saveWorkspaceFile({ agentId: selectedAgentId, path: previewEntry.path, content: editText });
       toast.success("已保存");
       setEditModified(false);
+      setPreviewContent((prev) => (prev && prev.kind === "TEXT" ? { ...prev, content: editText } : prev));
       fetchEntries();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "保存失败");
@@ -433,7 +456,7 @@ export function WorkspacePage() {
 
       {/* 预览 / 编辑 */}
       <Dialog open={!!previewEntry} onOpenChange={(o) => { if (!o) closePreview(); }}>
-        <DialogContent className="max-h-[90vh] max-w-3xl overflow-hidden">
+        <DialogContent className="max-h-[90vh] sm:max-w-6xl overflow-hidden">
           <DialogHeader>
             <DialogTitle className="break-all">{previewEntry?.path}</DialogTitle>
           </DialogHeader>
@@ -447,17 +470,38 @@ export function WorkspacePage() {
             </div>
           ) : previewContent?.kind === "TEXT" ? (
             <div className="flex flex-col gap-3 overflow-hidden">
-              <Textarea
-                rows={20}
-                className="max-h-[65vh] resize-y font-mono text-sm"
-                value={editText}
-                onChange={(e) => { setEditText(e.target.value); setEditModified(true); }}
-              />
+              <div className="overflow-auto" style={{ maxHeight: "65vh" }}>
+                {previewMode === "view" ? (
+                  <MarkdownRenderer
+                    content={
+                      isMarkdown(previewEntry?.name ?? "")
+                        ? previewContent.content ?? ""
+                        : codeFence(previewEntry?.name ?? "", previewContent.content ?? "")
+                    }
+                  />
+                ) : (
+                  <Textarea
+                    rows={20}
+                    className="resize-y font-mono text-sm"
+                    value={editText}
+                    onChange={(e) => { setEditText(e.target.value); setEditModified(true); }}
+                  />
+                )}
+              </div>
               <DialogFooter>
-                <Button variant="outline" onClick={closePreview}>关闭</Button>
-                <Button onClick={handleSave} disabled={editSaving || !editModified}>
-                  {editSaving ? "保存中..." : "保存"}
-                </Button>
+                {previewMode === "view" ? (
+                  <>
+                    <Button variant="outline" onClick={closePreview}>关闭</Button>
+                    <Button onClick={() => setPreviewMode("edit")}>编辑</Button>
+                  </>
+                ) : (
+                  <>
+                    <Button variant="outline" onClick={() => setPreviewMode("view")}>预览</Button>
+                    <Button onClick={handleSave} disabled={editSaving || !editModified}>
+                      {editSaving ? "保存中..." : "保存"}
+                    </Button>
+                  </>
+                )}
               </DialogFooter>
             </div>
           ) : (
