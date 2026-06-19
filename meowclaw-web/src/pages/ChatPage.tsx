@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import type { AgentDTO, ConversationDTO, ChatEventBatchDTO, ChatEventDTO } from "@/types";
 import { listAgents } from "@/services/agent";
-import { listConversations, createConversation, getConversation, deleteConversation, listBatches, chatStream, truncateAfterBatch, waitForTitle } from "@/services/conversation";
+import { listConversations, createConversation, getConversation, deleteConversation, renameConversation, listBatches, chatStream, truncateAfterBatch, waitForTitle } from "@/services/conversation";
 import { useAuthStore } from "@/stores/auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,6 +14,7 @@ import { Plus, Send, Trash2, Loader2, Wrench, ChevronRight, Copy, Pencil, Refres
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { MarkdownRenderer } from "@/components/markdown/MarkdownRenderer";
+import { toast } from "sonner";
 
 interface StreamStep {
   type: "thinking" | "tool_call";
@@ -132,6 +133,8 @@ export function ChatPage() {
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [editingBatchId, setEditingBatchId] = useState<number | null>(null);
   const [editDraft, setEditDraft] = useState("");
+  const [renamingId, setRenamingId] = useState<number | null>(null);
+  const [renameDraft, setRenameDraft] = useState("");
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const convoListRef = useRef<HTMLDivElement>(null);
@@ -220,6 +223,30 @@ export function ChatPage() {
     if (selectedConvoId === id) {
       setSelectedConvoId(null);
       setBatches([]);
+    }
+  };
+
+  const startRename = (convo: ConversationDTO) => {
+    setRenamingId(convo.id);
+    setRenameDraft(convo.title ?? "");
+  };
+
+  const cancelRename = () => {
+    setRenamingId(null);
+    setRenameDraft("");
+  };
+
+  const commitRename = async () => {
+    const id = renamingId;
+    const title = renameDraft.trim();
+    setRenamingId(null);
+    setRenameDraft("");
+    if (id == null || !title) return;
+    try {
+      const updated = await renameConversation(id, title);
+      setConversations((prev) => prev.map((c) => (c.id === updated.id ? updated : c)));
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "重命名失败");
     }
   };
 
@@ -397,26 +424,55 @@ export function ChatPage() {
         </div>
 
         <div className="flex-1 overflow-y-auto" ref={convoListRef} onScroll={handleConvoScroll}>
-          {conversations.map((convo) => (
+          {conversations.map((convo) => {
+            const titleBusy = !convo.title && ((sending && selectedConvoId === convo.id) || generatingTitleId === convo.id);
+            const renaming = renamingId === convo.id;
+            return (
             <div
               key={convo.id}
               className={`group flex cursor-pointer items-center gap-2 px-3 py-2 text-sm hover:bg-muted ${selectedConvoId === convo.id ? "bg-muted" : ""}`}
-              onClick={() => setSelectedConvoId(convo.id)}
+              onClick={() => { if (!renaming) setSelectedConvoId(convo.id); }}
             >
-              <span className="flex-1 truncate">{convo.title ?? "新对话"}</span>
-              {!convo.title && ((sending && selectedConvoId === convo.id) || generatingTitleId === convo.id) && (
-                <Loader2 className="size-3 shrink-0 animate-spin text-muted-foreground" />
+              {renaming ? (
+                <input
+                  autoFocus
+                  value={renameDraft}
+                  onChange={(e) => setRenameDraft(e.target.value)}
+                  onClick={(e) => e.stopPropagation()}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") commitRename();
+                    if (e.key === "Escape") cancelRename();
+                  }}
+                  onBlur={commitRename}
+                  className="flex-1 rounded bg-background px-1.5 py-0.5 text-sm outline-none ring-1 ring-ring"
+                />
+              ) : (
+                <>
+                  <span className="flex-1 truncate">{convo.title ?? "新对话"}</span>
+                  {titleBusy && <Loader2 className="size-3 shrink-0 animate-spin text-muted-foreground" />}
+                  <Button
+                    variant="ghost"
+                    size="icon-xs"
+                    className="opacity-0 group-hover:opacity-100"
+                    disabled={titleBusy}
+                    onClick={(e) => { e.stopPropagation(); startRename(convo); }}
+                    title="重命名"
+                  >
+                    <Pencil className="size-3" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon-xs"
+                    className="opacity-0 group-hover:opacity-100"
+                    onClick={(e) => { e.stopPropagation(); setDeleteTargetId(convo.id); }}
+                  >
+                    <Trash2 className="size-3 text-destructive" />
+                  </Button>
+                </>
               )}
-              <Button
-                variant="ghost"
-                size="icon-xs"
-                className="opacity-0 group-hover:opacity-100"
-                onClick={(e) => { e.stopPropagation(); setDeleteTargetId(convo.id); }}
-              >
-                <Trash2 className="size-3 text-destructive" />
-              </Button>
             </div>
-          ))}
+            );
+          })}
           {loadingMoreConvos && <div className="py-2 text-center text-xs text-muted-foreground">加载中...</div>}
           {loadingConvos && conversations.length === 0 && <div className="py-2 text-center text-xs text-muted-foreground">加载中...</div>}
         </div>

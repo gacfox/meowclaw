@@ -26,6 +26,14 @@ export async function deleteConversation(id: number) {
   return request(`/api/conversation/${id}`, { method: "DELETE" });
 }
 
+export async function renameConversation(id: number, title: string): Promise<ConversationDTO> {
+  const res = await request<ConversationDTO>(`/api/conversation/${id}/title`, {
+    method: "PUT",
+    body: JSON.stringify({ title }),
+  });
+  return res.data;
+}
+
 export async function listBatches(conversationId: number): Promise<ChatEventBatchDTO[]> {
   const res = await request<ChatEventBatchDTO[]>(`/api/conversation/${conversationId}/batch`);
   return res.data;

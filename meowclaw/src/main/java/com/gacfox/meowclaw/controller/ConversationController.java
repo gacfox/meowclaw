@@ -3,6 +3,7 @@ package com.gacfox.meowclaw.controller;
 import com.gacfox.meowclaw.dto.ChatEventBatchDTO;
 import com.gacfox.meowclaw.dto.ChatEventDTO;
 import com.gacfox.meowclaw.dto.ConversationDTO;
+import com.gacfox.meowclaw.dto.RenameConversationRequest;
 import com.gacfox.meowclaw.dto.SendMessageRequest;
 import com.gacfox.meowclaw.entity.Conversation;
 import com.gacfox.meowclaw.service.ChatService;
@@ -17,6 +18,7 @@ import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -66,6 +68,11 @@ public class ConversationController {
     @GetMapping("/{id}")
     public ApiResult<ConversationDTO> get(@PathVariable Long id) {
         return ApiResult.success(conversationService.getDTO(id));
+    }
+
+    @PutMapping("/{id}/title")
+    public ApiResult<ConversationDTO> rename(@PathVariable Long id, @RequestBody @Valid RenameConversationRequest req) {
+        return ApiResult.success(conversationService.updateTitle(id, req.getTitle()));
     }
 
     @DeleteMapping("/{id}")
