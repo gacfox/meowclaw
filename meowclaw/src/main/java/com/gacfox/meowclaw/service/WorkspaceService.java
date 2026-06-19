@@ -1,8 +1,8 @@
 package com.gacfox.meowclaw.service;
 
 import com.gacfox.meowclaw.dto.CreateEntryRequest;
-import com.gacfox.meowclaw.dto.FileContent;
-import com.gacfox.meowclaw.dto.FileEntry;
+import com.gacfox.meowclaw.dto.FileContentDTO;
+import com.gacfox.meowclaw.dto.FileEntryDTO;
 import com.gacfox.meowclaw.entity.Agent;
 import com.gacfox.meowclaw.repository.AgentRepository;
 import lombok.extern.slf4j.Slf4j;
@@ -48,7 +48,7 @@ public class WorkspaceService {
         this.agentRepository = agentRepository;
     }
 
-    public java.util.List<FileEntry> list(Long agentId, String dir) throws IOException {
+    public java.util.List<FileEntryDTO> list(Long agentId, String dir) throws IOException {
         Path root = resolveRoot(agentId);
         Path target = resolveWithin(root, dir);
         if (!Files.isDirectory(target)) {
@@ -58,13 +58,13 @@ public class WorkspaceService {
             return stream
                     .map(p -> toEntry(root, p))
                     .sorted(Comparator
-                            .comparing(FileEntry::isDirectory, Comparator.reverseOrder())
+                            .comparing(FileEntryDTO::isDirectory, Comparator.reverseOrder())
                             .thenComparing(e -> e.getName().toLowerCase(Locale.ROOT)))
                     .toList();
         }
     }
 
-    public FileContent read(Long agentId, String path) throws IOException {
+    public FileContentDTO read(Long agentId, String path) throws IOException {
         Path root = resolveRoot(agentId);
         Path file = resolveWithin(root, path);
         if (Files.isDirectory(file)) {
@@ -77,7 +77,7 @@ public class WorkspaceService {
         if (TEXT_EXTENSIONS.contains(ext)) {
             return readText(file);
         }
-        return new FileContent(FileContent.Kind.UNSUPPORTED, null, null, null);
+        return new FileContentDTO(FileContentDTO.Kind.UNSUPPORTED, null, null, null);
     }
 
     public void saveText(Long agentId, String path, String content) throws IOException {
@@ -158,7 +158,7 @@ public class WorkspaceService {
         }
     }
 
-    public FileEntry upload(Long agentId, String dir, MultipartFile file) throws IOException {
+    public FileEntryDTO upload(Long agentId, String dir, MultipartFile file) throws IOException {
         Path root = resolveRoot(agentId);
         Path targetDir = resolveWithin(root, dir);
         if (!Files.isDirectory(targetDir)) {
@@ -201,26 +201,26 @@ public class WorkspaceService {
         return resolved;
     }
 
-    private FileContent readText(Path file) throws IOException {
+    private FileContentDTO readText(Path file) throws IOException {
         long size = Files.size(file);
         if (size > MAX_TEXT_BYTES) {
             throw new IllegalArgumentException("文件过大，暂不支持预览（上限 2MB）");
         }
         String content = Files.readString(file, StandardCharsets.UTF_8);
-        return new FileContent(FileContent.Kind.TEXT, "text/plain", content, null);
+        return new FileContentDTO(FileContentDTO.Kind.TEXT, "text/plain", content, null);
     }
 
-    private FileContent readImage(Path file, String mime) throws IOException {
+    private FileContentDTO readImage(Path file, String mime) throws IOException {
         long size = Files.size(file);
         if (size > MAX_IMAGE_BYTES) {
             throw new IllegalArgumentException("图片过大，暂不支持预览（上限 10MB）");
         }
         byte[] bytes = Files.readAllBytes(file);
         String dataUrl = "data:" + mime + ";base64," + Base64.getEncoder().encodeToString(bytes);
-        return new FileContent(FileContent.Kind.IMAGE, mime, null, dataUrl);
+        return new FileContentDTO(FileContentDTO.Kind.IMAGE, mime, null, dataUrl);
     }
 
-    private FileEntry toEntry(Path root, Path p) {
+    private FileEntryDTO toEntry(Path root, Path p) {
         String rel = root.relativize(p).toString().replace('\\', '/');
         long size;
         try {
@@ -234,7 +234,7 @@ public class WorkspaceService {
         } catch (IOException e) {
             lastModified = 0L;
         }
-        return new FileEntry(p.getFileName().toString(), rel, Files.isDirectory(p), size, lastModified);
+        return new FileEntryDTO(p.getFileName().toString(), rel, Files.isDirectory(p), size, lastModified);
     }
 
     private String extension(String name) {

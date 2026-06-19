@@ -8,7 +8,7 @@ import lombok.Getter;
  */
 @Getter
 @AllArgsConstructor
-public class FileEntry {
+public class FileEntryDTO {
     private final String name;
     private final String path;
     private final boolean directory;

@@ -8,7 +8,7 @@ import lombok.Getter;
  */
 @Getter
 @AllArgsConstructor
-public class FileContent {
+public class FileContentDTO {
     public enum Kind { TEXT, IMAGE, UNSUPPORTED }
 
     private final Kind kind;

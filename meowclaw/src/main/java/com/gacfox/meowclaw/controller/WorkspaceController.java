@@ -1,8 +1,8 @@
 package com.gacfox.meowclaw.controller;
 
 import com.gacfox.meowclaw.dto.CreateEntryRequest;
-import com.gacfox.meowclaw.dto.FileContent;
-import com.gacfox.meowclaw.dto.FileEntry;
+import com.gacfox.meowclaw.dto.FileContentDTO;
+import com.gacfox.meowclaw.dto.FileEntryDTO;
 import com.gacfox.meowclaw.dto.MoveRequest;
 import com.gacfox.meowclaw.dto.SaveFileRequest;
 import com.gacfox.meowclaw.service.WorkspaceService;
@@ -31,13 +31,13 @@ public class WorkspaceController {
     }
 
     @GetMapping
-    public ApiResult<List<FileEntry>> list(@RequestParam Long agentId,
+    public ApiResult<List<FileEntryDTO>> list(@RequestParam Long agentId,
                                            @RequestParam(required = false) String path) throws IOException {
         return ApiResult.success(workspaceService.list(agentId, path));
     }
 
     @GetMapping("/file")
-    public ApiResult<FileContent> read(@RequestParam Long agentId,
+    public ApiResult<FileContentDTO> read(@RequestParam Long agentId,
                                        @RequestParam String path) throws IOException {
         return ApiResult.success(workspaceService.read(agentId, path));
     }
@@ -61,7 +61,7 @@ public class WorkspaceController {
     }
 
     @PostMapping("/upload")
-    public ApiResult<FileEntry> upload(@RequestParam Long agentId,
+    public ApiResult<FileEntryDTO> upload(@RequestParam Long agentId,
                                        @RequestParam(required = false) String path,
                                        @RequestParam("file") MultipartFile file) throws IOException {
         return ApiResult.success(workspaceService.upload(agentId, path, file));
