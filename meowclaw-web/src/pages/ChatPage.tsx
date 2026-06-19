@@ -450,16 +450,17 @@ export function ChatPage() {
                 <>
                   <span className="flex-1 truncate">{convo.title ?? "新对话"}</span>
                   {titleBusy && <Loader2 className="size-3 shrink-0 animate-spin text-muted-foreground" />}
-                  <Button
-                    variant="ghost"
-                    size="icon-xs"
-                    className="opacity-0 group-hover:opacity-100"
-                    disabled={titleBusy}
-                    onClick={(e) => { e.stopPropagation(); startRename(convo); }}
-                    title="重命名"
-                  >
-                    <Pencil className="size-3" />
-                  </Button>
+                  {!titleBusy && (
+                    <Button
+                      variant="ghost"
+                      size="icon-xs"
+                      className="opacity-0 group-hover:opacity-100"
+                      onClick={(e) => { e.stopPropagation(); startRename(convo); }}
+                      title="重命名"
+                    >
+                      <Pencil className="size-3" />
+                    </Button>
+                  )}
                   <Button
                     variant="ghost"
                     size="icon-xs"
