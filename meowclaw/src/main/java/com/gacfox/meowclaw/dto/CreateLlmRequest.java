@@ -29,6 +29,8 @@ public class CreateLlmRequest {
 
     private Integer maxTokens;
 
+    private Integer contextLength;
+
     private Integer temperature;
 
     @Size(max = 255, message = "能力标签长度不能超过255")

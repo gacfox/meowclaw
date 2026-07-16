@@ -40,11 +40,12 @@ interface LlmFormData {
   sk: string;
   model: string;
   maxTokens: string;
+  contextLength: string;
   temperature: string;
   capabilities: Capability[];
 }
 
-const emptyForm: LlmFormData = { name: "", endpointUrl: "", sk: "", model: "", maxTokens: "", temperature: "", capabilities: [] };
+const emptyForm: LlmFormData = { name: "", endpointUrl: "", sk: "", model: "", maxTokens: "", contextLength: "", temperature: "", capabilities: [] };
 
 function parseCapabilities(raw: string | null): Capability[] {
   if (!raw) return [];
@@ -109,6 +110,7 @@ export function LlmConfigPage() {
       sk: llm.sk ?? "",
       model: llm.model,
       maxTokens: llm.maxTokens?.toString() ?? "",
+      contextLength: llm.contextLength?.toString() ?? "",
       temperature: llm.temperature != null ? (llm.temperature / 100).toString() : "",
       capabilities: parseCapabilities(llm.capabilities),
     });
@@ -133,6 +135,7 @@ export function LlmConfigPage() {
         sk: form.sk || undefined,
         model: form.model,
         maxTokens: form.maxTokens ? parseInt(form.maxTokens) : undefined,
+        contextLength: form.contextLength ? parseInt(form.contextLength) : undefined,
         temperature: form.temperature ? Math.round(parseFloat(form.temperature) * 100) : undefined,
         capabilities: form.capabilities.length > 0 ? capabilitiesToString(form.capabilities) : undefined,
       };
@@ -238,10 +241,11 @@ export function LlmConfigPage() {
                     {visibleSks.has(llm.id) ? <EyeOff className="size-3" /> : <Eye className="size-3" />}
                   </Button>
                 </div>
-                {(llm.maxTokens || llm.temperature != null) && (
+                {(llm.maxTokens || llm.contextLength || llm.temperature != null) && (
                   <div className="flex gap-3 text-xs text-muted-foreground">
-                    {llm.maxTokens && <span>MaxTokens: {llm.maxTokens}</span>}
-                    {llm.temperature != null && <span>Temperature: {(llm.temperature / 100).toFixed(2)}</span>}
+                    {llm.contextLength && <span>上下文长度: {llm.contextLength}</span>}
+                    {llm.maxTokens && <span>最大输出长度: {llm.maxTokens}</span>}
+                    {llm.temperature != null && <span>温度: {(llm.temperature / 100).toFixed(2)}</span>}
                   </div>
                 )}
               </CardContent>
@@ -273,13 +277,17 @@ export function LlmConfigPage() {
               <Label>模型</Label>
               <Input value={form.model} onChange={(e) => setForm({ ...form, model: e.target.value })} placeholder="gpt-4o" />
             </div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-3 gap-4">
               <div className="flex flex-col gap-2">
-                <Label>Max Tokens</Label>
+                <Label>上下文长度</Label>
+                <Input type="number" value={form.contextLength} onChange={(e) => setForm({ ...form, contextLength: e.target.value })} />
+              </div>
+              <div className="flex flex-col gap-2">
+                <Label>最大输出长度</Label>
                 <Input type="number" value={form.maxTokens} onChange={(e) => setForm({ ...form, maxTokens: e.target.value })} />
               </div>
               <div className="flex flex-col gap-2">
-                <Label>Temperature</Label>
+                <Label>温度</Label>
                 <Input type="number" step="0.01" min="0" max="2" value={form.temperature} onChange={(e) => setForm({ ...form, temperature: e.target.value })} placeholder="0.70" />
               </div>
             </div>

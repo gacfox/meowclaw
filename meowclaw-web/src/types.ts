@@ -20,6 +20,7 @@ export interface LlmDTO {
   sk: string | null;
   model: string;
   maxTokens: number | null;
+  contextLength: number | null;
   temperature: number | null;
   capabilities: string | null;
   createdAt: number;

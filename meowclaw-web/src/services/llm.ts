@@ -12,6 +12,7 @@ export async function createLlm(data: {
   sk?: string;
   model: string;
   maxTokens?: number;
+  contextLength?: number;
   temperature?: number;
   capabilities?: string;
 }): Promise<LlmDTO> {

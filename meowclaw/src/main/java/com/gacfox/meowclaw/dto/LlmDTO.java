@@ -16,6 +16,7 @@ public class LlmDTO {
     private String sk;
     private String model;
     private Integer maxTokens;
+    private Integer contextLength;
     private Integer temperature;
     private String capabilities;
     private Long createdAt;

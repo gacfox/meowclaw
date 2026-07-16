@@ -36,6 +36,7 @@ public class LlmService {
         llm.setSk(req.getSk());
         llm.setModel(req.getModel());
         llm.setMaxTokens(req.getMaxTokens());
+        llm.setContextLength(req.getContextLength());
         llm.setTemperature(req.getTemperature());
         llm.setCapabilities(req.getCapabilities());
         long now = System.currentTimeMillis();
@@ -53,6 +54,7 @@ public class LlmService {
         if (req.getSk() != null) llm.setSk(req.getSk());
         if (req.getModel() != null) llm.setModel(req.getModel());
         if (req.getMaxTokens() != null) llm.setMaxTokens(req.getMaxTokens());
+        if (req.getContextLength() != null) llm.setContextLength(req.getContextLength());
         if (req.getTemperature() != null) llm.setTemperature(req.getTemperature());
         if (req.getCapabilities() != null) llm.setCapabilities(req.getCapabilities());
         llm.setUpdatedAt(System.currentTimeMillis());

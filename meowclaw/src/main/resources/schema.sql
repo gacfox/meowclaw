@@ -18,6 +18,7 @@ CREATE TABLE IF NOT EXISTS mc_llm (
     sk VARCHAR(255) COMMENT 'API密钥',
     model VARCHAR(100) NOT NULL COMMENT '模型名称',
     max_tokens INT COMMENT '最大token数',
+    context_length INT COMMENT '模型上下文长度',
     temperature INT COMMENT '温度参数(×100存储)',
     capabilities VARCHAR(255) COMMENT '能力标签',
     created_at BIGINT NOT NULL COMMENT '创建时间',

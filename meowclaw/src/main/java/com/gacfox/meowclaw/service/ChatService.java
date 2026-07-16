@@ -106,6 +106,7 @@ public class ChatService {
                         .endpoint(llm.getEndpointUrl())
                         .sk(llm.getSk())
                         .maxTokens(llm.getMaxTokens())
+                        .contextLength(llm.getContextLength())
                         .build();
                 TokenUsageAccumulator tokenAccum = new TokenUsageAccumulator();
                 TokenUsageContext tokenUsageContext = new TokenUsageContext(

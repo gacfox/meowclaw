@@ -37,6 +37,9 @@ public class Llm {
     @Column(name = "max_tokens")
     private Integer maxTokens;
 
+    @Column(name = "context_length")
+    private Integer contextLength;
+
     @Column(name = "temperature")
     private Integer temperature;
 
