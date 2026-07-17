@@ -15,6 +15,8 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -27,6 +29,10 @@ import java.util.stream.Stream;
 @Slf4j
 @Service
 public class SystemPromptService {
+
+    private static final DateTimeFormatter DATE_TIME_FORMATTER =
+            DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+
     @Value("classpath:prompt/system-prompt.md")
     private Resource templateResource;
 
@@ -60,6 +66,7 @@ public class SystemPromptService {
         vars.put("cwd", cwd);
 
         vars.put("osName", System.getProperty("os.name"));
+        vars.put("currentTime", LocalDateTime.now().format(DATE_TIME_FORMATTER));
 
         List<SkillSummary> skills = hasWorkspace ? listInstalledSkills(workspaceFolder) : List.of();
         vars.put("hasSkills", !skills.isEmpty());
