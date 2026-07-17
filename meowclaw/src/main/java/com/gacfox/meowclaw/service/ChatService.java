@@ -13,6 +13,7 @@ import com.gacfox.meowclaw.repository.AgentRepository;
 import com.gacfox.meowclaw.repository.LlmRepository;
 import com.gacfox.meowclaw.repository.MessageRepository;
 import com.gacfox.meowclaw.interceptor.AgentLoggingInterceptor;
+import com.gacfox.meowclaw.interceptor.AgentSystemPromptRefreshInterceptor;
 import com.gacfox.meowclaw.interceptor.LlmLoggingInterceptor;
 import com.gacfox.meowclaw.interceptor.TokenUsageAccumulator;
 import com.gacfox.meowclaw.interceptor.TokenUsageContext;
@@ -56,8 +57,8 @@ public class ChatService {
     private final ToolRegistry toolRegistry;
     private final HttpClient httpClient;
     private final AgentLoggingInterceptor agentLoggingInterceptor;
+    private final AgentSystemPromptRefreshInterceptor agentSystemPromptRefreshInterceptor;
     private final LlmLoggingInterceptor llmLoggingInterceptor;
-    private final SystemPromptService systemPromptService;
     private final TitleGenerationRegistry titleGenerationRegistry;
     private final TokenUsageLogService tokenUsageLogService;
 
@@ -70,8 +71,8 @@ public class ChatService {
                        ToolRegistry toolRegistry,
                        HttpClient httpClient,
                        AgentLoggingInterceptor agentLoggingInterceptor,
+                       AgentSystemPromptRefreshInterceptor agentSystemPromptRefreshInterceptor,
                        LlmLoggingInterceptor llmLoggingInterceptor,
-                       SystemPromptService systemPromptService,
                        TitleGenerationRegistry titleGenerationRegistry,
                        TokenUsageLogService tokenUsageLogService) {
         this.conversationService = conversationService;
@@ -82,8 +83,8 @@ public class ChatService {
         this.toolRegistry = toolRegistry;
         this.httpClient = httpClient;
         this.agentLoggingInterceptor = agentLoggingInterceptor;
+        this.agentSystemPromptRefreshInterceptor = agentSystemPromptRefreshInterceptor;
         this.llmLoggingInterceptor = llmLoggingInterceptor;
-        this.systemPromptService = systemPromptService;
         this.titleGenerationRegistry = titleGenerationRegistry;
         this.tokenUsageLogService = tokenUsageLogService;
     }
@@ -118,8 +119,18 @@ public class ChatService {
                                 new TokenUsageLlmInterceptor(tokenAccum, tokenUsageLogService, tokenUsageContext)))
                         .build();
 
+                String workspaceFolder = agent.getWorkspaceFolder();
+                Map<String, Object> variables = new HashMap<>();
+                if (workspaceFolder != null && !workspaceFolder.isBlank()) {
+                    variables.put("workspacePath", workspaceFolder);
+                }
+                String savedCwd = extractCwd(conv.getContextJson());
+                String currentCwd = savedCwd != null ? savedCwd : workspaceFolder;
+                variables.put("cwd", currentCwd);
+                variables.put("agentId", agent.getId());
+
                 List<com.gacfox.proarc.agentic.model.openai.Message> messages =
-                        buildContextMessages(agent, conversationId, userContent);
+                        buildContextMessages(conversationId, userContent);
 
                 List<String> toolNames = new ArrayList<>(parseJsonArray(agent.getEnabledTools()));
                 toolNames.addAll(parseJsonArray(agent.getEnabledMcpTools()));
@@ -129,16 +140,8 @@ public class ChatService {
                         .defaultLlmClient(llmClient)
                         .toolRegistry(toolRegistry)
                         .defaultToolNames(toolNames)
-                        .interceptors(List.of(agentLoggingInterceptor))
+                        .interceptors(List.of(agentSystemPromptRefreshInterceptor, agentLoggingInterceptor))
                         .build();
-
-                String workspaceFolder = agent.getWorkspaceFolder();
-                Map<String, Object> variables = new HashMap<>();
-                if (workspaceFolder != null && !workspaceFolder.isBlank()) {
-                    variables.put("workspacePath", workspaceFolder);
-                }
-                String savedCwd = extractCwd(conv.getContextJson());
-                variables.put("cwd", savedCwd != null ? savedCwd : workspaceFolder);
 
                 AgentContext context = AgentContext.builder()
                         .messages(messages)
@@ -228,24 +231,11 @@ public class ChatService {
     }
 
     private List<com.gacfox.proarc.agentic.model.openai.Message> buildContextMessages(
-            Agent agent, Long conversationId, String userContent) {
+            Long conversationId, String userContent) {
         List<com.gacfox.proarc.agentic.model.openai.Message> messages = new ArrayList<>();
 
-        String systemContent = systemPromptService.build(agent);
-        if (!systemContent.isBlank()) {
-            messages.add(com.gacfox.proarc.agentic.model.openai.Message.builder()
-                    .role(com.gacfox.proarc.agentic.model.openai.Message.ROLE_SYSTEM)
-                    .content(systemContent)
-                    .build());
-        }
-
         List<Message> history = messageRepository.findByConversationIdOrderByCreatedAtAsc(conversationId);
-        boolean firstSkipped = false;
         for (Message msg : history) {
-            if (!firstSkipped && "system".equalsIgnoreCase(msg.getRole())) {
-                firstSkipped = true;
-                continue;
-            }
             messages.add(chatPersistenceService.toProarcMessage(msg));
         }
 

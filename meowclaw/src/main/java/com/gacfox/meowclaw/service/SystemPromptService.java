@@ -41,8 +41,11 @@ public class SystemPromptService {
 
     /**
      * 构建系统提示词
+     *
+     * @param agent 智能体配置
+     * @param cwd   当前工作目录，可为 null
      */
-    public String build(Agent agent) {
+    public String build(Agent agent, String cwd) {
         Map<String, Object> vars = new HashMap<>();
 
         String persona = agent.getPersona();
@@ -54,6 +57,7 @@ public class SystemPromptService {
         boolean hasWorkspace = workspaceFolder != null && !workspaceFolder.isBlank();
         vars.put("hasWorkspace", hasWorkspace);
         vars.put("workspacePath", workspaceFolder);
+        vars.put("cwd", cwd);
 
         vars.put("osName", System.getProperty("os.name"));
 
