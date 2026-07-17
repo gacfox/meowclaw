@@ -23,6 +23,7 @@ import com.gacfox.proarc.agentic.agent.AgentResponse;
 import com.gacfox.proarc.agentic.agent.ReActAgentExecutor;
 import com.gacfox.proarc.agentic.client.LlmClient;
 import com.gacfox.proarc.agentic.client.OpenAiLlmClient;
+import com.gacfox.proarc.agentic.client.interceptor.builtin.RetryInterceptor;
 import com.gacfox.proarc.agentic.model.ChatRequest;
 import com.gacfox.proarc.agentic.model.openai.ModelInfo;
 import com.gacfox.proarc.agentic.model.openai.ModelResponse;
@@ -116,7 +117,8 @@ public class ChatService {
                         .modelInfo(modelInfo)
                         .httpClient(httpClient)
                         .interceptors(List.of(llmLoggingInterceptor,
-                                new TokenUsageLlmInterceptor(tokenAccum, tokenUsageLogService, tokenUsageContext)))
+                                new TokenUsageLlmInterceptor(tokenAccum, tokenUsageLogService, tokenUsageContext),
+                                new RetryInterceptor()))
                         .build();
 
                 String workspaceFolder = agent.getWorkspaceFolder();
