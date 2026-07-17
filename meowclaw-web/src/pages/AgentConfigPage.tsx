@@ -29,7 +29,8 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Pencil, Trash2, FolderOpen, Camera, RefreshCw } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
+import { Plus, Pencil, Trash2, Copy, FolderOpen, Camera, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 
 function parseJsonArray(raw: string | null): string[] {
@@ -183,6 +184,43 @@ export function AgentConfigPage() {
     }
   };
 
+  // Copy dialog
+  const [copyDialogOpen, setCopyDialogOpen] = useState(false);
+  const [copyingAgent, setCopyingAgent] = useState<AgentDTO | null>(null);
+  const [copyName, setCopyName] = useState("");
+  const [copyIndependentWorkspace, setCopyIndependentWorkspace] = useState(false);
+  const [copySaving, setCopySaving] = useState(false);
+
+  const openCopy = (agent: AgentDTO) => {
+    setCopyingAgent(agent);
+    setCopyName(`${agent.name}(复制)`);
+    setCopyIndependentWorkspace(true);
+    setCopyDialogOpen(true);
+  };
+
+  const handleCopy = async () => {
+    if (!copyingAgent || !copyName.trim()) return;
+    setCopySaving(true);
+    try {
+      await createAgent({
+        name: copyName.trim(),
+        avatarUrl: copyingAgent.avatarUrl ?? undefined,
+        persona: copyingAgent.persona ?? undefined,
+        enabledTools: copyingAgent.enabledTools ?? undefined,
+        enabledMcpTools: copyingAgent.enabledMcpTools ?? undefined,
+        llmId: copyingAgent.llmId ?? undefined,
+        workspaceFolder: copyIndependentWorkspace ? undefined : (copyingAgent.workspaceFolder ?? undefined),
+      });
+      await fetchData();
+      setCopyDialogOpen(false);
+      toast.success("复制成功");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "复制失败");
+    } finally {
+      setCopySaving(false);
+    }
+  };
+
   const handleAvatarClick = (agentId: number) => {
     avatarFileRef.current?.click();
     setUploadingAvatarId(agentId);
@@ -254,6 +292,9 @@ export function AgentConfigPage() {
                 <div className="flex gap-1">
                   <Button variant="ghost" size="icon-sm" onClick={() => openEdit(agent)}>
                     <Pencil className="size-4" />
+                  </Button>
+                  <Button variant="ghost" size="icon-sm" onClick={() => openCopy(agent)} title="复制">
+                    <Copy className="size-4" />
                   </Button>
                   <Button variant="ghost" size="icon-sm" onClick={() => openDelete(agent)}>
                     <Trash2 className="size-4 text-destructive" />
@@ -388,6 +429,42 @@ export function AgentConfigPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Copy Dialog */}
+      <Dialog open={copyDialogOpen} onOpenChange={setCopyDialogOpen}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>复制智能体</DialogTitle>
+          </DialogHeader>
+          <div className="flex flex-col gap-4">
+            <div className="flex flex-col gap-2">
+              <Label>新智能体名称</Label>
+              <Input
+                value={copyName}
+                onChange={(e) => setCopyName(e.target.value)}
+                placeholder="请输入新智能体名称"
+                autoFocus
+              />
+            </div>
+            <div className="flex items-center justify-between gap-4">
+              <Label htmlFor="independent-workspace" className="cursor-pointer">生成独立工作区</Label>
+              <Switch
+                id="independent-workspace"
+                checked={copyIndependentWorkspace}
+                onCheckedChange={setCopyIndependentWorkspace}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCopyDialogOpen(false)} disabled={copySaving}>
+              取消
+            </Button>
+            <Button onClick={handleCopy} disabled={copySaving || !copyName.trim()}>
+              {copySaving ? "复制中..." : "确认"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <input
         ref={avatarFileRef}

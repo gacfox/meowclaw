@@ -23,7 +23,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Plus, Pencil, Trash2, Eye, EyeOff, Globe, Cpu, RefreshCw } from "lucide-react";
+import { Plus, Pencil, Trash2, Copy, Eye, EyeOff, Globe, Cpu, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 
 const CAPABILITY_OPTIONS = [
@@ -173,6 +173,42 @@ export function LlmConfigPage() {
     }
   };
 
+  // Copy dialog
+  const [copyDialogOpen, setCopyDialogOpen] = useState(false);
+  const [copyingLlm, setCopyingLlm] = useState<LlmDTO | null>(null);
+  const [copyName, setCopyName] = useState("");
+  const [copySaving, setCopySaving] = useState(false);
+
+  const openCopy = (llm: LlmDTO) => {
+    setCopyingLlm(llm);
+    setCopyName(`${llm.name}(复制)`);
+    setCopyDialogOpen(true);
+  };
+
+  const handleCopy = async () => {
+    if (!copyingLlm || !copyName.trim()) return;
+    setCopySaving(true);
+    try {
+      await createLlm({
+        name: copyName.trim(),
+        endpointUrl: copyingLlm.endpointUrl,
+        sk: copyingLlm.sk ?? undefined,
+        model: copyingLlm.model,
+        maxTokens: copyingLlm.maxTokens ?? undefined,
+        contextLength: copyingLlm.contextLength ?? undefined,
+        temperature: copyingLlm.temperature ?? undefined,
+        capabilities: copyingLlm.capabilities ?? undefined,
+      });
+      await fetchLlms();
+      setCopyDialogOpen(false);
+      toast.success("复制成功");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "复制失败");
+    } finally {
+      setCopySaving(false);
+    }
+  };
+
   const renderCapabilityBadges = (caps: string | null) => {
     if (!caps) return null;
     const list = caps.split(",").map((s) => s.trim()).filter(Boolean);
@@ -217,6 +253,9 @@ export function LlmConfigPage() {
                 <div className="flex gap-1">
                   <Button variant="ghost" size="icon-sm" onClick={() => openEdit(llm)}>
                     <Pencil className="size-4" />
+                  </Button>
+                  <Button variant="ghost" size="icon-sm" onClick={() => openCopy(llm)} title="复制">
+                    <Copy className="size-4" />
                   </Button>
                   <Button variant="ghost" size="icon-sm" onClick={() => openDelete(llm)}>
                     <Trash2 className="size-4 text-destructive" />
@@ -332,6 +371,34 @@ export function LlmConfigPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Copy Dialog */}
+      <Dialog open={copyDialogOpen} onOpenChange={setCopyDialogOpen}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>复制配置</DialogTitle>
+          </DialogHeader>
+          <div className="flex flex-col gap-4">
+            <div className="flex flex-col gap-2">
+              <Label>新配置名称</Label>
+              <Input
+                value={copyName}
+                onChange={(e) => setCopyName(e.target.value)}
+                placeholder="请输入新配置名称"
+                autoFocus
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCopyDialogOpen(false)} disabled={copySaving}>
+              取消
+            </Button>
+            <Button onClick={handleCopy} disabled={copySaving || !copyName.trim()}>
+              {copySaving ? "复制中..." : "确认"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
