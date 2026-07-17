@@ -1,5 +1,5 @@
 import { Moon, Sun, Monitor, LogOut, Settings } from "lucide-react";
-import { siGithub } from "simple-icons/icons";
+import { siGithub } from "simple-icons";
 import { useTheme } from "next-themes";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useAuthStore } from "@/stores/auth";
