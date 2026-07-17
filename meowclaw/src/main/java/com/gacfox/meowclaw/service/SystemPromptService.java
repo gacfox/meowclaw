@@ -22,15 +22,12 @@ import java.util.Map;
 import java.util.stream.Stream;
 
 /**
- * 系统提示词组装：基于 Mustache 模板渲染 persona / workspace / skills 等片段。
+ * 系统提示词组装服务
  */
 @Slf4j
 @Service
 public class SystemPromptService {
-
-    private static final String TEMPLATE_LOCATION = "classpath:prompt/system-prompt.md";
-
-    @Value(TEMPLATE_LOCATION)
+    @Value("classpath:prompt/system-prompt.md")
     private Resource templateResource;
 
     private String template;
@@ -43,7 +40,7 @@ public class SystemPromptService {
     }
 
     /**
-     * 构建智能体的系统提示词（即 system message 内容）。
+     * 构建系统提示词
      */
     public String build(Agent agent) {
         Map<String, Object> vars = new HashMap<>();
@@ -58,6 +55,8 @@ public class SystemPromptService {
         vars.put("hasWorkspace", hasWorkspace);
         vars.put("workspacePath", workspaceFolder);
 
+        vars.put("osName", System.getProperty("os.name"));
+
         List<SkillSummary> skills = hasWorkspace ? listInstalledSkills(workspaceFolder) : List.of();
         vars.put("hasSkills", !skills.isEmpty());
         vars.put("skills", skills);
@@ -65,10 +64,11 @@ public class SystemPromptService {
         return PromptTemplate.build(template, vars);
     }
 
-    public record SkillSummary(String name, String description) {}
+    public record SkillSummary(String name, String description) {
+    }
 
     /**
-     * 扫描工作区 {@code .skill/<name>/SKILL.md}，仅依赖文件系统，与技能包管理模块完全解耦。
+     * 扫描工作区 {@code .skill/<name>/SKILL.md}，仅依赖文件系统，与技能包管理模块完全解耦
      */
     private List<SkillSummary> listInstalledSkills(String workspacePath) {
         Path skillRoot = Paths.get(workspacePath, ".skill");
