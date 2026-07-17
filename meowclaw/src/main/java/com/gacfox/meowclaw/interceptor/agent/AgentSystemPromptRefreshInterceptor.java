@@ -1,4 +1,4 @@
-package com.gacfox.meowclaw.interceptor;
+package com.gacfox.meowclaw.interceptor.agent;
 
 import com.gacfox.meowclaw.entity.Agent;
 import com.gacfox.meowclaw.repository.AgentRepository;

@@ -6,7 +6,7 @@ import com.gacfox.meowclaw.dto.TokenStatsDTO.TokenStatsSummary;
 import com.gacfox.meowclaw.dto.TokenStatsDTO.TokenTopModel;
 import com.gacfox.meowclaw.entity.Llm;
 import com.gacfox.meowclaw.entity.TokenUsageLog;
-import com.gacfox.meowclaw.interceptor.TokenUsageContext;
+import com.gacfox.meowclaw.interceptor.llm.TokenUsageContext;
 import com.gacfox.meowclaw.repository.LlmRepository;
 import com.gacfox.meowclaw.repository.TokenUsageLogRepository;
 import com.gacfox.proarc.agentic.model.openai.Usage;

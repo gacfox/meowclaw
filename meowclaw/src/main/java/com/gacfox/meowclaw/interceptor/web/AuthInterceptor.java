@@ -1,4 +1,4 @@
-package com.gacfox.meowclaw.interceptor;
+package com.gacfox.meowclaw.interceptor.web;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.gacfox.meowclaw.dto.UserDTO;

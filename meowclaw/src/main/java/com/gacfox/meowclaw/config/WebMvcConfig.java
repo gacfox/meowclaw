@@ -1,6 +1,6 @@
 package com.gacfox.meowclaw.config;
 
-import com.gacfox.meowclaw.interceptor.AuthInterceptor;
+import com.gacfox.meowclaw.interceptor.web.AuthInterceptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Configuration;

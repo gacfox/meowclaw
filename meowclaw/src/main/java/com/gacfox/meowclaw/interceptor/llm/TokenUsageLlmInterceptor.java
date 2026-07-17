@@ -1,4 +1,4 @@
-package com.gacfox.meowclaw.interceptor;
+package com.gacfox.meowclaw.interceptor.llm;
 
 import com.gacfox.meowclaw.service.TokenUsageLogService;
 import com.gacfox.proarc.agentic.client.interceptor.LlmInterceptor;

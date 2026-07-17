@@ -1,4 +1,4 @@
-package com.gacfox.meowclaw.interceptor;
+package com.gacfox.meowclaw.interceptor.agent;
 
 import com.gacfox.proarc.agentic.agent.AgentContext;
 import com.gacfox.proarc.agentic.agent.interceptor.AgentInterceptor;
