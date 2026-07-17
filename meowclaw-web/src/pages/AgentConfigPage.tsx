@@ -104,7 +104,10 @@ export function AgentConfigPage() {
 
   const openCreate = () => {
     setEditing(null);
-    setForm(emptyForm);
+    setForm({
+      ...emptyForm,
+      enabledTools: tools.map((tool) => tool.name),
+    });
     setDialogOpen(true);
   };
 
