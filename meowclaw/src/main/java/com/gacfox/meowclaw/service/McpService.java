@@ -28,6 +28,8 @@ import io.modelcontextprotocol.spec.McpClientTransport;
 import io.modelcontextprotocol.spec.McpSchema;
 import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -38,8 +40,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 
 /**
  * MCP 服务管理：CRUD、启用/禁用（动态注册/反注册工具到 ProArc {@link ToolRegistry}）、连接测试、状态刷新。
@@ -59,27 +59,27 @@ public class McpService {
     private final AgentRepository agentRepository;
     private final McpServiceConverter converter;
     private final ToolRegistry toolRegistry;
+    private final ThreadPoolTaskScheduler taskScheduler;
     private final Map<Long, McpSyncClient> activeClients = new ConcurrentHashMap<>();
 
+    @Autowired
     public McpService(McpServiceConfigRepository mcpServiceRepository,
                       AgentRepository agentRepository,
                       McpServiceConverter converter,
-                      ToolRegistry toolRegistry) {
+                      ToolRegistry toolRegistry,
+                      ThreadPoolTaskScheduler taskScheduler) {
         this.mcpServiceRepository = mcpServiceRepository;
         this.agentRepository = agentRepository;
         this.converter = converter;
         this.toolRegistry = toolRegistry;
+        this.taskScheduler = taskScheduler;
     }
 
     @PostConstruct
     public void init() {
         List<McpServiceConfig> enabled = mcpServiceRepository.findByEnabledTrue();
-        if (enabled.isEmpty()) {
-            return;
-        }
-        ExecutorService executor = Executors.newCachedThreadPool();
         for (McpServiceConfig service : enabled) {
-            executor.submit(() -> {
+            taskScheduler.submit(() -> {
                 try {
                     doEnable(service);
                     log.info("MCP service {} connected on startup", service.getName());
@@ -89,7 +89,6 @@ public class McpService {
                 }
             });
         }
-        executor.shutdown();
     }
 
     @Transactional(readOnly = true)

@@ -49,26 +49,17 @@ public class ConversationService {
     }
 
     @Transactional(readOnly = true)
-    public Pagination<ConversationDTO> listByAgent(Long agentId, int page, int size) {
-        Page<Conversation> pageResult = conversationRepository.findByAgentIdOrderByUpdatedAtDesc(agentId, PageRequest.of(page - 1, size));
+    public Pagination<ConversationDTO> listByAgent(Long agentId, String type, int page, int size) {
+        Page<Conversation> pageResult;
+        if (type == null || type.isBlank()) {
+            pageResult = conversationRepository.findByAgentIdOrderByUpdatedAtDesc(agentId, PageRequest.of(page - 1, size));
+        } else {
+            pageResult = conversationRepository.findByAgentIdAndTypeOrderByUpdatedAtDesc(agentId, type, PageRequest.of(page - 1, size));
+        }
         List<ConversationDTO> list = pageResult.getContent().stream().map(conversationConverter::toDTO).toList();
         int total = (int) pageResult.getTotalElements();
         int totalPages = (int) Math.ceil((double) total / size);
         return new Pagination<>(list, total, totalPages, page, size);
-    }
-
-    @Transactional(readOnly = true)
-    public Pagination<ConversationDTO> listByAgentAndType(Long agentId, String type, int page, int size) {
-        Page<Conversation> pageResult = conversationRepository.findByAgentIdAndTypeOrderByUpdatedAtDesc(agentId, type, PageRequest.of(page - 1, size));
-        List<ConversationDTO> list = pageResult.getContent().stream().map(conversationConverter::toDTO).toList();
-        int total = (int) pageResult.getTotalElements();
-        int totalPages = (int) Math.ceil((double) total / size);
-        return new Pagination<>(list, total, totalPages, page, size);
-    }
-
-    @Transactional
-    public ConversationDTO create(Long agentId) {
-        return create(agentId, "CHAT");
     }
 
     @Transactional

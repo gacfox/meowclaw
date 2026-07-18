@@ -54,15 +54,12 @@ public class ConversationController {
             @RequestParam(required = false) String type,
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "20") int size) {
-        if (type != null) {
-            return ApiResult.success(conversationService.listByAgentAndType(agentId, type, page, size));
-        }
-        return ApiResult.success(conversationService.listByAgent(agentId, page, size));
+        return ApiResult.success(conversationService.listByAgent(agentId, type, page, size));
     }
 
     @PostMapping
     public ApiResult<ConversationDTO> create(@RequestBody Map<String, Long> body) {
-        return ApiResult.success(conversationService.create(body.get("agentId")));
+        return ApiResult.success(conversationService.create(body.get("agentId"), "CHAT"));
     }
 
     @GetMapping("/{id}")
