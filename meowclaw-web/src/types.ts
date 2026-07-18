@@ -69,6 +69,7 @@ export interface ChatEventBatchDTO {
   id: number;
   conversationId: number;
   userContent: string;
+  type: "USER" | "CONTEXT_COMPACTION";
   status: string;
   errorMessage: string | null;
   inputTokens: number | null;

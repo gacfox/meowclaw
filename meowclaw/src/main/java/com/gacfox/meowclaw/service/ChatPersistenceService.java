@@ -42,9 +42,24 @@ public class ChatPersistenceService {
         ChatEventBatch batch = new ChatEventBatch();
         batch.setConversationId(conversationId);
         batch.setUserContent(userContent);
+        batch.setType("USER");
         batch.setStatus("RUNNING");
         batch.setCreatedAt(System.currentTimeMillis());
         return chatEventBatchRepository.save(batch);
+    }
+
+    @Transactional
+    public ChatEventBatch createContextCompressionBatch(Long conversationId, String content) {
+        ChatEventBatch batch = new ChatEventBatch();
+        batch.setConversationId(conversationId);
+        batch.setUserContent("");
+        batch.setType("CONTEXT_COMPACTION");
+        batch.setStatus("COMPLETED");
+        batch.setCreatedAt(System.currentTimeMillis());
+        batch.setCompletedAt(batch.getCreatedAt());
+        batch = chatEventBatchRepository.save(batch);
+        saveChatEvent(batch.getId(), 0, "context_compression", content, null, null, null);
+        return batch;
     }
 
     @Transactional

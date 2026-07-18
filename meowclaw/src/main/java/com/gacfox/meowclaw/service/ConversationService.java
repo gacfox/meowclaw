@@ -11,6 +11,10 @@ import com.gacfox.meowclaw.repository.ChatEventBatchRepository;
 import com.gacfox.meowclaw.repository.ChatEventRepository;
 import com.gacfox.meowclaw.repository.ConversationRepository;
 import com.gacfox.meowclaw.repository.MessageRepository;
+import com.gacfox.meowclaw.repository.ContextRecapRepository;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.gacfox.proarc.common.model.Pagination;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
@@ -23,10 +27,12 @@ import java.util.stream.Stream;
 
 @Service
 public class ConversationService {
+    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
     private final ConversationRepository conversationRepository;
     private final MessageRepository messageRepository;
     private final ChatEventBatchRepository chatEventBatchRepository;
     private final ChatEventRepository chatEventRepository;
+    private final ContextRecapRepository contextRecapRepository;
     private final ConversationConverter conversationConverter;
     private final ChatEventBatchConverter chatEventBatchConverter;
     private final ChatEventConverter chatEventConverter;
@@ -36,6 +42,7 @@ public class ConversationService {
                                MessageRepository messageRepository,
                                ChatEventBatchRepository chatEventBatchRepository,
                                ChatEventRepository chatEventRepository,
+                               ContextRecapRepository contextRecapRepository,
                                ConversationConverter conversationConverter,
                                ChatEventBatchConverter chatEventBatchConverter,
                                ChatEventConverter chatEventConverter) {
@@ -43,6 +50,7 @@ public class ConversationService {
         this.messageRepository = messageRepository;
         this.chatEventBatchRepository = chatEventBatchRepository;
         this.chatEventRepository = chatEventRepository;
+        this.contextRecapRepository = contextRecapRepository;
         this.conversationConverter = conversationConverter;
         this.chatEventBatchConverter = chatEventBatchConverter;
         this.chatEventConverter = chatEventConverter;
@@ -83,6 +91,7 @@ public class ConversationService {
             chatEventRepository.deleteByBatchIdIn(batchIds);
         }
         chatEventBatchRepository.deleteByConversationId(id);
+        contextRecapRepository.deleteByConversationId(id);
         messageRepository.deleteByConversationId(id);
         conversationRepository.delete(conv);
     }
@@ -115,6 +124,72 @@ public class ConversationService {
         conv.setContextJson(contextJson);
         conv.setUpdatedAt(System.currentTimeMillis());
         conversationRepository.save(conv);
+    }
+
+    @Transactional
+    public void updateCwd(Long id, String cwd) {
+        updateContextField(id, "cwd", cwd);
+    }
+
+    @Transactional
+    public void updateContextHealth(Long id, long promptTokens, Integer contextLength, String status) {
+        Conversation conv = getById(id);
+        ObjectNode root = contextRoot(conv.getContextJson());
+        ObjectNode health = root.putObject("context");
+        health.put("promptTokens", promptTokens);
+        if (contextLength != null) health.put("contextLength", contextLength);
+        health.put("status", status);
+        health.put("measuredAt", System.currentTimeMillis());
+        saveContext(conv, root);
+    }
+
+    @Transactional(readOnly = true)
+    public String getContextStatus(Long id) {
+        Conversation conv = getById(id);
+        try {
+            JsonNode node = OBJECT_MAPPER.readTree(conv.getContextJson());
+            JsonNode status = node.path("context").path("status");
+            return status.isTextual() ? status.asText() : "NORMAL";
+        } catch (Exception e) {
+            return "NORMAL";
+        }
+    }
+
+    @Transactional(readOnly = true)
+    public long getContextPromptTokens(Long id) {
+        Conversation conv = getById(id);
+        try {
+            JsonNode node = OBJECT_MAPPER.readTree(conv.getContextJson());
+            return node.path("context").path("promptTokens").asLong(0);
+        } catch (Exception e) {
+            return 0;
+        }
+    }
+
+    private void updateContextField(Long id, String name, String value) {
+        Conversation conv = getById(id);
+        ObjectNode root = contextRoot(conv.getContextJson());
+        if (value == null) root.putNull(name); else root.put(name, value);
+        saveContext(conv, root);
+    }
+
+    private ObjectNode contextRoot(String contextJson) {
+        try {
+            JsonNode node = contextJson == null ? null : OBJECT_MAPPER.readTree(contextJson);
+            if (node instanceof ObjectNode objectNode) return objectNode;
+        } catch (Exception ignored) {
+        }
+        return OBJECT_MAPPER.createObjectNode();
+    }
+
+    private void saveContext(Conversation conv, ObjectNode root) {
+        try {
+            conv.setContextJson(OBJECT_MAPPER.writeValueAsString(root));
+            conv.setUpdatedAt(System.currentTimeMillis());
+            conversationRepository.save(conv);
+        } catch (Exception e) {
+            throw new IllegalStateException("更新会话上下文失败", e);
+        }
     }
 
     @Transactional
@@ -154,6 +229,8 @@ public class ConversationService {
         if (batchIdsToDelete.isEmpty()) return;
         chatEventRepository.deleteByBatchIdIn(batchIdsToDelete);
         messageRepository.deleteByBatchIdIn(batchIdsToDelete);
+        contextRecapRepository.deleteByConversationIdAndFromBatchIdInOrConversationIdAndToBatchIdIn(
+                conversationId, batchIdsToDelete, conversationId, batchIdsToDelete);
         chatEventBatchRepository.deleteAllById(batchIdsToDelete);
     }
 }

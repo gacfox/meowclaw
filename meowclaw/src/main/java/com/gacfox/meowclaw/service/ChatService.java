@@ -1,17 +1,14 @@
 package com.gacfox.meowclaw.service;
 
 import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.gacfox.meowclaw.dto.ChatEventDTO;
 import com.gacfox.meowclaw.entity.Agent;
 import com.gacfox.meowclaw.entity.ChatEventBatch;
 import com.gacfox.meowclaw.entity.Conversation;
 import com.gacfox.meowclaw.entity.Llm;
-import com.gacfox.meowclaw.entity.Message;
 import com.gacfox.meowclaw.repository.AgentRepository;
 import com.gacfox.meowclaw.repository.LlmRepository;
-import com.gacfox.meowclaw.repository.MessageRepository;
 import com.gacfox.meowclaw.interceptor.agent.AgentLoggingInterceptor;
 import com.gacfox.meowclaw.interceptor.agent.AgentSystemPromptRefreshInterceptor;
 import com.gacfox.meowclaw.interceptor.llm.LlmLoggingInterceptor;
@@ -19,12 +16,12 @@ import com.gacfox.meowclaw.interceptor.llm.TokenUsageAccumulator;
 import com.gacfox.meowclaw.interceptor.llm.TokenUsageContext;
 import com.gacfox.meowclaw.interceptor.llm.TokenUsageLlmInterceptor;
 import com.gacfox.proarc.agentic.agent.AgentContext;
-import com.gacfox.proarc.agentic.agent.AgentResponse;
 import com.gacfox.proarc.agentic.agent.ReActAgentExecutor;
 import com.gacfox.proarc.agentic.client.LlmClient;
 import com.gacfox.proarc.agentic.client.OpenAiLlmClient;
 import com.gacfox.proarc.agentic.client.interceptor.builtin.RetryInterceptor;
 import com.gacfox.proarc.agentic.model.ChatRequest;
+import com.gacfox.proarc.agentic.model.openai.Message;
 import com.gacfox.proarc.agentic.model.openai.ModelInfo;
 import com.gacfox.proarc.agentic.model.openai.ModelResponse;
 import com.gacfox.proarc.agentic.tool.ToolRegistry;
@@ -55,7 +52,6 @@ public class ChatService {
     private final ChatPersistenceService chatPersistenceService;
     private final AgentRepository agentRepository;
     private final LlmRepository llmRepository;
-    private final MessageRepository messageRepository;
     private final ToolRegistry toolRegistry;
     private final HttpClient httpClient;
     private final AgentLoggingInterceptor agentLoggingInterceptor;
@@ -63,25 +59,25 @@ public class ChatService {
     private final LlmLoggingInterceptor llmLoggingInterceptor;
     private final TitleGenerationRegistry titleGenerationRegistry;
     private final TokenUsageLogService tokenUsageLogService;
+    private final ContextCompressionService contextCompressionService;
 
     @Autowired
     public ChatService(ConversationService conversationService,
                        ChatPersistenceService chatPersistenceService,
                        AgentRepository agentRepository,
                        LlmRepository llmRepository,
-                       MessageRepository messageRepository,
                        ToolRegistry toolRegistry,
                        HttpClient httpClient,
                        AgentLoggingInterceptor agentLoggingInterceptor,
                        AgentSystemPromptRefreshInterceptor agentSystemPromptRefreshInterceptor,
                        LlmLoggingInterceptor llmLoggingInterceptor,
                        TitleGenerationRegistry titleGenerationRegistry,
-                       TokenUsageLogService tokenUsageLogService) {
+                       TokenUsageLogService tokenUsageLogService,
+                       ContextCompressionService contextCompressionService) {
         this.conversationService = conversationService;
         this.chatPersistenceService = chatPersistenceService;
         this.agentRepository = agentRepository;
         this.llmRepository = llmRepository;
-        this.messageRepository = messageRepository;
         this.toolRegistry = toolRegistry;
         this.httpClient = httpClient;
         this.agentLoggingInterceptor = agentLoggingInterceptor;
@@ -89,6 +85,7 @@ public class ChatService {
         this.llmLoggingInterceptor = llmLoggingInterceptor;
         this.titleGenerationRegistry = titleGenerationRegistry;
         this.tokenUsageLogService = tokenUsageLogService;
+        this.contextCompressionService = contextCompressionService;
     }
 
     public Flux<ChatEventDTO> chat(Long conversationId, String userContent) {
@@ -100,107 +97,209 @@ public class ChatService {
                 Llm llm = llmRepository.findById(agent.getLlmId())
                         .orElseThrow(() -> new IllegalArgumentException("LLM配置不存在"));
 
+                tryProactiveCompression(conversationId, llm, sink);
+
                 ChatEventBatch batch = chatPersistenceService.createBatch(conversationId, userContent);
                 Long batchId = batch.getId();
 
-                ModelInfo modelInfo = ModelInfo.builder()
-                        .provider("openai")
-                        .model(llm.getModel())
-                        .endpoint(llm.getEndpointUrl())
-                        .sk(llm.getSk())
-                        .maxTokens(llm.getMaxTokens())
-                        .contextLength(llm.getContextLength())
-                        .build();
                 TokenUsageAccumulator tokenAccum = new TokenUsageAccumulator();
-                TokenUsageContext tokenUsageContext = new TokenUsageContext(
-                        agent.getLlmId(), conv.getAgentId(), conversationId, batchId, llm.getModel());
-                LlmClient llmClient = OpenAiLlmClient.builder()
-                        .modelInfo(modelInfo)
-                        .httpClient(httpClient)
-                        .interceptors(List.of(llmLoggingInterceptor,
-                                new TokenUsageLlmInterceptor(tokenAccum, tokenUsageLogService, tokenUsageContext),
-                                new RetryInterceptor()))
-                        .build();
-
-                String workspaceFolder = agent.getWorkspaceFolder();
-                Map<String, Object> variables = new HashMap<>();
-                if (workspaceFolder != null && !workspaceFolder.isBlank()) {
-                    variables.put("workspacePath", workspaceFolder);
-                }
-                String savedCwd = extractCwd(conv.getContextJson());
-                String currentCwd = savedCwd != null ? savedCwd : workspaceFolder;
-                variables.put("cwd", currentCwd);
-                variables.put("agentId", agent.getId());
-
-                List<com.gacfox.proarc.agentic.model.openai.Message> messages =
-                        buildContextMessages(conversationId, userContent);
+                LlmClient llmClient = buildMainLlmClient(llm, batchId, agent, conv, tokenAccum);
 
                 List<String> toolNames = new ArrayList<>(parseJsonArray(agent.getEnabledTools()));
                 toolNames.addAll(parseJsonArray(agent.getEnabledMcpTools()));
-                Double temperature = llm.getTemperature() != null ? llm.getTemperature() / 100.0 : 0.7;
+                ReActAgentExecutor executor = buildExecutor(llmClient, toolNames);
 
-                ReActAgentExecutor executor = ReActAgentExecutor.builder()
-                        .defaultLlmClient(llmClient)
-                        .toolRegistry(toolRegistry)
-                        .defaultToolNames(toolNames)
-                        .interceptors(List.of(agentSystemPromptRefreshInterceptor, agentLoggingInterceptor))
-                        .build();
-
-                AgentContext context = AgentContext.builder()
-                        .messages(messages)
-                        .llmClient(llmClient)
-                        .toolNames(toolNames)
-                        .temperature(temperature)
-                        .maxTokens(llm.getMaxTokens())
-                        .variables(variables)
-                        .build();
-
-                int messageCountBefore = context.getMessages().size();
-                AtomicInteger eventOrder = new AtomicInteger(0);
-                AtomicReference<String> firstFinalAnswer = new AtomicReference<>();
+                AgentContext context = buildAgentContext(agent, conv, llm, userContent, toolNames, llmClient);
                 boolean isFirstBatch = conv.getTitle() == null || conv.getTitle().isBlank();
 
-                executor.execute(context)
-                        .map(this::toChatEvent)
-                        .publishOn(Schedulers.boundedElastic())
-                        .doOnNext(event -> {
-                            chatPersistenceService.saveChatEvent(
-                                    batchId, eventOrder.getAndIncrement(), event.getType(),
-                                    event.getContent(), event.getToolName(), event.getToolCallId(), event.getToolArguments());
-                            if ("final_answer".equals(event.getType()) && isFirstBatch
-                                    && firstFinalAnswer.get() == null && event.getContent() != null) {
-                                firstFinalAnswer.set(event.getContent());
-                            }
-                        })
-                        .doOnComplete(() -> {
-                            List<com.gacfox.proarc.agentic.model.openai.Message> newMessages =
-                                    context.getMessages().subList(messageCountBefore, context.getMessages().size());
-                            chatPersistenceService.completeBatch(batchId, conversationId, newMessages,
-                                    tokenAccum.getInputTokens(), tokenAccum.getOutputTokens());
-                            Object cwd = context.getVariables().get("cwd");
-                            if (cwd instanceof String cwdStr) {
-                                try {
-                                    conversationService.updateContextJson(conversationId,
-                                            OBJECT_MAPPER.writeValueAsString(Map.of("cwd", cwdStr)));
-                                } catch (Exception ignored) {
-                                }
-                            }
-                            if (isFirstBatch && firstFinalAnswer.get() != null) {
-                                CompletableFuture<String> ignored = titleGenerationRegistry.register(conversationId);
-                                Mono.fromRunnable(() -> generateTitle(conversationId, userContent, firstFinalAnswer.get(), llmClient))
-                                        .subscribeOn(Schedulers.boundedElastic())
-                                        .subscribe();
-                            }
-                        })
-                        .doOnError(e -> {
-                            log.error("Chat execution error for conversation {}", conversationId, e);
-                            chatPersistenceService.failBatch(batchId, e.getMessage());
-                        })
-                        .subscribe(sink::next, sink::error, sink::complete);
+                executeAgent(context, executor, batchId, conversationId, userContent, llm, tokenAccum, isFirstBatch, sink);
             } catch (Exception e) {
                 sink.error(e);
             }
         }).subscribeOn(Schedulers.boundedElastic());
+    }
+
+    private void tryProactiveCompression(Long conversationId, Llm llm,
+                                          reactor.core.publisher.FluxSink<ChatEventDTO> sink) {
+        if (!"VERY_LOW".equals(conversationService.getContextStatus(conversationId))) {
+            return;
+        }
+        try {
+            if (contextCompressionService.proactivelyCompress(conversationId, llm,
+                    conversationService.getContextPromptTokens(conversationId))) {
+                sink.next(ChatEventDTO.builder().type("context_compression")
+                        .content("系统已进行主动上下文压缩，以继续执行当前任务。").build());
+            }
+        } catch (Exception compressionError) {
+            log.warn("Proactive context compression failed for conversation {}", conversationId, compressionError);
+        }
+    }
+
+    private LlmClient buildMainLlmClient(Llm llm, Long batchId, Agent agent, Conversation conv,
+                                          TokenUsageAccumulator tokenAccum) {
+        TokenUsageContext tokenUsageContext = new TokenUsageContext(
+                agent.getLlmId(), conv.getAgentId(), conv.getId(), batchId, llm.getModel());
+        return OpenAiLlmClient.builder()
+                .modelInfo(buildModelInfo(llm))
+                .httpClient(httpClient)
+                .interceptors(List.of(llmLoggingInterceptor,
+                        new TokenUsageLlmInterceptor(tokenAccum, tokenUsageLogService, tokenUsageContext),
+                        new RetryInterceptor()))
+                .build();
+    }
+
+    private ReActAgentExecutor buildExecutor(LlmClient llmClient, List<String> toolNames) {
+        return ReActAgentExecutor.builder()
+                .defaultLlmClient(llmClient)
+                .toolRegistry(toolRegistry)
+                .defaultToolNames(toolNames)
+                .interceptors(List.of(agentSystemPromptRefreshInterceptor, agentLoggingInterceptor))
+                .build();
+    }
+
+    private AgentContext buildAgentContext(Agent agent, Conversation conv, Llm llm, String userContent,
+                                            List<String> toolNames, LlmClient llmClient) {
+        String workspaceFolder = agent.getWorkspaceFolder();
+        Map<String, Object> variables = new HashMap<>();
+        if (workspaceFolder != null && !workspaceFolder.isBlank()) {
+            variables.put("workspacePath", workspaceFolder);
+        }
+        String currentCwd = workspaceFolder;
+        String contextJson = conv.getContextJson();
+        if (contextJson != null && !contextJson.isBlank()) {
+            try {
+                com.fasterxml.jackson.databind.JsonNode node = OBJECT_MAPPER.readTree(contextJson);
+                com.fasterxml.jackson.databind.JsonNode cwdNode = node.get("cwd");
+                if (cwdNode != null && cwdNode.isTextual()) {
+                    currentCwd = cwdNode.asText();
+                }
+            } catch (Exception ignored) {
+            }
+        }
+        variables.put("cwd", currentCwd);
+        variables.put("agentId", agent.getId());
+
+        Double temperature = llm.getTemperature() != null ? llm.getTemperature() / 100.0 : 0.7;
+
+        List<Message> messages = new ArrayList<>();
+        messages.add(Message.builder()
+                .role(Message.ROLE_SYSTEM).content("").build());
+        messages.addAll(contextCompressionService.buildMessages(conv.getId(), userContent));
+
+        return AgentContext.builder()
+                .messages(messages)
+                .llmClient(llmClient)
+                .toolNames(toolNames)
+                .temperature(temperature)
+                .maxTokens(llm.getMaxTokens())
+                .variables(variables)
+                .build();
+    }
+
+    private void executeAgent(AgentContext context, ReActAgentExecutor executor, Long batchId, Long conversationId,
+                               String userContent, Llm llm, TokenUsageAccumulator tokenAccum,
+                               boolean isFirstBatch, reactor.core.publisher.FluxSink<ChatEventDTO> sink) {
+        int messageCountBefore = context.getMessages().size();
+        AtomicInteger eventOrder = new AtomicInteger(0);
+        AtomicReference<String> firstFinalAnswer = new AtomicReference<>();
+
+        executor.execute(context)
+                .map(response -> switch (response.getType()) {
+                    case THINKING -> ChatEventDTO.builder()
+                            .type("thinking")
+                            .content(response.getContent())
+                            .build();
+                    case TOOL_CALL -> ChatEventDTO.builder()
+                            .type("tool_call")
+                            .toolCallId(response.getToolCallId())
+                            .toolName(response.getToolName())
+                            .toolArguments(response.getToolArguments())
+                            .build();
+                    case TOOL_RESULT -> ChatEventDTO.builder()
+                            .type("tool_result")
+                            .toolCallId(response.getToolCallId())
+                            .toolName(response.getToolName())
+                            .content(response.getContent())
+                            .build();
+                    case FINAL_ANSWER -> ChatEventDTO.builder()
+                            .type("final_answer")
+                            .content(response.getContent())
+                            .build();
+                    case ERROR -> ChatEventDTO.builder()
+                            .type("error")
+                            .content(response.getContent())
+                            .build();
+                })
+                .publishOn(Schedulers.boundedElastic())
+                .doOnNext(event -> {
+                    chatPersistenceService.saveChatEvent(
+                            batchId, eventOrder.getAndIncrement(), event.getType(),
+                            event.getContent(), event.getToolName(), event.getToolCallId(), event.getToolArguments());
+                    if ("final_answer".equals(event.getType()) && isFirstBatch
+                            && firstFinalAnswer.get() == null && event.getContent() != null) {
+                        firstFinalAnswer.set(event.getContent());
+                    }
+                })
+                .doOnComplete(() -> {
+                    List<Message> newMessages =
+                            context.getMessages().subList(messageCountBefore, context.getMessages().size());
+                    chatPersistenceService.completeBatch(batchId, conversationId, newMessages,
+                            tokenAccum.getInputTokens(), tokenAccum.getOutputTokens());
+                    long promptTokens = tokenAccum.getLastPromptTokens();
+                    String contextStatus;
+                    Integer contextLength = llm.getContextLength();
+                    Integer maxTokens = llm.getMaxTokens();
+                    if (contextLength == null || contextLength <= 0 || promptTokens <= 0) {
+                        contextStatus = "NORMAL";
+                    } else {
+                        int available = contextLength - (maxTokens == null ? 0 : maxTokens);
+                        if (available <= 0) available = contextLength;
+                        double ratio = (double) promptTokens / available;
+                        if (ratio >= 0.93) {
+                            contextStatus = "VERY_LOW";
+                        } else if (ratio >= 0.82) {
+                            contextStatus = "LOW";
+                        } else {
+                            contextStatus = "NORMAL";
+                        }
+                    }
+                    conversationService.updateContextHealth(conversationId, promptTokens, contextLength, contextStatus);
+                    sink.next(ChatEventDTO.builder().type("context_status").content(contextStatus).build());
+                    try {
+                        contextCompressionService.afterBatch(conversationId, batchId, llm);
+                    } catch (Exception recapError) {
+                        log.warn("Rolling context recap failed for conversation {}", conversationId, recapError);
+                    }
+                    Object cwd = context.getVariables().get("cwd");
+                    if (cwd instanceof String cwdStr) {
+                        try {
+                            conversationService.updateCwd(conversationId, cwdStr);
+                        } catch (Exception ignored) {
+                        }
+                    }
+                    if (isFirstBatch && firstFinalAnswer.get() != null) {
+                        CompletableFuture<String> ignored = titleGenerationRegistry.register(conversationId);
+                        Mono.fromRunnable(() -> generateTitle(conversationId, userContent, firstFinalAnswer.get(), context.getLlmClient()))
+                                .subscribeOn(Schedulers.boundedElastic())
+                                .subscribe();
+                    }
+                })
+                .doOnError(e -> {
+                    log.error("Chat execution error for conversation {}", conversationId, e);
+                    chatPersistenceService.failBatch(batchId, e.getMessage());
+                })
+                .subscribe(sink::next, sink::error, sink::complete);
+    }
+
+    private ModelInfo buildModelInfo(Llm llm) {
+        return ModelInfo.builder()
+                .provider("openai")
+                .model(llm.getModel())
+                .endpoint(llm.getEndpointUrl())
+                .sk(llm.getSk())
+                .maxTokens(llm.getMaxTokens())
+                .contextLength(llm.getContextLength())
+                .build();
     }
 
     private void generateTitle(Long conversationId, String userContent, String finalAnswer, LlmClient llmClient) {
@@ -210,8 +309,8 @@ public class ChatService {
                     + "用户：" + userContent + "\n\nAI：" + finalAnswer;
             ChatRequest request = ChatRequest.builder()
                     .messages(List.of(
-                            com.gacfox.proarc.agentic.model.openai.Message.builder()
-                                    .role(com.gacfox.proarc.agentic.model.openai.Message.ROLE_USER)
+                            Message.builder()
+                                    .role(Message.ROLE_USER)
                                     .content(prompt)
                                     .build()))
                     .temperature(0.7)
@@ -233,52 +332,6 @@ public class ChatService {
         titleGenerationRegistry.complete(conversationId, finalTitle);
     }
 
-    private List<com.gacfox.proarc.agentic.model.openai.Message> buildContextMessages(
-            Long conversationId, String userContent) {
-        List<com.gacfox.proarc.agentic.model.openai.Message> messages = new ArrayList<>();
-
-        List<Message> history = messageRepository.findByConversationIdOrderByCreatedAtAsc(conversationId);
-        for (Message msg : history) {
-            messages.add(chatPersistenceService.toProarcMessage(msg));
-        }
-
-        messages.add(com.gacfox.proarc.agentic.model.openai.Message.builder()
-                .role(com.gacfox.proarc.agentic.model.openai.Message.ROLE_USER)
-                .content(userContent)
-                .build());
-
-        return messages;
-    }
-
-    private ChatEventDTO toChatEvent(AgentResponse response) {
-        return switch (response.getType()) {
-            case THINKING -> ChatEventDTO.builder()
-                    .type("thinking")
-                    .content(response.getContent())
-                    .build();
-            case TOOL_CALL -> ChatEventDTO.builder()
-                    .type("tool_call")
-                    .toolCallId(response.getToolCallId())
-                    .toolName(response.getToolName())
-                    .toolArguments(response.getToolArguments())
-                    .build();
-            case TOOL_RESULT -> ChatEventDTO.builder()
-                    .type("tool_result")
-                    .toolCallId(response.getToolCallId())
-                    .toolName(response.getToolName())
-                    .content(response.getContent())
-                    .build();
-            case FINAL_ANSWER -> ChatEventDTO.builder()
-                    .type("final_answer")
-                    .content(response.getContent())
-                    .build();
-            case ERROR -> ChatEventDTO.builder()
-                    .type("error")
-                    .content(response.getContent())
-                    .build();
-        };
-    }
-
     private List<String> parseJsonArray(String json) {
         if (json == null || json.isBlank()) return Collections.emptyList();
         try {
@@ -286,17 +339,6 @@ public class ChatService {
             });
         } catch (Exception e) {
             return Collections.emptyList();
-        }
-    }
-
-    private String extractCwd(String contextJson) {
-        if (contextJson == null || contextJson.isBlank()) return null;
-        try {
-            JsonNode node = OBJECT_MAPPER.readTree(contextJson);
-            JsonNode cwdNode = node.get("cwd");
-            return cwdNode != null && cwdNode.isTextual() ? cwdNode.asText() : null;
-        } catch (Exception e) {
-            return null;
         }
     }
 }

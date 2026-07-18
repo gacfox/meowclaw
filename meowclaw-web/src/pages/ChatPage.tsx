@@ -13,7 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import {
   Table, TableBody, TableCell, TableRow,
 } from "@/components/ui/table";
-import { Plus, Send, Trash2, Loader2, Wrench, ChevronRight, Copy, Pencil, RefreshCw, ArrowUp, ArrowDown, Check, Clock } from "lucide-react";
+import { Plus, Send, Trash2, Loader2, Wrench, ChevronRight, Copy, Pencil, RefreshCw, ArrowUp, ArrowDown, Check, Clock, TriangleAlert } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { MarkdownRenderer } from "@/components/markdown/MarkdownRenderer";
@@ -206,6 +206,8 @@ export function ChatPage() {
   const [streamContent, setStreamContent] = useState("");
   const [streamSteps, setStreamSteps] = useState<StreamStep[]>([]);
   const [streamError, setStreamError] = useState<string | null>(null);
+  const [contextStatus, setContextStatus] = useState<"NORMAL" | "LOW" | "VERY_LOW">("NORMAL");
+  const [compressionNotice, setCompressionNotice] = useState<string | null>(null);
   const [deleteTargetId, setDeleteTargetId] = useState<number | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [editingBatchId, setEditingBatchId] = useState<number | null>(null);
@@ -371,6 +373,7 @@ export function ChatPage() {
     setStreamContent("");
     setStreamSteps([]);
     setStreamError(null);
+    setCompressionNotice(null);
 
     try {
       const controller = new AbortController();
@@ -473,6 +476,14 @@ export function ChatPage() {
       case "error":
         setStreamError(event.content ?? "未知错误");
         break;
+      case "context_status":
+        if (event.content === "NORMAL" || event.content === "LOW" || event.content === "VERY_LOW") {
+          setContextStatus(event.content);
+        }
+        break;
+      case "context_compression":
+        setCompressionNotice(event.content ?? "系统已进行主动上下文压缩");
+        break;
     }
   };
 
@@ -565,7 +576,20 @@ export function ChatPage() {
                 <div className="flex h-full items-center justify-center text-muted-foreground">加载中...</div>
               ) : (
                 <div className="mx-auto max-w-3xl space-y-4">
+                  {contextStatus !== "NORMAL" && (
+                    <div className={`flex items-center gap-2 border px-3 py-2 text-sm ${contextStatus === "VERY_LOW" ? "border-destructive/50 text-destructive" : "border-amber-500/50 text-amber-700 dark:text-amber-400"}`}>
+                      <TriangleAlert className="size-4" />
+                      {contextStatus === "VERY_LOW" ? "Context very low" : "Context low"}
+                    </div>
+                  )}
+                  {compressionNotice && (
+                    <div className="border border-amber-500/50 px-3 py-2 text-sm text-amber-700 dark:text-amber-400">{compressionNotice}</div>
+                  )}
                   {batches.map((batch) => {
+                    if (batch.type === "CONTEXT_COMPACTION") {
+                      const notice = batch.events.find((event) => event.type === "context_compression")?.content;
+                      return <div key={batch.id} className="border-l-2 border-amber-500 px-3 py-2 text-sm text-muted-foreground">{notice ?? "系统已进行主动上下文压缩"}</div>;
+                    }
                     const finalAnswer = batch.events.find((e) => e.type === "final_answer");
                     return (
                     <div key={batch.id} className="space-y-2">

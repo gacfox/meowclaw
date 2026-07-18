@@ -15,6 +15,7 @@ public class ChatEventBatchDTO {
     private Long id;
     private Long conversationId;
     private String userContent;
+    private String type;
     private String status;
     private String errorMessage;
     private Long inputTokens;

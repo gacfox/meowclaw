@@ -57,6 +57,7 @@ CREATE TABLE IF NOT EXISTS mc_chat_event_batch (
     id BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
     conversation_id BIGINT NOT NULL COMMENT '关联会话ID',
     user_content TEXT NOT NULL COMMENT '用户输入内容',
+    type VARCHAR(32) NOT NULL DEFAULT 'USER' COMMENT '批次类型(USER=用户任务,CONTEXT_COMPACTION=上下文主动压缩)',
     status VARCHAR(20) NOT NULL DEFAULT 'RUNNING' COMMENT '批次状态(RUNNING=执行中,COMPLETED=已完成,ERROR=出错)',
     error_message TEXT COMMENT '错误信息(仅ERROR状态)',
     input_tokens BIGINT COMMENT '输入token数',
@@ -67,6 +68,19 @@ CREATE TABLE IF NOT EXISTS mc_chat_event_batch (
 );
 
 CREATE INDEX IF NOT EXISTS idx_mc_chat_event_batch_conversation_id ON mc_chat_event_batch(conversation_id);
+
+CREATE TABLE IF NOT EXISTS mc_context_recap (
+    id BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+    conversation_id BIGINT NOT NULL COMMENT '关联会话ID',
+    from_batch_id BIGINT NOT NULL COMMENT '覆盖起始批次ID',
+    to_batch_id BIGINT NOT NULL COMMENT '覆盖结束批次ID',
+    type VARCHAR(32) NOT NULL COMMENT '摘要类型(ROLLING=单批次,ROLLED_UP=合并摘要,PROACTIVE=主动压缩)',
+    content TEXT NOT NULL COMMENT '摘要内容',
+    created_at BIGINT NOT NULL COMMENT '创建时间(时间戳毫秒)',
+    PRIMARY KEY (id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_mc_context_recap_conversation_id ON mc_context_recap(conversation_id);
 
 CREATE TABLE IF NOT EXISTS mc_chat_event (
     id BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
