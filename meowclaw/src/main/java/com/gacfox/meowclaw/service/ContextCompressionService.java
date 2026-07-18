@@ -69,17 +69,17 @@ public class ContextCompressionService {
     public List<com.gacfox.proarc.agentic.model.openai.Message> buildMessages(Long conversationId) {
         List<ChatEventBatch> batches = userBatches(conversationId);
         List<ContextRecap> recaps = recapRepository.findByConversationIdOrderByCreatedAtAsc(conversationId);
-        Set<Long> summarized = summarizedBatchIds(recaps, batches);
+        Set<Long> skipped = proactivelyCompressedBatchIds(recaps, batches);
         Map<Long, List<Message>> messagesByBatch = messagesByBatch(conversationId);
         List<com.gacfox.proarc.agentic.model.openai.Message> result = new ArrayList<>();
         for (int i = 0; i < batches.size(); i++) {
             ChatEventBatch batch = batches.get(i);
-            if (summarized.contains(batch.getId())) continue;
+            if (skipped.contains(batch.getId())) continue;
             int age = batches.size() - i;
             result.add(com.gacfox.proarc.agentic.model.openai.Message.builder()
                     .role(com.gacfox.proarc.agentic.model.openai.Message.ROLE_USER).content(batch.getUserContent()).build());
             for (Message message : messagesByBatch.getOrDefault(batch.getId(), List.of())) {
-                if (age >= 15 && ("tool".equals(message.getRole()) || message.getToolCallsJson() != null)) continue;
+                if (age >= 15 && shouldFoldToolMessage(message)) continue;
                 boolean truncate = age >= 5;
                 var builder = com.gacfox.proarc.agentic.model.openai.Message.builder().role(message.getRole())
                         .content(truncate ? truncateContent(message.getContent()) : message.getContent())
@@ -90,9 +90,6 @@ public class ContextCompressionService {
                         List<ToolCall> calls = OBJECT_MAPPER.readValue(message.getToolCallsJson(),
                                 new TypeReference<>() {
                                 });
-                        if (truncate) {
-                            calls.forEach(call -> call.getFunction().setArguments(truncateContent(call.getFunction().getArguments())));
-                        }
                         builder.toolCalls(calls);
                     } catch (Exception ignored) {
                     }
@@ -148,8 +145,8 @@ public class ContextCompressionService {
     public boolean proactivelyCompress(Long conversationId, Llm llm, long promptTokens) {
         List<ChatEventBatch> batches = userBatches(conversationId);
         List<ContextRecap> recaps = recapRepository.findByConversationIdOrderByCreatedAtAsc(conversationId);
-        Set<Long> summarized = summarizedBatchIds(recaps, batches);
-        List<ChatEventBatch> candidates = batches.stream().filter(b -> !summarized.contains(b.getId())).toList();
+        Set<Long> skipped = proactivelyCompressedBatchIds(recaps, batches);
+        List<ChatEventBatch> candidates = batches.stream().filter(b -> !skipped.contains(b.getId())).toList();
         if (candidates.size() < 2) return false;
         Integer contextLength = llm.getContextLength();
         Integer maxTokens = llm.getMaxTokens();
@@ -237,11 +234,28 @@ public class ContextCompressionService {
         return result;
     }
 
-    private Set<Long> summarizedBatchIds(List<ContextRecap> recaps, List<ChatEventBatch> batches) {
+    private boolean shouldFoldToolMessage(Message message) {
+        if ("tool".equals(message.getRole())) {
+            return true;
+        }
+        if (message.getToolCallsJson() == null) {
+            return false;
+        }
+        try {
+            List<ToolCall> calls = OBJECT_MAPPER.readValue(message.getToolCallsJson(), new TypeReference<>() {
+            });
+            return calls.stream().noneMatch(call -> "final_answer".equals(call.getFunction().getName()));
+        } catch (Exception ignored) {
+            return true;
+        }
+    }
+
+    private Set<Long> proactivelyCompressedBatchIds(List<ContextRecap> recaps, List<ChatEventBatch> batches) {
         Set<Long> ids = new HashSet<>();
         Map<Long, Integer> positions = new HashMap<>();
         for (int i = 0; i < batches.size(); i++) positions.put(batches.get(i).getId(), i);
         for (ContextRecap recap : recaps) {
+            if (!"PROACTIVE".equals(recap.getType())) continue;
             Integer from = positions.get(recap.getFromBatchId());
             Integer to = positions.get(recap.getToBatchId());
             if (from == null || to == null) continue;
