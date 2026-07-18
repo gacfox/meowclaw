@@ -143,6 +143,17 @@ public class ConversationService {
         saveContext(conv, root);
     }
 
+    @Transactional
+    public void clearContextHealth(Long id) {
+        Conversation conv = getById(id);
+        ObjectNode root = contextRoot(conv.getContextJson());
+        ObjectNode health = root.putObject("context");
+        health.put("promptTokens", 0);
+        health.put("status", "NORMAL");
+        health.put("measuredAt", System.currentTimeMillis());
+        saveContext(conv, root);
+    }
+
     @Transactional(readOnly = true)
     public String getContextStatus(Long id) {
         Conversation conv = getById(id);
@@ -232,5 +243,6 @@ public class ConversationService {
         contextRecapRepository.deleteByConversationIdAndFromBatchIdInOrConversationIdAndToBatchIdIn(
                 conversationId, batchIdsToDelete, conversationId, batchIdsToDelete);
         chatEventBatchRepository.deleteAllById(batchIdsToDelete);
+        clearContextHealth(conversationId);
     }
 }
