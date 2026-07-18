@@ -13,9 +13,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import {
   Table, TableBody, TableCell, TableRow,
 } from "@/components/ui/table";
-import { Plus, Send, Trash2, Loader2, Wrench, ChevronRight, Copy, Pencil, RefreshCw, ArrowUp, ArrowDown, Check, Clock, TriangleAlert } from "lucide-react";
+import { Plus, Send, Trash2, Loader2, Wrench, ChevronRight, Copy, Pencil, RefreshCw, ArrowUp, ArrowDown, Check, Clock, TriangleAlert, X } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { Alert, AlertTitle, AlertDescription, AlertAction } from "@/components/ui/alert";
+import { motion, AnimatePresence } from "framer-motion";
 import { MarkdownRenderer } from "@/components/markdown/MarkdownRenderer";
 import { toast } from "sonner";
 
@@ -206,8 +208,8 @@ export function ChatPage() {
   const [streamContent, setStreamContent] = useState("");
   const [streamSteps, setStreamSteps] = useState<StreamStep[]>([]);
   const [streamError, setStreamError] = useState<string | null>(null);
-  const [contextStatus, setContextStatus] = useState<"NORMAL" | "LOW" | "VERY_LOW">("NORMAL");
-  const [compressionNotice, setCompressionNotice] = useState<string | null>(null);
+  const [contextStatusMap, setContextStatusMap] = useState<Record<number, "NORMAL" | "LOW" | "VERY_LOW">>({});
+  const [dismissedStatusMap, setDismissedStatusMap] = useState<Record<number, boolean>>({});
   const [deleteTargetId, setDeleteTargetId] = useState<number | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [editingBatchId, setEditingBatchId] = useState<number | null>(null);
@@ -373,7 +375,6 @@ export function ChatPage() {
     setStreamContent("");
     setStreamSteps([]);
     setStreamError(null);
-    setCompressionNotice(null);
 
     try {
       const controller = new AbortController();
@@ -446,6 +447,8 @@ export function ChatPage() {
   };
 
   const handleStreamEvent = (event: ChatEventDTO) => {
+    const convoId = selectedConvoId;
+    if (!convoId) return;
     switch (event.type) {
       case "thinking":
         if (event.content) setStreamSteps((prev) => [...prev, { type: "thinking", content: event.content! }]);
@@ -478,11 +481,18 @@ export function ChatPage() {
         break;
       case "context_status":
         if (event.content === "NORMAL" || event.content === "LOW" || event.content === "VERY_LOW") {
-          setContextStatus(event.content);
+          const status = event.content;
+          setContextStatusMap((prev) => ({
+            ...prev,
+            [convoId]: status,
+          }));
+          setDismissedStatusMap((prev) => ({
+            ...prev,
+            [convoId]: false,
+          }));
         }
         break;
       case "context_compression":
-        setCompressionNotice(event.content ?? "系统已进行主动上下文压缩");
         break;
     }
   };
@@ -576,19 +586,52 @@ export function ChatPage() {
                 <div className="flex h-full items-center justify-center text-muted-foreground">加载中...</div>
               ) : (
                 <div className="mx-auto max-w-3xl space-y-4">
-                  {contextStatus !== "NORMAL" && (
-                    <div className={`flex items-center gap-2 border px-3 py-2 text-sm ${contextStatus === "VERY_LOW" ? "border-destructive/50 text-destructive" : "border-amber-500/50 text-amber-700 dark:text-amber-400"}`}>
-                      <TriangleAlert className="size-4" />
-                      {contextStatus === "VERY_LOW" ? "Context very low" : "Context low"}
-                    </div>
-                  )}
-                  {compressionNotice && (
-                    <div className="border border-amber-500/50 px-3 py-2 text-sm text-amber-700 dark:text-amber-400">{compressionNotice}</div>
-                  )}
+                  {(() => {
+                    const status = selectedConvoId ? contextStatusMap[selectedConvoId] : undefined;
+                    const showAlert = status && status !== "NORMAL" && selectedConvoId && !dismissedStatusMap[selectedConvoId];
+                    return (
+                      <AnimatePresence>
+                        {showAlert && (
+                          <motion.div
+                            key={`context-alert-${selectedConvoId}`}
+                            initial={{ opacity: 0, y: -12 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: -12 }}
+                            className="sticky top-0 z-10 mb-2"
+                          >
+                            <Alert
+                              variant={status === "VERY_LOW" ? "destructive" : "default"}
+                              className={status === "LOW" ? "border-amber-500/50 text-amber-700 dark:text-amber-400 [&>svg]:text-amber-500" : undefined}
+                            >
+                              <TriangleAlert className="size-4" />
+                              <AlertTitle>{status === "VERY_LOW" ? "上下文空间非常不足" : "上下文空间不足"}</AlertTitle>
+                              <AlertDescription>请及时新建会话或清理历史消息，避免上下文超限。</AlertDescription>
+                              <AlertAction>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-6 w-6"
+                                  onClick={() => setDismissedStatusMap((prev) => ({ ...prev, [selectedConvoId!]: true }))}
+                                >
+                                  <X className="size-4" />
+                                </Button>
+                              </AlertAction>
+                            </Alert>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+                    );
+                  })()}
                   {batches.map((batch) => {
                     if (batch.type === "CONTEXT_COMPACTION") {
                       const notice = batch.events.find((event) => event.type === "context_compression")?.content;
-                      return <div key={batch.id} className="border-l-2 border-amber-500 px-3 py-2 text-sm text-muted-foreground">{notice ?? "系统已进行主动上下文压缩"}</div>;
+                      return (
+                        <div key={batch.id} className="flex justify-center">
+                          <div className="rounded-full bg-muted px-4 py-1.5 text-xs text-muted-foreground">
+                            {notice ?? "系统已进行主动上下文压缩"}
+                          </div>
+                        </div>
+                      );
                     }
                     const finalAnswer = batch.events.find((e) => e.type === "final_answer");
                     return (
