@@ -178,13 +178,16 @@ public class ChatService {
         }
         variables.put("cwd", currentCwd);
         variables.put("agentId", agent.getId());
+        variables.put("conversationId", conv.getId());
 
         Double temperature = llm.getTemperature() != null ? llm.getTemperature() / 100.0 : 0.7;
 
         List<Message> messages = new ArrayList<>();
         messages.add(Message.builder()
                 .role(Message.ROLE_SYSTEM).content("").build());
-        messages.addAll(contextCompressionService.buildMessages(conv.getId(), userContent));
+        messages.addAll(contextCompressionService.buildMessages(conv.getId()));
+        messages.add(Message.builder()
+                .role(Message.ROLE_USER).content(userContent).build());
 
         return AgentContext.builder()
                 .messages(messages)

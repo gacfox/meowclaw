@@ -2,6 +2,7 @@ package com.gacfox.meowclaw.interceptor.agent;
 
 import com.gacfox.meowclaw.entity.Agent;
 import com.gacfox.meowclaw.repository.AgentRepository;
+import com.gacfox.meowclaw.service.ContextCompressionService;
 import com.gacfox.meowclaw.service.SystemPromptService;
 import com.gacfox.proarc.agentic.agent.AgentContext;
 import com.gacfox.proarc.agentic.agent.AgentLoopResult;
@@ -19,11 +20,15 @@ public class AgentSystemPromptRefreshInterceptor implements AgentInterceptor {
 
     private final AgentRepository agentRepository;
     private final SystemPromptService systemPromptService;
+    private final ContextCompressionService contextCompressionService;
 
     @Autowired
-    public AgentSystemPromptRefreshInterceptor(AgentRepository agentRepository, SystemPromptService systemPromptService) {
+    public AgentSystemPromptRefreshInterceptor(AgentRepository agentRepository,
+                                               SystemPromptService systemPromptService,
+                                               ContextCompressionService contextCompressionService) {
         this.agentRepository = agentRepository;
         this.systemPromptService = systemPromptService;
+        this.contextCompressionService = contextCompressionService;
     }
 
     @Override
@@ -40,7 +45,12 @@ public class AgentSystemPromptRefreshInterceptor implements AgentInterceptor {
 
         Object cwdObj = context.getVariables().get("cwd");
         String cwd = cwdObj instanceof String ? (String) cwdObj : null;
-        String systemContent = systemPromptService.build(agent, cwd);
+
+        Object conversationIdObj = context.getVariables().get("conversationId");
+        Long conversationId = conversationIdObj instanceof Long ? (Long) conversationIdObj : null;
+        String recap = conversationId != null ? contextCompressionService.buildRecapText(conversationId) : null;
+
+        String systemContent = systemPromptService.build(agent, cwd, recap);
 
         boolean replaced = false;
         for (Message msg : context.getMessages()) {

@@ -66,17 +66,12 @@ public class ContextCompressionService {
         }
     }
 
-    public List<com.gacfox.proarc.agentic.model.openai.Message> buildMessages(Long conversationId, String userContent) {
+    public List<com.gacfox.proarc.agentic.model.openai.Message> buildMessages(Long conversationId) {
         List<ChatEventBatch> batches = userBatches(conversationId);
         List<ContextRecap> recaps = recapRepository.findByConversationIdOrderByCreatedAtAsc(conversationId);
         Set<Long> summarized = summarizedBatchIds(recaps, batches);
         Map<Long, List<Message>> messagesByBatch = messagesByBatch(conversationId);
         List<com.gacfox.proarc.agentic.model.openai.Message> result = new ArrayList<>();
-        for (ContextRecap recap : recaps) {
-            result.add(com.gacfox.proarc.agentic.model.openai.Message.builder()
-                    .role(com.gacfox.proarc.agentic.model.openai.Message.ROLE_SYSTEM)
-                    .content("[会话历史摘要]\n" + recap.getContent()).build());
-        }
         for (int i = 0; i < batches.size(); i++) {
             ChatEventBatch batch = batches.get(i);
             if (summarized.contains(batch.getId())) continue;
@@ -105,9 +100,16 @@ public class ContextCompressionService {
                 result.add(builder.build());
             }
         }
-        result.add(com.gacfox.proarc.agentic.model.openai.Message.builder()
-                .role(com.gacfox.proarc.agentic.model.openai.Message.ROLE_USER).content(userContent).build());
         return result;
+    }
+
+    public String buildRecapText(Long conversationId) {
+        List<ContextRecap> recaps = recapRepository.findByConversationIdOrderByCreatedAtAsc(conversationId);
+        if (recaps.isEmpty()) return null;
+        return recaps.stream()
+                .map(ContextRecap::getContent)
+                .reduce((a, b) -> a + "\n\n" + b)
+                .orElse(null);
     }
 
     public void afterBatch(Long conversationId, Long completedBatchId, Llm llm) {
