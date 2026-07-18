@@ -6,6 +6,10 @@ import com.gacfox.meowclaw.entity.ChatEventBatch;
 import com.gacfox.meowclaw.entity.ContextRecap;
 import com.gacfox.meowclaw.entity.Llm;
 import com.gacfox.meowclaw.entity.Message;
+import com.gacfox.meowclaw.interceptor.llm.LlmLoggingInterceptor;
+import com.gacfox.meowclaw.interceptor.llm.TokenUsageAccumulator;
+import com.gacfox.meowclaw.interceptor.llm.TokenUsageContext;
+import com.gacfox.meowclaw.interceptor.llm.TokenUsageLlmInterceptor;
 import com.gacfox.meowclaw.repository.ChatEventBatchRepository;
 import com.gacfox.meowclaw.repository.ContextRecapRepository;
 import com.gacfox.meowclaw.repository.MessageRepository;
@@ -42,6 +46,8 @@ public class ContextCompressionService {
     private final ContextRecapRepository recapRepository;
     private final MessageRepository messageRepository;
     private final ChatPersistenceService persistenceService;
+    private final TokenUsageLogService tokenUsageLogService;
+    private final LlmLoggingInterceptor llmLoggingInterceptor;
     private final reactor.netty.http.client.HttpClient httpClient;
 
     @Value("classpath:prompt/context-recap-prompt.md")
@@ -51,11 +57,14 @@ public class ContextCompressionService {
 
     public ContextCompressionService(ChatEventBatchRepository batchRepository, ContextRecapRepository recapRepository,
                                      MessageRepository messageRepository, ChatPersistenceService persistenceService,
+                                     TokenUsageLogService tokenUsageLogService, LlmLoggingInterceptor llmLoggingInterceptor,
                                      reactor.netty.http.client.HttpClient httpClient) {
         this.batchRepository = batchRepository;
         this.recapRepository = recapRepository;
         this.messageRepository = messageRepository;
         this.persistenceService = persistenceService;
+        this.tokenUsageLogService = tokenUsageLogService;
+        this.llmLoggingInterceptor = llmLoggingInterceptor;
         this.httpClient = httpClient;
     }
 
@@ -110,7 +119,7 @@ public class ContextCompressionService {
     }
 
     public void afterBatch(Long conversationId, Long completedBatchId, Llm llm) {
-        LlmClient llmClient = buildCompressionLlmClient(llm);
+        LlmClient llmClient = buildCompressionLlmClient(llm, conversationId, completedBatchId);
         List<ChatEventBatch> batches = userBatches(conversationId);
         int current = -1;
         for (int i = 0; i < batches.size(); i++) {
@@ -164,7 +173,7 @@ public class ContextCompressionService {
         }
         StringBuilder source = new StringBuilder();
         for (ChatEventBatch batch : selected) source.append(batchText(batch, messagesByBatch)).append("\n\n");
-        String recapContent = summarize(source.toString(), buildCompressionLlmClient(llm));
+        String recapContent = summarize(source.toString(), buildCompressionLlmClient(llm, conversationId, null));
         ChatEventBatch first = selected.get(0);
         ChatEventBatch last = selected.get(selected.size() - 1);
         saveRecap(conversationId, first.getId(), last.getId(), "PROACTIVE", recapContent);
@@ -175,7 +184,10 @@ public class ContextCompressionService {
         return true;
     }
 
-    private LlmClient buildCompressionLlmClient(Llm llm) {
+    private LlmClient buildCompressionLlmClient(Llm llm, Long conversationId, Long batchId) {
+        TokenUsageContext tokenUsageContext = new TokenUsageContext(
+                llm.getId(), null, conversationId, batchId, llm.getModel());
+        TokenUsageAccumulator tokenAccum = new TokenUsageAccumulator();
         return OpenAiLlmClient.builder()
                 .modelInfo(ModelInfo.builder()
                         .provider("openai")
@@ -186,7 +198,9 @@ public class ContextCompressionService {
                         .contextLength(llm.getContextLength())
                         .build())
                 .httpClient(httpClient)
-                .interceptors(List.of(new RetryInterceptor()))
+                .interceptors(List.of(llmLoggingInterceptor,
+                        new TokenUsageLlmInterceptor(tokenAccum, tokenUsageLogService, tokenUsageContext),
+                        new RetryInterceptor()))
                 .build();
     }
 
@@ -216,13 +230,48 @@ public class ContextCompressionService {
     }
 
     private String batchText(ChatEventBatch batch, Map<Long, List<Message>> messagesByBatch) {
-        StringBuilder text = new StringBuilder("用户：").append(batch.getUserContent());
-        for (Message message : messagesByBatch.getOrDefault(batch.getId(), List.of())) {
-            if ("assistant".equals(message.getRole()) && message.getContent() != null && !message.getContent().isBlank()) {
-                text.append("\n助手：").append(message.getContent());
+        StringBuilder text = new StringBuilder();
+        text.append("=== Batch ").append(batch.getId()).append(" ===\n");
+        text.append("【用户】\n").append(batch.getUserContent()).append("\n\n");
+        text.append("【交互过程】\n");
+
+        List<Message> messages = messagesByBatch.getOrDefault(batch.getId(), List.of());
+        if (messages.isEmpty()) {
+            text.append("（无助手回复）\n");
+        }
+        for (Message message : messages) {
+            if ("assistant".equals(message.getRole())) {
+                if (message.getContent() != null && !message.getContent().isBlank()) {
+                    text.append("助手思考：").append(message.getContent()).append("\n");
+                }
+                if (message.getToolCallsJson() != null) {
+                    try {
+                        List<ToolCall> calls = OBJECT_MAPPER.readValue(message.getToolCallsJson(), new TypeReference<>() {
+                        });
+                        for (ToolCall call : calls) {
+                            String name = call.getFunction().getName();
+                            String args = call.getFunction().getArguments();
+                            text.append("工具调用：").append(name);
+                            if (args != null && !args.isBlank()) {
+                                text.append("，参数：").append(args);
+                            }
+                            text.append("\n");
+                        }
+                    } catch (Exception ignored) {
+                        text.append("工具调用：").append(message.getToolCallsJson()).append("\n");
+                    }
+                }
+            } else if ("tool".equals(message.getRole())) {
+                text.append("工具返回（callId=").append(message.getToolCallId()).append("）：");
+                if (message.getContent() != null && !message.getContent().isBlank()) {
+                    text.append(message.getContent());
+                } else {
+                    text.append("(无内容)");
+                }
+                text.append("\n");
             }
         }
-        return text.toString();
+        return text.toString().trim();
     }
 
     private Map<Long, List<Message>> messagesByBatch(Long conversationId) {
