@@ -112,6 +112,8 @@ public class ContextCompressionService {
     public String buildRecapText(Long conversationId) {
         List<ContextRecap> recaps = recapRepository.findByConversationIdOrderByCreatedAtAsc(conversationId);
         if (recaps.isEmpty()) return null;
+        log.info("Loaded recaps for conversation {}: {}", conversationId,
+                recaps.stream().map(ContextRecap::getId).toList());
         return recaps.stream()
                 .map(ContextRecap::getContent)
                 .reduce((a, b) -> a + "\n\n" + b)

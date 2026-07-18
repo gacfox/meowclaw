@@ -604,8 +604,8 @@ export function ChatPage() {
                               className={status === "LOW" ? "border-amber-500/50 text-amber-700 dark:text-amber-400 [&>svg]:text-amber-500" : undefined}
                             >
                               <TriangleAlert className="size-4" />
-                              <AlertTitle>{status === "VERY_LOW" ? "上下文空间非常不足" : "上下文空间不足"}</AlertTitle>
-                              <AlertDescription>请及时新建会话或清理历史消息，避免上下文超限。</AlertDescription>
+                              <AlertTitle>{status === "VERY_LOW" ? "上下文空间严重不足" : "上下文空间不足"}</AlertTitle>
+                              <AlertDescription>注意：当上下文空间使用超过93%时，系统将自动进行上下文压缩。</AlertDescription>
                               <AlertAction>
                                 <Button
                                   variant="ghost"
