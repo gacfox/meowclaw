@@ -42,7 +42,7 @@ public class ScheduledTaskExecutor {
             conversationId = scheduledTaskExecutionRepository
                     .findTopByScheduledTaskIdOrderByExecutedAtDesc(taskId)
                     .map(ScheduledTaskExecution::getConversationId)
-                    .filter(cid -> conversationService.existsById(cid))
+                    .filter(conversationService::existsById)
                     .orElseGet(() -> conversationService.create(task.getAgentId(), "SCHEDULED").getId());
         }
 

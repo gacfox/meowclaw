@@ -41,6 +41,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -185,7 +186,7 @@ public class ChatService {
                                 }
                             }
                             if (isFirstBatch && firstFinalAnswer.get() != null) {
-                                titleGenerationRegistry.register(conversationId);
+                                CompletableFuture<String> ignored = titleGenerationRegistry.register(conversationId);
                                 Mono.fromRunnable(() -> generateTitle(conversationId, userContent, firstFinalAnswer.get(), llmClient))
                                         .subscribeOn(Schedulers.boundedElastic())
                                         .subscribe();
@@ -281,7 +282,8 @@ public class ChatService {
     private List<String> parseJsonArray(String json) {
         if (json == null || json.isBlank()) return Collections.emptyList();
         try {
-            return OBJECT_MAPPER.readValue(json, new TypeReference<>() {});
+            return OBJECT_MAPPER.readValue(json, new TypeReference<>() {
+            });
         } catch (Exception e) {
             return Collections.emptyList();
         }

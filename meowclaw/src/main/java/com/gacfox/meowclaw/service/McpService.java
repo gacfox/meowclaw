@@ -180,7 +180,7 @@ public class McpService {
     }
 
     /**
-     * 测试连接：不持久化、不注册工具。
+     * 测试连接，不持久化、不注册工具
      */
     public McpTestResultDTO test(McpServiceTestRequest req) {
         validateProtocol(req.getProtocol());
@@ -226,7 +226,7 @@ public class McpService {
     }
 
     /**
-     * 列出所有已启用且连接成功的服务下的全部工具（扁平化、含服务名前缀），供智能体配置使用。
+     * 列出所有已启用且连接成功的服务下的全部工具（扁平化、含服务名前缀），供智能体配置使用
      */
     @Transactional(readOnly = true)
     public List<McpToolDTO> listEnabledTools() {
@@ -240,8 +240,6 @@ public class McpService {
         }
         return result;
     }
-
-    // ==================== Orchestration ====================
 
     private void doEnable(McpServiceConfig entity) {
         Connection conn;
@@ -297,8 +295,6 @@ public class McpService {
         }
     }
 
-    // ==================== MCP SDK plumbing ====================
-
     private record Connection(McpSyncClient client, List<McpToolInfo> tools) {}
 
     private static final class McpConnectionException extends RuntimeException {
@@ -308,7 +304,7 @@ public class McpService {
     }
 
     /**
-     * 建立到 MCP 服务的连接，initialize 后立即 listTools。失败时抛 {@link McpConnectionException}。
+     * 建立到 MCP 服务的连接，initialize 后立即 listTools，失败时抛 {@link McpConnectionException}
      */
     private Connection connect(McpServiceConfig service) {
         McpClientTransport transport = buildTransport(service.getProtocol(), service.getConfig());
@@ -386,7 +382,6 @@ public class McpService {
         }
     }
 
-    @SuppressWarnings("unchecked")
     private Map<String, Object> parseConfig(String json) {
         try {
             return OBJECT_MAPPER.readValue(json, new TypeReference<>() {});
@@ -402,8 +397,6 @@ public class McpService {
         }
         return String.valueOf(value);
     }
-
-    // ==================== ToolRegistry plumbing ====================
 
     private void registerTools(McpServiceConfig service, McpSyncClient client, List<McpToolInfo> tools) {
         String prefix = service.getName() + TOOL_NAME_SEPARATOR;
@@ -485,8 +478,6 @@ public class McpService {
             toolRegistry.unregister(toolName);
         }
     }
-
-    // ==================== Helpers ====================
 
     private McpServiceDTO toDTO(McpServiceConfig entity) {
         McpServiceDTO dto = converter.toDTO(entity);

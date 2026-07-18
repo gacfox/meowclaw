@@ -7,7 +7,6 @@ import com.gacfox.proarc.agentic.model.openai.ModelInfo;
 import com.gacfox.proarc.agentic.model.openai.ModelRequest;
 import com.gacfox.proarc.agentic.model.openai.ModelResponse;
 import com.gacfox.proarc.agentic.model.openai.Usage;
-import reactor.core.publisher.Flux;
 
 /**
  * Tokens消耗拦截器：既累加当前批次的Tokens总量（供批次汇总），
@@ -38,8 +37,4 @@ public class TokenUsageLlmInterceptor implements LlmInterceptor {
         return response;
     }
 
-    @Override
-    public Flux<ModelResponse> interceptStreaming(ModelRequest request, ModelInfo modelInfo, LlmInterceptorChain chain) {
-        return chain.nextStreaming(request);
-    }
 }

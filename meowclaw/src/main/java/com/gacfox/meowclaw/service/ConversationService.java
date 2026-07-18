@@ -86,7 +86,6 @@ public class ConversationService {
     public void delete(Long id) {
         Conversation conv = conversationRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("会话不存在"));
-        // Cascade delete: events (by batch) -> batches -> messages -> conversation
         List<Long> batchIds = chatEventBatchRepository.findByConversationIdOrderByCreatedAtAsc(id)
                 .stream().map(ChatEventBatch::getId).toList();
         if (!batchIds.isEmpty()) {

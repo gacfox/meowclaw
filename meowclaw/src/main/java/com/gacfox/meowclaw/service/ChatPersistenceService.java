@@ -2,6 +2,7 @@ package com.gacfox.meowclaw.service;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.gacfox.meowclaw.dto.ConversationDTO;
 import com.gacfox.meowclaw.entity.ChatEvent;
 import com.gacfox.meowclaw.entity.ChatEventBatch;
 import com.gacfox.meowclaw.entity.Message;
@@ -74,7 +75,7 @@ public class ChatPersistenceService {
         batch.setInputTokens(inputTokens);
         batch.setOutputTokens(outputTokens);
         chatEventBatchRepository.save(batch);
-        conversationService.touch(conversationId);
+        ConversationDTO ignored = conversationService.touch(conversationId);
     }
 
     @Transactional
@@ -120,7 +121,8 @@ public class ChatPersistenceService {
         if (entity.getToolCallsJson() != null) {
             try {
                 List<ToolCall> toolCalls = OBJECT_MAPPER.readValue(
-                        entity.getToolCallsJson(), new TypeReference<>() {});
+                        entity.getToolCallsJson(), new TypeReference<>() {
+                        });
                 builder.toolCalls(toolCalls);
             } catch (Exception e) {
                 log.warn("Failed to deserialize tool calls for message {}", entity.getId(), e);
