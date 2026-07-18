@@ -180,7 +180,7 @@ public class ContextCompressionService {
         ChatEventBatch last = selected.get(selected.size() - 1);
         saveRecap(conversationId, first.getId(), last.getId(), "PROACTIVE", recapContent);
         log.info("Saved [PROACTIVE] Recap: {}", recapContent);
-        String compressionContent = "已主动压缩 " + selected.size() + " 个历史 batch（" + first.getId() + "-" + last.getId() + "）。";
+        String compressionContent = "已主动压缩 " + selected.size() + " 个历史 batch（" + first.getId() + "-" + last.getId() + "）";
         persistenceService.createContextCompressionBatch(conversationId, compressionContent);
         log.info("Saved compression batch: {}", compressionContent);
         return true;
