@@ -1,7 +1,7 @@
 package com.gacfox.meowclaw.service;
 
 import com.gacfox.meowclaw.entity.Agent;
-import com.gacfox.meowclaw.util.FrontmatterParser;
+import com.gacfox.meowclaw.util.FrontmatterParseUtil;
 import com.gacfox.proarc.agentic.prompt.PromptTemplate;
 import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
@@ -106,7 +106,7 @@ public class SystemPromptService {
                 if (!Files.isRegularFile(md)) return;
                 try {
                     String content = Files.readString(md, StandardCharsets.UTF_8);
-                    Map<String, Object> fm = FrontmatterParser.parse(content);
+                    Map<String, Object> fm = FrontmatterParseUtil.parse(content);
                     Object name = fm.get("name");
                     if (name == null) return;
                     Object desc = fm.get("description");

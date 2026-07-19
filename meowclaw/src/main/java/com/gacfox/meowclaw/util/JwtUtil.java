@@ -15,7 +15,6 @@ import java.util.Map;
 
 @Component
 public class JwtUtil {
-
     private static final String USER_CLAIM = "user";
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 

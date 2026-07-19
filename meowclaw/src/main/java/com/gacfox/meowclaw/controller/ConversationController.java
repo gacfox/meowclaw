@@ -8,7 +8,7 @@ import com.gacfox.meowclaw.dto.SendMessageRequest;
 import com.gacfox.meowclaw.entity.Conversation;
 import com.gacfox.meowclaw.service.ChatService;
 import com.gacfox.meowclaw.service.ConversationService;
-import com.gacfox.meowclaw.service.TitleGenerationRegistry;
+import com.gacfox.meowclaw.service.TitleGenerationRegistryService;
 import com.gacfox.proarc.common.model.ApiResult;
 import com.gacfox.proarc.common.model.Pagination;
 import jakarta.validation.Valid;
@@ -37,15 +37,15 @@ public class ConversationController {
 
     private final ConversationService conversationService;
     private final ChatService chatService;
-    private final TitleGenerationRegistry titleGenerationRegistry;
+    private final TitleGenerationRegistryService titleGenerationRegistryService;
 
     @Autowired
     public ConversationController(ConversationService conversationService,
                                   ChatService chatService,
-                                  TitleGenerationRegistry titleGenerationRegistry) {
+                                  TitleGenerationRegistryService titleGenerationRegistryService) {
         this.conversationService = conversationService;
         this.chatService = chatService;
-        this.titleGenerationRegistry = titleGenerationRegistry;
+        this.titleGenerationRegistryService = titleGenerationRegistryService;
     }
 
     @GetMapping
@@ -102,7 +102,7 @@ public class ConversationController {
         DeferredResult<ApiResult<Map<String, String>>> result = new DeferredResult<>(TITLE_WAIT_TIMEOUT_MS);
         result.onTimeout(() -> result.setResult(ApiResult.success(Map.of("title", ""))));
 
-        CompletableFuture<String> future = titleGenerationRegistry.get(id);
+        CompletableFuture<String> future = titleGenerationRegistryService.get(id);
         if (future == null) {
             Conversation conv = conversationService.getById(id);
             String currentTitle = conv.getTitle() == null ? "" : conv.getTitle();

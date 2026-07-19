@@ -5,8 +5,10 @@ import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
 
+/**
+ * 从请求域获取当前登录用户信息工具类
+ */
 public class AuthUtil {
-
     private static final String USER_ATTR = "currentUser";
 
     public static UserDTO getCurrentUser() {

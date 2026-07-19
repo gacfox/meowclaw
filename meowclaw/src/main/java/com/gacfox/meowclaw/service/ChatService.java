@@ -57,7 +57,7 @@ public class ChatService {
     private final AgentLoggingInterceptor agentLoggingInterceptor;
     private final AgentSystemPromptRefreshInterceptor agentSystemPromptRefreshInterceptor;
     private final LlmLoggingInterceptor llmLoggingInterceptor;
-    private final TitleGenerationRegistry titleGenerationRegistry;
+    private final TitleGenerationRegistryService titleGenerationRegistryService;
     private final TokenUsageLogService tokenUsageLogService;
     private final ContextCompressionService contextCompressionService;
 
@@ -71,7 +71,7 @@ public class ChatService {
                        AgentLoggingInterceptor agentLoggingInterceptor,
                        AgentSystemPromptRefreshInterceptor agentSystemPromptRefreshInterceptor,
                        LlmLoggingInterceptor llmLoggingInterceptor,
-                       TitleGenerationRegistry titleGenerationRegistry,
+                       TitleGenerationRegistryService titleGenerationRegistryService,
                        TokenUsageLogService tokenUsageLogService,
                        ContextCompressionService contextCompressionService) {
         this.conversationService = conversationService;
@@ -83,7 +83,7 @@ public class ChatService {
         this.agentLoggingInterceptor = agentLoggingInterceptor;
         this.agentSystemPromptRefreshInterceptor = agentSystemPromptRefreshInterceptor;
         this.llmLoggingInterceptor = llmLoggingInterceptor;
-        this.titleGenerationRegistry = titleGenerationRegistry;
+        this.titleGenerationRegistryService = titleGenerationRegistryService;
         this.tokenUsageLogService = tokenUsageLogService;
         this.contextCompressionService = contextCompressionService;
     }
@@ -281,7 +281,7 @@ public class ChatService {
                         }
                     }
                     if (isFirstBatch && firstFinalAnswer.get() != null) {
-                        CompletableFuture<String> ignored = titleGenerationRegistry.register(conversationId);
+                        CompletableFuture<String> ignored = titleGenerationRegistryService.register(conversationId);
                         Mono.fromRunnable(() -> generateTitle(conversationId, userContent, firstFinalAnswer.get(), context.getLlmClient()))
                                 .subscribeOn(Schedulers.boundedElastic())
                                 .subscribe();
@@ -332,7 +332,7 @@ public class ChatService {
         }
         String finalTitle = title.trim();
         conversationService.updateTitle(conversationId, finalTitle);
-        titleGenerationRegistry.complete(conversationId, finalTitle);
+        titleGenerationRegistryService.complete(conversationId, finalTitle);
     }
 
     private List<String> parseJsonArray(String json) {

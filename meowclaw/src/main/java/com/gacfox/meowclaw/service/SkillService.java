@@ -7,7 +7,7 @@ import com.gacfox.meowclaw.entity.Agent;
 import com.gacfox.meowclaw.entity.SkillPackage;
 import com.gacfox.meowclaw.repository.AgentRepository;
 import com.gacfox.meowclaw.repository.SkillPackageRepository;
-import com.gacfox.meowclaw.util.FrontmatterParser;
+import com.gacfox.meowclaw.util.FrontmatterParseUtil;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -66,7 +66,7 @@ public class SkillService {
         if (skillMdContent == null) {
             throw new IllegalArgumentException("压缩包根目录必须包含 SKILL.md");
         }
-        Map<String, Object> fm = FrontmatterParser.parse(skillMdContent);
+        Map<String, Object> fm = FrontmatterParseUtil.parse(skillMdContent);
         Object nameObj = fm.get("name");
         if (nameObj == null || String.valueOf(nameObj).isBlank()) {
             throw new IllegalArgumentException("SKILL.md frontmatter 缺少必填字段 name");

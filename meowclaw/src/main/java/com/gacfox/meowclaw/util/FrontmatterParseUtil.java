@@ -6,14 +6,10 @@ import java.util.Collections;
 import java.util.Map;
 
 /**
- * 解析 Markdown 顶部的 YAML frontmatter（一对 {@code ---} 之间的内容）。
- * 无 frontmatter 或解析失败时返回空 Map。
+ * 解析Markdown顶部的YAML Frontmatter
+ * 无Frontmatter或解析失败时返回空Map
  */
-public final class FrontmatterParser {
-
-    private FrontmatterParser() {
-    }
-
+public class FrontmatterParseUtil {
     public static Map<String, Object> parse(String md) {
         if (md == null || md.isBlank()) {
             return Collections.emptyMap();

@@ -3,11 +3,9 @@ package com.gacfox.meowclaw.util;
 import java.nio.file.Path;
 
 /**
- * 工具路径解析：相对路径基于 cwd 解析，绝对路径直接使用。不做路径穿越防护。
+ * 工具路径解析，相对路径基于cwd解析，绝对路径直接使用，这里不做路径穿越防护
  */
-public final class ToolPathUtil {
-    private ToolPathUtil() {}
-
+public class ToolPathUtil {
     public static Path resolve(String cwd, String input) {
         if (input == null || input.isBlank()) {
             throw new IllegalArgumentException("path is blank");

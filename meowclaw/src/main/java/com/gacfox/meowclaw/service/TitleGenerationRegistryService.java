@@ -15,7 +15,7 @@ import java.util.concurrent.TimeUnit;
  */
 @Slf4j
 @Service
-public class TitleGenerationRegistry {
+public class TitleGenerationRegistryService {
     private static final long TIMEOUT_SECONDS = 60;
     private final Map<Long, CompletableFuture<String>> pending = new ConcurrentHashMap<>();
 
