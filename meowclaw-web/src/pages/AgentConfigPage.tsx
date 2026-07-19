@@ -30,6 +30,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
+import { MultiSelect } from "@/components/ui/multi-select";
 import { Plus, Pencil, Trash2, Copy, FolderOpen, Camera, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 
@@ -122,24 +123,6 @@ export function AgentConfigPage() {
       workspaceFolder: agent.workspaceFolder ?? "",
     });
     setDialogOpen(true);
-  };
-
-  const toggleTool = (toolName: string) => {
-    setForm((prev) => ({
-      ...prev,
-      enabledTools: prev.enabledTools.includes(toolName)
-        ? prev.enabledTools.filter((t) => t !== toolName)
-        : [...prev.enabledTools, toolName],
-    }));
-  };
-
-  const toggleMcpTool = (toolName: string) => {
-    setForm((prev) => ({
-      ...prev,
-      enabledMcpTools: prev.enabledMcpTools.includes(toolName)
-        ? prev.enabledMcpTools.filter((t) => t !== toolName)
-        : [...prev.enabledMcpTools, toolName],
-    }));
   };
 
   const handleSave = async () => {
@@ -349,39 +332,28 @@ export function AgentConfigPage() {
             </div>
             <div className="flex flex-col gap-2">
               <Label>启用内置工具</Label>
-              <div className="flex flex-wrap gap-2">
-                {tools.map((tool) => (
-                  <Button
-                    key={tool.name}
-                    type="button"
-                    size="sm"
-                    variant={form.enabledTools.includes(tool.name) ? "default" : "outline"}
-                    onClick={() => toggleTool(tool.name)}
-                  >
-                    {tool.name}
-                  </Button>
-                ))}
-              </div>
+              <MultiSelect
+                options={tools.map((tool) => ({ value: tool.name, label: tool.name, description: tool.description }))}
+                selected={form.enabledTools}
+                onChange={(selected) => setForm((prev) => ({ ...prev, enabledTools: selected }))}
+                placeholder="选择内置工具"
+                searchPlaceholder="搜索内置工具"
+                emptyText="无可用内置工具"
+              />
             </div>
             <div className="flex flex-col gap-2">
               <Label>启用 MCP 工具</Label>
               {mcpTools.length === 0 ? (
                 <p className="text-xs text-muted-foreground">暂无可用的 MCP 工具，请先在「MCP 服务」中启用服务</p>
               ) : (
-                <div className="flex flex-wrap gap-2">
-                  {mcpTools.map((tool) => (
-                    <Button
-                      key={tool.name}
-                      type="button"
-                      size="sm"
-                      variant={form.enabledMcpTools.includes(tool.name) ? "default" : "outline"}
-                      onClick={() => toggleMcpTool(tool.name)}
-                      title={tool.description || tool.name}
-                    >
-                      {tool.name}
-                    </Button>
-                  ))}
-                </div>
+                <MultiSelect
+                  options={mcpTools.map((tool) => ({ value: tool.name, label: tool.name, description: tool.description || undefined }))}
+                  selected={form.enabledMcpTools}
+                  onChange={(selected) => setForm((prev) => ({ ...prev, enabledMcpTools: selected }))}
+                  placeholder="选择 MCP 工具"
+                  searchPlaceholder="搜索 MCP 工具"
+                  emptyText="无可用 MCP 工具"
+                />
               )}
             </div>
             <div className="flex flex-col gap-2">
