@@ -40,6 +40,7 @@ export interface AgentDTO {
   enabledTools: string | null;
   enabledMcpTools: string | null;
   llmId: number | null;
+  secondaryLlmId: number | null;
   workspaceFolder: string | null;
   createdAt: number;
   updatedAt: number;

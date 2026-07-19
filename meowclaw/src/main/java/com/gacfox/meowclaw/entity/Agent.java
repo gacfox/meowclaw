@@ -37,8 +37,11 @@ public class Agent {
     @Column(name = "enabled_mcp_tools", length = 2000)
     private String enabledMcpTools;
 
-    @Column(name = "llm_id")
+    @Column(name = "llm_id", nullable = false)
     private Long llmId;
+
+    @Column(name = "secondary_llm_id", nullable = false)
+    private Long secondaryLlmId;
 
     @Column(name = "workspace_folder", length = 500)
     private String workspaceFolder;

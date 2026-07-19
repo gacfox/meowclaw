@@ -29,6 +29,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
+import reactor.core.publisher.FluxSink;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
 import reactor.netty.http.client.HttpClient;
@@ -96,14 +97,17 @@ public class ChatService {
                         .orElseThrow(() -> new IllegalArgumentException("智能体不存在"));
                 Llm llm = llmRepository.findById(agent.getLlmId())
                         .orElseThrow(() -> new IllegalArgumentException("LLM配置不存在"));
+                Llm secondaryLlm = llmRepository.findById(agent.getSecondaryLlmId())
+                        .orElseThrow(() -> new IllegalArgumentException("辅助LLM配置不存在"));
 
-                tryProactiveCompression(conversationId, llm, sink);
+                tryProactiveCompression(conversationId, secondaryLlm, sink);
 
                 ChatEventBatch batch = chatPersistenceService.createBatch(conversationId, userContent);
                 Long batchId = batch.getId();
 
                 TokenUsageAccumulator tokenAccum = new TokenUsageAccumulator();
-                LlmClient llmClient = buildMainLlmClient(llm, batchId, agent, conv, tokenAccum);
+                LlmClient llmClient = buildMainLlmClient(llm, batchId, conv, tokenAccum);
+                LlmClient secondaryLlmClient = buildAuxiliaryLlmClient(secondaryLlm, batchId, conv);
 
                 List<String> toolNames = new ArrayList<>(parseJsonArray(agent.getEnabledTools()));
                 toolNames.addAll(parseJsonArray(agent.getEnabledMcpTools()));
@@ -112,7 +116,7 @@ public class ChatService {
                 AgentContext context = buildAgentContext(agent, conv, llm, userContent, toolNames, llmClient);
                 boolean isFirstBatch = conv.getTitle() == null || conv.getTitle().isBlank();
 
-                executeAgent(context, executor, batchId, conversationId, userContent, llm, tokenAccum, isFirstBatch, sink);
+                executeAgent(context, executor, batchId, conversationId, userContent, llm, secondaryLlm, secondaryLlmClient, tokenAccum, isFirstBatch, sink);
             } catch (Exception e) {
                 sink.error(e);
             }
@@ -120,7 +124,7 @@ public class ChatService {
     }
 
     private void tryProactiveCompression(Long conversationId, Llm llm,
-                                          reactor.core.publisher.FluxSink<ChatEventDTO> sink) {
+                                         reactor.core.publisher.FluxSink<ChatEventDTO> sink) {
         if (!"VERY_LOW".equals(conversationService.getContextStatus(conversationId))) {
             return;
         }
@@ -135,15 +139,27 @@ public class ChatService {
         }
     }
 
-    private LlmClient buildMainLlmClient(Llm llm, Long batchId, Agent agent, Conversation conv,
-                                          TokenUsageAccumulator tokenAccum) {
+    private LlmClient buildMainLlmClient(Llm llm, Long batchId, Conversation conv,
+                                         TokenUsageAccumulator tokenAccum) {
         TokenUsageContext tokenUsageContext = new TokenUsageContext(
-                agent.getLlmId(), conv.getAgentId(), conv.getId(), batchId, llm.getModel());
+                llm.getId(), conv.getAgentId(), conv.getId(), batchId, llm.getModel());
         return OpenAiLlmClient.builder()
                 .modelInfo(buildModelInfo(llm))
                 .httpClient(httpClient)
                 .interceptors(List.of(llmLoggingInterceptor,
                         new TokenUsageLlmInterceptor(tokenAccum, tokenUsageLogService, tokenUsageContext),
+                        new RetryInterceptor()))
+                .build();
+    }
+
+    private LlmClient buildAuxiliaryLlmClient(Llm llm, Long batchId, Conversation conv) {
+        TokenUsageContext tokenUsageContext = new TokenUsageContext(
+                llm.getId(), conv.getAgentId(), conv.getId(), batchId, llm.getModel());
+        return OpenAiLlmClient.builder()
+                .modelInfo(buildModelInfo(llm))
+                .httpClient(httpClient)
+                .interceptors(List.of(llmLoggingInterceptor,
+                        new TokenUsageLlmInterceptor(new TokenUsageAccumulator(), tokenUsageLogService, tokenUsageContext),
                         new RetryInterceptor()))
                 .build();
     }
@@ -158,7 +174,7 @@ public class ChatService {
     }
 
     private AgentContext buildAgentContext(Agent agent, Conversation conv, Llm llm, String userContent,
-                                            List<String> toolNames, LlmClient llmClient) {
+                                           List<String> toolNames, LlmClient llmClient) {
         String workspaceFolder = agent.getWorkspaceFolder();
         Map<String, Object> variables = new HashMap<>();
         if (workspaceFolder != null && !workspaceFolder.isBlank()) {
@@ -200,8 +216,10 @@ public class ChatService {
     }
 
     private void executeAgent(AgentContext context, ReActAgentExecutor executor, Long batchId, Long conversationId,
-                               String userContent, Llm llm, TokenUsageAccumulator tokenAccum,
-                               boolean isFirstBatch, reactor.core.publisher.FluxSink<ChatEventDTO> sink) {
+                              String userContent,
+                              Llm llm, Llm secondaryLlm, LlmClient secondaryLlmClient,
+                              TokenUsageAccumulator tokenAccum, boolean isFirstBatch,
+                              FluxSink<ChatEventDTO> sink) {
         int messageCountBefore = context.getMessages().size();
         AtomicInteger eventOrder = new AtomicInteger(0);
         AtomicReference<String> firstFinalAnswer = new AtomicReference<>();
@@ -269,7 +287,7 @@ public class ChatService {
                     conversationService.updateContextHealth(conversationId, promptTokens, contextLength, contextStatus);
                     sink.next(ChatEventDTO.builder().type("context_status").content(contextStatus).build());
                     try {
-                        contextCompressionService.afterBatch(conversationId, batchId, llm);
+                        contextCompressionService.afterBatch(conversationId, batchId, secondaryLlm);
                     } catch (Exception recapError) {
                         log.warn("Rolling context recap failed for conversation {}", conversationId, recapError);
                     }
@@ -282,7 +300,7 @@ public class ChatService {
                     }
                     if (isFirstBatch && firstFinalAnswer.get() != null) {
                         CompletableFuture<String> ignored = titleGenerationRegistryService.register(conversationId);
-                        Mono.fromRunnable(() -> generateTitle(conversationId, userContent, firstFinalAnswer.get(), context.getLlmClient()))
+                        Mono.fromRunnable(() -> generateTitle(conversationId, userContent, firstFinalAnswer.get(), secondaryLlmClient))
                                 .subscribeOn(Schedulers.boundedElastic())
                                 .subscribe();
                     }

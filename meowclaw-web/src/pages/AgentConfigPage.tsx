@@ -54,6 +54,7 @@ interface AgentFormData {
   enabledTools: string[];
   enabledMcpTools: string[];
   llmId: string;
+  secondaryLlmId: string;
   workspaceFolder: string;
 }
 
@@ -63,6 +64,7 @@ const emptyForm: AgentFormData = {
   enabledTools: [],
   enabledMcpTools: [],
   llmId: "",
+  secondaryLlmId: "",
   workspaceFolder: "",
 };
 
@@ -120,12 +122,21 @@ export function AgentConfigPage() {
       enabledTools: parseJsonArray(agent.enabledTools),
       enabledMcpTools: parseJsonArray(agent.enabledMcpTools),
       llmId: agent.llmId?.toString() ?? "",
+      secondaryLlmId: agent.secondaryLlmId?.toString() ?? "",
       workspaceFolder: agent.workspaceFolder ?? "",
     });
     setDialogOpen(true);
   };
 
   const handleSave = async () => {
+    if (!form.llmId) {
+      toast.error("请选择Agent执行LLM");
+      return;
+    }
+    if (!form.secondaryLlmId) {
+      toast.error("请选择辅助LLM");
+      return;
+    }
     setSaving(true);
     try {
       const data = {
@@ -133,7 +144,8 @@ export function AgentConfigPage() {
         persona: form.persona || undefined,
         enabledTools: toJsonArray(form.enabledTools),
         enabledMcpTools: toJsonArray(form.enabledMcpTools),
-        llmId: form.llmId ? parseInt(form.llmId) : undefined,
+        llmId: parseInt(form.llmId),
+        secondaryLlmId: parseInt(form.secondaryLlmId),
         workspaceFolder: form.workspaceFolder || undefined,
       };
       if (editing) {
@@ -195,6 +207,7 @@ export function AgentConfigPage() {
         enabledTools: copyingAgent.enabledTools ?? undefined,
         enabledMcpTools: copyingAgent.enabledMcpTools ?? undefined,
         llmId: copyingAgent.llmId ?? undefined,
+        secondaryLlmId: copyingAgent.secondaryLlmId ?? undefined,
         workspaceFolder: copyIndependentWorkspace ? undefined : (copyingAgent.workspaceFolder ?? undefined),
       });
       await fetchData();
@@ -357,10 +370,37 @@ export function AgentConfigPage() {
               )}
             </div>
             <div className="flex flex-col gap-2">
-              <Label>关联 LLM</Label>
-              <Select value={form.llmId} onValueChange={(v) => setForm({ ...form, llmId: v })}>
+              <Label>Agent执行LLM</Label>
+              <Select
+                value={form.llmId}
+                onValueChange={(v) =>
+                  setForm((prev) => ({
+                    ...prev,
+                    llmId: v,
+                    secondaryLlmId: prev.secondaryLlmId || v,
+                  }))
+                }
+              >
                 <SelectTrigger className="w-full">
                   <SelectValue placeholder="选择 LLM" />
+                </SelectTrigger>
+                <SelectContent>
+                  {llms.map((llm) => (
+                    <SelectItem key={llm.id} value={llm.id.toString()}>
+                      {llm.name} ({llm.model})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex flex-col gap-2">
+              <Label>辅助LLM</Label>
+              <Select
+                value={form.secondaryLlmId}
+                onValueChange={(v) => setForm({ ...form, secondaryLlmId: v })}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="选择辅助 LLM" />
                 </SelectTrigger>
                 <SelectContent>
                   {llms.map((llm) => (

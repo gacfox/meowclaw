@@ -51,6 +51,7 @@ public class AgentService {
         agent.setEnabledTools(req.getEnabledTools());
         agent.setEnabledMcpTools(req.getEnabledMcpTools());
         agent.setLlmId(req.getLlmId());
+        agent.setSecondaryLlmId(req.getSecondaryLlmId());
         long now = System.currentTimeMillis();
         agent.setCreatedAt(now);
         agent.setUpdatedAt(now);
@@ -82,6 +83,7 @@ public class AgentService {
         if (req.getEnabledTools() != null) agent.setEnabledTools(req.getEnabledTools());
         if (req.getEnabledMcpTools() != null) agent.setEnabledMcpTools(req.getEnabledMcpTools());
         if (req.getLlmId() != null) agent.setLlmId(req.getLlmId());
+        if (req.getSecondaryLlmId() != null) agent.setSecondaryLlmId(req.getSecondaryLlmId());
         if (req.getWorkspaceFolder() != null) agent.setWorkspaceFolder(req.getWorkspaceFolder());
         agent.setUpdatedAt(System.currentTimeMillis());
         return agentConverter.toDTO(agentRepository.save(agent));

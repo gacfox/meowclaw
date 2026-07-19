@@ -1,6 +1,7 @@
 package com.gacfox.meowclaw.dto;
 
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
@@ -27,7 +28,11 @@ public class CreateAgentRequest {
     @Size(max = 2000, message = "启用MCP工具配置长度不能超过2000")
     private String enabledMcpTools;
 
+    @NotNull(message = "请选择Agent执行LLM")
     private Long llmId;
+
+    @NotNull(message = "请选择辅助LLM")
+    private Long secondaryLlmId;
 
     @Size(max = 500, message = "工作区路径长度不能超过500")
     private String workspaceFolder;
