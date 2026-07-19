@@ -43,6 +43,9 @@ public class Agent {
     @Column(name = "secondary_llm_id", nullable = false)
     private Long secondaryLlmId;
 
+    @Column(name = "embedding_model_id")
+    private Long embeddingModelId;
+
     @Column(name = "workspace_folder", length = 500)
     private String workspaceFolder;
 

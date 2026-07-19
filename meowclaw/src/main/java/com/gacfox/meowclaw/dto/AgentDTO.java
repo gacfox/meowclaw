@@ -18,6 +18,7 @@ public class AgentDTO {
     private String enabledMcpTools;
     private Long llmId;
     private Long secondaryLlmId;
+    private Long embeddingModelId;
     private String workspaceFolder;
     private Long createdAt;
     private Long updatedAt;

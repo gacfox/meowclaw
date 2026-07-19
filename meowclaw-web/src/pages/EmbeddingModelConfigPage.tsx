@@ -1,10 +1,11 @@
 import { useState, useEffect, useCallback } from "react";
-import type { EmbeddingModelDTO } from "@/types";
+import type { EmbeddingModelDTO, EmbeddingModelTestResultDTO } from "@/types";
 import {
   listEmbeddingModels,
   createEmbeddingModel,
   updateEmbeddingModel,
   deleteEmbeddingModel as apiDeleteEmbeddingModel,
+  testEmbeddingModel,
 } from "@/services/embeddingModel";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -28,7 +29,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Plus, Pencil, Trash2, Copy, Eye, EyeOff, Globe, Database, RefreshCw } from "lucide-react";
+import { Plus, Pencil, Trash2, Copy, Eye, EyeOff, Globe, Database, RefreshCw, Play } from "lucide-react";
 import { toast } from "sonner";
 
 interface EmbeddingModelFormData {
@@ -87,9 +88,13 @@ export function EmbeddingModelConfigPage() {
   const [form, setForm] = useState<EmbeddingModelFormData>(emptyForm);
   const [saving, setSaving] = useState(false);
 
+  const [testing, setTesting] = useState(false);
+  const [testResult, setTestResult] = useState<EmbeddingModelTestResultDTO | null>(null);
+
   const openCreate = () => {
     setEditing(null);
     setForm(emptyForm);
+    setTestResult(null);
     setDialogOpen(true);
   };
 
@@ -102,7 +107,26 @@ export function EmbeddingModelConfigPage() {
       model: model.model,
       dimensions: model.dimensions?.toString() ?? "",
     });
+    setTestResult(null);
     setDialogOpen(true);
+  };
+
+  const handleTest = async () => {
+    setTesting(true);
+    setTestResult(null);
+    try {
+      const result = await testEmbeddingModel({
+        endpointUrl: form.endpointUrl,
+        sk: form.sk || undefined,
+        model: form.model,
+        dimensions: parseInt(form.dimensions),
+      });
+      setTestResult(result);
+    } catch (err) {
+      setTestResult({ success: false, dimensions: null, errorMessage: err instanceof Error ? err.message : "请求失败" });
+    } finally {
+      setTesting(false);
+    }
   };
 
   const handleSave = async () => {
@@ -184,6 +208,9 @@ export function EmbeddingModelConfigPage() {
 
   const canSave =
     form.name && form.endpointUrl && form.model && form.dimensions && !isNaN(parseInt(form.dimensions));
+
+  const canTest =
+    form.endpointUrl && form.model && form.dimensions && !isNaN(parseInt(form.dimensions));
 
   return (
     <div className="flex flex-col gap-6">
@@ -297,6 +324,20 @@ export function EmbeddingModelConfigPage() {
                 onChange={(e) => setForm({ ...form, dimensions: e.target.value })}
                 placeholder="1024"
               />
+            </div>
+
+            <div className="flex items-center gap-2">
+              <Button variant="outline" type="button" onClick={handleTest} disabled={testing || !canTest}>
+                {testing ? "测试中..." : "测试模型"}
+                <Play className="ml-1 size-4" />
+              </Button>
+              {testResult && (
+                <span className={testResult.success ? "text-sm text-primary" : "text-sm text-destructive"}>
+                  {testResult.success
+                    ? `测试成功，返回维度 ${testResult.dimensions}`
+                    : `测试失败: ${testResult.errorMessage}`}
+                </span>
+              )}
             </div>
           </div>
           <DialogFooter>

@@ -1,4 +1,4 @@
-import type { EmbeddingModelDTO } from "@/types";
+import type { EmbeddingModelDTO, EmbeddingModelTestResultDTO } from "@/types";
 import { request } from "./request";
 
 export async function listEmbeddingModels(): Promise<EmbeddingModelDTO[]> {
@@ -36,4 +36,17 @@ export async function updateEmbeddingModel(id: number, data: {
 
 export async function deleteEmbeddingModel(id: number) {
   return request(`/api/embedding-model/${id}`, { method: "DELETE" });
+}
+
+export async function testEmbeddingModel(data: {
+  endpointUrl: string;
+  sk?: string;
+  model: string;
+  dimensions: number;
+}): Promise<EmbeddingModelTestResultDTO> {
+  const res = await request<EmbeddingModelTestResultDTO>("/api/embedding-model/test", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+  return res.data;
 }

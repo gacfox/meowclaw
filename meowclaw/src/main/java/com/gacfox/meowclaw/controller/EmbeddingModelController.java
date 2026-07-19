@@ -2,6 +2,8 @@ package com.gacfox.meowclaw.controller;
 
 import com.gacfox.meowclaw.dto.CreateEmbeddingModelRequest;
 import com.gacfox.meowclaw.dto.EmbeddingModelDTO;
+import com.gacfox.meowclaw.dto.EmbeddingModelTestRequest;
+import com.gacfox.meowclaw.dto.EmbeddingTestResultDTO;
 import com.gacfox.meowclaw.dto.UpdateEmbeddingModelRequest;
 import com.gacfox.meowclaw.service.EmbeddingModelService;
 import com.gacfox.proarc.common.model.ApiResult;
@@ -48,5 +50,10 @@ public class EmbeddingModelController {
     public ApiResult<?> delete(@PathVariable Long id) {
         embeddingModelService.delete(id);
         return ApiResult.success();
+    }
+
+    @PostMapping("/test")
+    public ApiResult<EmbeddingTestResultDTO> test(@RequestBody @Valid EmbeddingModelTestRequest req) {
+        return ApiResult.success(embeddingModelService.test(req));
     }
 }

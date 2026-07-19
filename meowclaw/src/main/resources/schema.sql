@@ -35,6 +35,7 @@ CREATE TABLE IF NOT EXISTS mc_agent (
     enabled_mcp_tools VARCHAR(2000) COMMENT '启用的MCP工具(JSON数组)',
     llm_id BIGINT NOT NULL COMMENT '关联的LLM配置ID',
     secondary_llm_id BIGINT NOT NULL COMMENT '辅助LLM配置ID（标题生成、消息压缩使用）',
+    embedding_model_id BIGINT COMMENT '可选的向量嵌入模型配置ID',
     workspace_folder VARCHAR(500) COMMENT '工作区目录路径',
     created_at BIGINT NOT NULL COMMENT '创建时间(时间戳毫秒)',
     updated_at BIGINT NOT NULL COMMENT '更新时间(时间戳毫秒)',
@@ -200,4 +201,45 @@ CREATE TABLE IF NOT EXISTS mc_embedding_model (
     updated_at BIGINT NOT NULL COMMENT '更新时间(时间戳毫秒)',
     PRIMARY KEY (id)
 );
+
+CREATE TABLE IF NOT EXISTS mc_memory_node (
+    id BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+    agent_id BIGINT NOT NULL COMMENT '智能体ID',
+    type VARCHAR(32) NOT NULL COMMENT '类型：fact/preference/rule',
+    content TEXT NOT NULL COMMENT '记忆内容',
+    last_accessed_at BIGINT COMMENT '最后访问时间戳(毫秒)',
+    created_at BIGINT NOT NULL COMMENT '创建时间戳(毫秒)',
+    updated_at BIGINT NOT NULL COMMENT '更新时间戳(毫秒)',
+    PRIMARY KEY (id)
+);
+CREATE INDEX IF NOT EXISTS idx_mc_memory_node_agent_id ON mc_memory_node(agent_id);
+CREATE INDEX IF NOT EXISTS idx_mc_memory_node_type ON mc_memory_node(type);
+
+CREATE TABLE IF NOT EXISTS mc_memory_entity (
+    id BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+    agent_id BIGINT NOT NULL COMMENT '智能体ID',
+    name VARCHAR(255) NOT NULL COMMENT '实体名',
+    last_accessed_at BIGINT COMMENT '最后访问时间戳(毫秒)',
+    created_at BIGINT NOT NULL COMMENT '创建时间戳(毫秒)',
+    updated_at BIGINT NOT NULL COMMENT '更新时间戳(毫秒)',
+    PRIMARY KEY (id)
+);
+CREATE INDEX IF NOT EXISTS idx_mc_memory_entity_agent_id ON mc_memory_entity(agent_id);
+CREATE UNIQUE INDEX IF NOT EXISTS uk_mc_memory_entity_agent_name ON mc_memory_entity(agent_id, name);
+
+CREATE TABLE IF NOT EXISTS mc_memory_node_entity (
+    id BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+    agent_id BIGINT NOT NULL COMMENT '智能体ID',
+    node_id BIGINT NOT NULL COMMENT '关联记忆节点ID',
+    entity_id BIGINT NOT NULL COMMENT '关联实体ID',
+    description TEXT NOT NULL COMMENT '关系描述',
+    last_accessed_at BIGINT COMMENT '最后访问时间戳(毫秒)',
+    created_at BIGINT NOT NULL COMMENT '创建时间戳(毫秒)',
+    updated_at BIGINT NOT NULL COMMENT '更新时间戳(毫秒)',
+    PRIMARY KEY (id)
+);
+CREATE INDEX IF NOT EXISTS idx_mc_memory_node_entity_agent_id ON mc_memory_node_entity(agent_id);
+CREATE INDEX IF NOT EXISTS idx_mc_memory_node_entity_node_id ON mc_memory_node_entity(node_id);
+CREATE INDEX IF NOT EXISTS idx_mc_memory_node_entity_entity_id ON mc_memory_node_entity(entity_id);
+
 

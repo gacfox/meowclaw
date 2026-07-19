@@ -34,6 +34,8 @@ public class CreateAgentRequest {
     @NotNull(message = "请选择辅助LLM")
     private Long secondaryLlmId;
 
+    private Long embeddingModelId;
+
     @Size(max = 500, message = "工作区路径长度不能超过500")
     private String workspaceFolder;
 }

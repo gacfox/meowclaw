@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import type { AgentDTO, LlmDTO, McpToolDTO, ToolInfoDTO } from "@/types";
+import type { AgentDTO, EmbeddingModelDTO, LlmDTO, McpToolDTO, ToolInfoDTO } from "@/types";
 import { listAgents, createAgent, updateAgent, deleteAgent as apiDeleteAgent, uploadAgentAvatar } from "@/services/agent";
 import { listLlms } from "@/services/llm";
+import { listEmbeddingModels } from "@/services/embeddingModel";
 import { listTools } from "@/services/tool";
 import { listMcpTools } from "@/services/mcp-service";
 import { Button } from "@/components/ui/button";
@@ -55,6 +56,7 @@ interface AgentFormData {
   enabledMcpTools: string[];
   llmId: string;
   secondaryLlmId: string;
+  embeddingModelId: string;
   workspaceFolder: string;
 }
 
@@ -65,12 +67,14 @@ const emptyForm: AgentFormData = {
   enabledMcpTools: [],
   llmId: "",
   secondaryLlmId: "",
+  embeddingModelId: "none",
   workspaceFolder: "",
 };
 
 export function AgentConfigPage() {
   const [agents, setAgents] = useState<AgentDTO[]>([]);
   const [llms, setLlms] = useState<LlmDTO[]>([]);
+  const [embeddingModels, setEmbeddingModels] = useState<EmbeddingModelDTO[]>([]);
   const [tools, setTools] = useState<ToolInfoDTO[]>([]);
   const [mcpTools, setMcpTools] = useState<McpToolDTO[]>([]);
   const [loading, setLoading] = useState(true);
@@ -80,14 +84,16 @@ export function AgentConfigPage() {
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      const [agentList, llmList, toolList, mcpToolList] = await Promise.all([
+      const [agentList, llmList, embeddingModelList, toolList, mcpToolList] = await Promise.all([
         listAgents(),
         listLlms(),
+        listEmbeddingModels(),
         listTools(),
         listMcpTools(),
       ]);
       setAgents(agentList);
       setLlms(llmList);
+      setEmbeddingModels(embeddingModelList);
       setTools(toolList);
       setMcpTools(mcpToolList);
     } finally {
@@ -123,6 +129,7 @@ export function AgentConfigPage() {
       enabledMcpTools: parseJsonArray(agent.enabledMcpTools),
       llmId: agent.llmId?.toString() ?? "",
       secondaryLlmId: agent.secondaryLlmId?.toString() ?? "",
+      embeddingModelId: agent.embeddingModelId?.toString() ?? "none",
       workspaceFolder: agent.workspaceFolder ?? "",
     });
     setDialogOpen(true);
@@ -146,6 +153,7 @@ export function AgentConfigPage() {
         enabledMcpTools: toJsonArray(form.enabledMcpTools),
         llmId: parseInt(form.llmId),
         secondaryLlmId: parseInt(form.secondaryLlmId),
+        embeddingModelId: form.embeddingModelId !== "none" ? parseInt(form.embeddingModelId) : undefined,
         workspaceFolder: form.workspaceFolder || undefined,
       };
       if (editing) {
@@ -208,6 +216,7 @@ export function AgentConfigPage() {
         enabledMcpTools: copyingAgent.enabledMcpTools ?? undefined,
         llmId: copyingAgent.llmId ?? undefined,
         secondaryLlmId: copyingAgent.secondaryLlmId ?? undefined,
+        embeddingModelId: copyingAgent.embeddingModelId ?? undefined,
         workspaceFolder: copyIndependentWorkspace ? undefined : (copyingAgent.workspaceFolder ?? undefined),
       });
       await fetchData();
@@ -406,6 +415,25 @@ export function AgentConfigPage() {
                   {llms.map((llm) => (
                     <SelectItem key={llm.id} value={llm.id.toString()}>
                       {llm.name} ({llm.model})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex flex-col gap-2">
+              <Label>向量嵌入模型（可选）</Label>
+              <Select
+                value={form.embeddingModelId}
+                onValueChange={(v) => setForm({ ...form, embeddingModelId: v })}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="不使用向量检索（仅传统检索）" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">不使用向量检索</SelectItem>
+                  {embeddingModels.map((em) => (
+                    <SelectItem key={em.id} value={em.id.toString()}>
+                      {em.name} ({em.model}, {em.dimensions}维)
                     </SelectItem>
                   ))}
                 </SelectContent>

@@ -14,6 +14,7 @@ export async function createAgent(data: {
   enabledMcpTools?: string;
   llmId?: number;
   secondaryLlmId?: number;
+  embeddingModelId?: number;
   workspaceFolder?: string;
 }): Promise<AgentDTO> {
   const res = await request<AgentDTO>("/api/agent", {
@@ -31,6 +32,7 @@ export async function updateAgent(id: number, data: {
   enabledMcpTools?: string;
   llmId?: number;
   secondaryLlmId?: number;
+  embeddingModelId?: number;
   workspaceFolder?: string;
 }): Promise<AgentDTO> {
   const res = await request<AgentDTO>(`/api/agent/${id}`, {

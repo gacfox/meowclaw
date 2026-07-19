@@ -38,6 +38,12 @@ export interface EmbeddingModelDTO {
   updatedAt: number;
 }
 
+export interface EmbeddingModelTestResultDTO {
+  success: boolean;
+  dimensions: number | null;
+  errorMessage: string | null;
+}
+
 export interface ToolInfoDTO {
   name: string;
   description: string;
@@ -52,6 +58,7 @@ export interface AgentDTO {
   enabledMcpTools: string | null;
   llmId: number | null;
   secondaryLlmId: number | null;
+  embeddingModelId: number | null;
   workspaceFolder: string | null;
   createdAt: number;
   updatedAt: number;
