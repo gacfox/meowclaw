@@ -19,6 +19,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { ServiceStatusIndicator } from "./ServiceStatusIndicator";
 
 const ROUTE_LABELS: Record<string, string> = {
   "/": "对话",
@@ -69,6 +70,7 @@ export function AppHeader() {
         </BreadcrumbList>
       </Breadcrumb>
       <div className="flex items-center gap-1">
+        <ServiceStatusIndicator />
         <Button variant="ghost" size="icon-sm" onClick={cycleTheme}>
           {themeIcon}
         </Button>
