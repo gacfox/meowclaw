@@ -9,6 +9,7 @@ import { InitPage } from "@/pages/InitPage";
 import { LoginPage } from "@/pages/LoginPage";
 import { UserSettingsPage } from "@/pages/UserSettingsPage";
 import { LlmConfigPage } from "@/pages/LlmConfigPage";
+import { EmbeddingModelConfigPage } from "@/pages/EmbeddingModelConfigPage";
 import { AgentConfigPage } from "@/pages/AgentConfigPage";
 import { ChatPage } from "@/pages/ChatPage";
 import { ScheduledTaskPage } from "@/pages/ScheduledTaskPage";
@@ -116,6 +117,7 @@ function AppRoutes() {
         <Route index element={<ChatPage />} />
         <Route path="settings" element={<UserSettingsPage />} />
         <Route path="llm" element={<LlmConfigPage />} />
+        <Route path="embedding-model" element={<EmbeddingModelConfigPage />} />
         <Route path="agent" element={<AgentConfigPage />} />
         <Route path="scheduled-task" element={<ScheduledTaskPage />} />
         <Route path="mcp-service" element={<McpServicePage />} />

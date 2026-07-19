@@ -311,7 +311,7 @@ export function WorkspacePage() {
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between gap-3">
-        <h1 className="text-2xl font-semibold">工作区管理</h1>
+        <h1 className="text-2xl font-semibold">工作区</h1>
         <div className="flex items-center gap-2">
           <Select value={selectedAgentId != null ? String(selectedAgentId) : undefined} onValueChange={onAgentChange}>
             <SelectTrigger className="w-[220px]">

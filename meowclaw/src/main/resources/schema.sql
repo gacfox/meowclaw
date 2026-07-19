@@ -189,3 +189,15 @@ CREATE TABLE IF NOT EXISTS mc_token_usage_log (
 CREATE INDEX IF NOT EXISTS idx_mc_token_usage_log_llm_id ON mc_token_usage_log(llm_id);
 CREATE INDEX IF NOT EXISTS idx_mc_token_usage_log_created_at ON mc_token_usage_log(created_at);
 
+CREATE TABLE IF NOT EXISTS mc_embedding_model (
+    id BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+    name VARCHAR(255) NOT NULL COMMENT '配置名称',
+    endpoint_url VARCHAR(500) NOT NULL COMMENT 'API端点URL',
+    sk VARCHAR(255) COMMENT 'API密钥',
+    model VARCHAR(100) NOT NULL COMMENT '模型名称',
+    dimensions INT NOT NULL COMMENT '向量维度',
+    created_at BIGINT NOT NULL COMMENT '创建时间(时间戳毫秒)',
+    updated_at BIGINT NOT NULL COMMENT '更新时间(时间戳毫秒)',
+    PRIMARY KEY (id)
+);
+

@@ -23,7 +23,8 @@ import { ServiceStatusIndicator } from "./ServiceStatusIndicator";
 
 const ROUTE_LABELS: Record<string, string> = {
   "/": "对话",
-  "/llm": "LLM 配置",
+  "/llm": "大语言模型",
+  "/embedding-model": "向量嵌入模型",
   "/agent": "智能体",
   "/scheduled-task": "定时任务",
   "/mcp-service": "MCP 服务",

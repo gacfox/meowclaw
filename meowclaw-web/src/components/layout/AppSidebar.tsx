@@ -1,5 +1,5 @@
 import { Link, useLocation } from "react-router-dom";
-import { MessageSquare, Cpu, Sparkles, Clock, Plug, Package, BarChart3, FolderTree } from "lucide-react";
+import { MessageSquare, Cpu, Database, Sparkles, Clock, Plug, Package, BarChart3, FolderTree } from "lucide-react";
 import {
   Sidebar,
   SidebarContent,
@@ -44,10 +44,10 @@ export function AppSidebar() {
                 </SidebarMenuButton>
               </SidebarMenuItem>
               <SidebarMenuItem>
-                <SidebarMenuButton tooltip="工作区管理" asChild isActive={location.pathname === "/workspace"}>
+                <SidebarMenuButton tooltip="工作区" asChild isActive={location.pathname === "/workspace"}>
                   <Link to="/workspace">
                     <FolderTree />
-                    <span>工作区管理</span>
+                    <span>工作区</span>
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
@@ -84,10 +84,18 @@ export function AppSidebar() {
                 </SidebarMenuButton>
               </SidebarMenuItem>
               <SidebarMenuItem>
-                <SidebarMenuButton tooltip="LLM 配置" asChild isActive={location.pathname === "/llm"}>
+                <SidebarMenuButton tooltip="大语言模型" asChild isActive={location.pathname === "/llm"}>
                   <Link to="/llm">
                     <Cpu />
-                    <span>LLM 配置</span>
+                    <span>大语言模型</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              <SidebarMenuItem>
+                <SidebarMenuButton tooltip="向量嵌入模型" asChild isActive={location.pathname === "/embedding-model"}>
+                  <Link to="/embedding-model">
+                    <Database />
+                    <span>向量嵌入模型</span>
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>

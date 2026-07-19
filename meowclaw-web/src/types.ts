@@ -27,6 +27,17 @@ export interface LlmDTO {
   updatedAt: number;
 }
 
+export interface EmbeddingModelDTO {
+  id: number;
+  name: string;
+  endpointUrl: string;
+  sk: string | null;
+  model: string;
+  dimensions: number;
+  createdAt: number;
+  updatedAt: number;
+}
+
 export interface ToolInfoDTO {
   name: string;
   description: string;
