@@ -270,10 +270,13 @@ public class ChatService {
                     String contextStatus;
                     Integer contextLength = llm.getContextLength();
                     Integer maxTokens = llm.getMaxTokens();
+                    if (maxTokens == null || maxTokens <= 0 || maxTokens > 8192) {
+                        maxTokens = 8192;
+                    }
                     if (contextLength == null || contextLength <= 0 || promptTokens <= 0) {
                         contextStatus = "NORMAL";
                     } else {
-                        int available = contextLength - (maxTokens == null ? 0 : maxTokens);
+                        int available = contextLength - maxTokens;
                         if (available <= 0) available = contextLength;
                         double ratio = (double) promptTokens / available;
                         if (ratio >= 0.93) {
