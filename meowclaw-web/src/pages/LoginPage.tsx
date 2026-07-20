@@ -11,7 +11,6 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Bot } from "lucide-react";
 
 export function LoginPage() {
   const [username, setUsername] = useState("");
@@ -39,8 +38,8 @@ export function LoginPage() {
     <div className="flex min-h-svh items-center justify-center p-4">
       <Card className="w-full max-w-sm">
         <CardHeader className="text-center">
-          <div className="mx-auto mb-2 flex size-10 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-            <Bot className="size-5" />
+          <div className="mx-auto mb-2 size-10">
+            <img src="/favicon.svg" alt="MeowClaw" className="size-full rounded-lg" />
           </div>
           <CardTitle className="text-xl">MeowClaw</CardTitle>
           <CardDescription>登录你的账户</CardDescription>
