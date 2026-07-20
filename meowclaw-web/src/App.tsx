@@ -17,6 +17,7 @@ import { McpServicePage } from "@/pages/McpServicePage";
 import { SkillPage } from "@/pages/SkillPage";
 import { TokensStatisticsPage } from "@/pages/TokensStatisticsPage";
 import { WorkspacePage } from "@/pages/WorkspacePage";
+import { HistorySessionsPage } from "@/pages/HistorySessionsPage";
 import { useEffect, useState } from "react";
 
 function AuthGuard({ children }: { children: React.ReactNode }) {
@@ -124,6 +125,7 @@ function AppRoutes() {
         <Route path="skill" element={<SkillPage />} />
         <Route path="tokens" element={<TokensStatisticsPage />} />
         <Route path="workspace" element={<WorkspacePage />} />
+        <Route path="history-sessions" element={<HistorySessionsPage />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

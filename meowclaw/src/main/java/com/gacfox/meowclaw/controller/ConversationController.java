@@ -3,6 +3,7 @@ package com.gacfox.meowclaw.controller;
 import com.gacfox.meowclaw.dto.ChatEventBatchDTO;
 import com.gacfox.meowclaw.dto.ChatEventDTO;
 import com.gacfox.meowclaw.dto.ConversationDTO;
+import com.gacfox.meowclaw.dto.ConversationHistoryDTO;
 import com.gacfox.meowclaw.dto.RenameConversationRequest;
 import com.gacfox.meowclaw.dto.SendMessageRequest;
 import com.gacfox.meowclaw.entity.Conversation;
@@ -75,6 +76,30 @@ public class ConversationController {
     @DeleteMapping("/{id}")
     public ApiResult<?> delete(@PathVariable Long id) {
         conversationService.delete(id);
+        return ApiResult.success();
+    }
+
+    @GetMapping("/history")
+    public ApiResult<Pagination<ConversationHistoryDTO>> listHistory(
+            @RequestParam(required = false) String type,
+            @RequestParam(required = false) Long agentId,
+            @RequestParam(required = false) String keyword,
+            @RequestParam(required = false) Long startTime,
+            @RequestParam(required = false) Long endTime,
+            @RequestParam(defaultValue = "1") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        return ApiResult.success(conversationService.listHistory(type, agentId, keyword, startTime, endTime, page, size));
+    }
+
+    @DeleteMapping("/batch")
+    public ApiResult<?> deleteBatch(@RequestBody List<Long> ids) {
+        conversationService.deleteBatch(ids);
+        return ApiResult.success();
+    }
+
+    @DeleteMapping("/all")
+    public ApiResult<?> deleteAll() {
+        conversationService.deleteAll();
         return ApiResult.success();
     }
 

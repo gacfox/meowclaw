@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import type { AgentDTO, ConversationDTO, ChatEventBatchDTO, ChatEventDTO } from "@/types";
+import { useSearchParams } from "react-router-dom";
+import type { AgentDTO, ConversationDTO, ChatEventBatchDTO, ChatEventDTO, PageResult } from "@/types";
 import { listAgents } from "@/services/agent";
 import { listConversations, createConversation, getConversation, deleteConversation, renameConversation, listBatches, chatStream, truncateAfterBatch, waitForTitle } from "@/services/conversation";
 import { useAuthStore } from "@/stores/auth";
@@ -190,6 +191,8 @@ function StreamBubble({ steps, content, thinking }: { steps: StreamStep[]; conte
 
 export function ChatPage() {
   const { user } = useAuthStore();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const initialHandledRef = useRef(false);
   const [agents, setAgents] = useState<AgentDTO[]>([]);
   const [selectedAgentId, setSelectedAgentId] = useState<number | null>(null);
   const [conversations, setConversations] = useState<ConversationDTO[]>([]);
@@ -227,9 +230,10 @@ export function ChatPage() {
   useEffect(() => {
     listAgents().then((list) => {
       setAgents(list);
-      if (list.length > 0 && !selectedAgentId) {
-        setSelectedAgentId(list[0].id);
-      }
+      const agentIdParam = searchParams.get("agentId");
+      const urlAgentId = agentIdParam ? Number(agentIdParam) : null;
+      const validAgentId = urlAgentId && list.some((a) => a.id === urlAgentId) ? urlAgentId : list[0]?.id ?? null;
+      setSelectedAgentId(validAgentId);
     });
   }, []);
 
@@ -240,7 +244,33 @@ export function ChatPage() {
     setHasMoreConvos(true);
     setSelectedConvoId(null);
     setBatches([]);
-    loadConversations(selectedAgentId, 1, true);
+
+    const handleUrlConversation = async () => {
+      const convoIdParam = searchParams.get("conversationId");
+      if (initialHandledRef.current || !convoIdParam) {
+        await loadConversations(selectedAgentId, 1, true);
+        initialHandledRef.current = true;
+        return;
+      }
+      const urlConvoId = Number(convoIdParam);
+      const result = await loadConversations(selectedAgentId, 1, true);
+      if (result.list.some((c) => c.id === urlConvoId)) {
+        setSelectedConvoId(urlConvoId);
+      } else {
+        try {
+          const convo = await getConversation(urlConvoId);
+          if (convo.agentId === selectedAgentId) {
+            setConversations((prev) => [convo, ...prev]);
+            setSelectedConvoId(convo.id);
+          }
+        } catch {
+          // ignore
+        }
+      }
+      initialHandledRef.current = true;
+      setSearchParams({}, { replace: true });
+    };
+    handleUrlConversation();
   }, [selectedAgentId]);
 
   useEffect(() => {
@@ -258,7 +288,7 @@ export function ChatPage() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [batches, streamContent, streamSteps]);
 
-  const loadConversations = useCallback(async (agentId: number, page: number, reset: boolean) => {
+  const loadConversations = useCallback(async (agentId: number, page: number, reset: boolean): Promise<PageResult<ConversationDTO>> => {
     if (reset) {
       setLoadingConvos(true);
     } else {
@@ -269,10 +299,14 @@ export function ChatPage() {
       if (reset) {
         setConversations(result.list);
       } else {
-        setConversations((prev) => [...prev, ...result.list]);
+        setConversations((prev) => {
+          const existingIds = new Set(prev.map((c) => c.id));
+          return [...prev, ...result.list.filter((c) => !existingIds.has(c.id))];
+        });
       }
       setHasMoreConvos(result.list.length >= 20);
       setConvoPage(page);
+      return result;
     } finally {
       setLoadingConvos(false);
       setLoadingMoreConvos(false);

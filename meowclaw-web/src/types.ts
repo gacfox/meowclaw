@@ -73,6 +73,16 @@ export interface ConversationDTO {
   updatedAt: number;
 }
 
+export interface ConversationHistoryDTO {
+  id: number;
+  agentId: number;
+  agentName: string;
+  title: string | null;
+  type: string | null;
+  createdAt: number;
+  updatedAt: number;
+}
+
 export interface ChatEventDTO {
   id?: number;
   batchId?: number;

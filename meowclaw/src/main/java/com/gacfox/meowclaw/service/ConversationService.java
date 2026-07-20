@@ -3,15 +3,19 @@ package com.gacfox.meowclaw.service;
 import com.gacfox.meowclaw.converter.ChatEventBatchConverter;
 import com.gacfox.meowclaw.converter.ChatEventConverter;
 import com.gacfox.meowclaw.converter.ConversationConverter;
+import com.gacfox.meowclaw.converter.ConversationHistoryConverter;
 import com.gacfox.meowclaw.dto.ChatEventBatchDTO;
 import com.gacfox.meowclaw.dto.ConversationDTO;
+import com.gacfox.meowclaw.dto.ConversationHistoryDTO;
+import com.gacfox.meowclaw.entity.Agent;
 import com.gacfox.meowclaw.entity.ChatEventBatch;
 import com.gacfox.meowclaw.entity.Conversation;
+import com.gacfox.meowclaw.repository.AgentRepository;
 import com.gacfox.meowclaw.repository.ChatEventBatchRepository;
 import com.gacfox.meowclaw.repository.ChatEventRepository;
 import com.gacfox.meowclaw.repository.ConversationRepository;
-import com.gacfox.meowclaw.repository.MessageRepository;
 import com.gacfox.meowclaw.repository.ContextRecapRepository;
+import com.gacfox.meowclaw.repository.MessageRepository;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -23,6 +27,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Stream;
 
 @Service
@@ -33,7 +38,9 @@ public class ConversationService {
     private final ChatEventBatchRepository chatEventBatchRepository;
     private final ChatEventRepository chatEventRepository;
     private final ContextRecapRepository contextRecapRepository;
+    private final AgentRepository agentRepository;
     private final ConversationConverter conversationConverter;
+    private final ConversationHistoryConverter conversationHistoryConverter;
     private final ChatEventBatchConverter chatEventBatchConverter;
     private final ChatEventConverter chatEventConverter;
 
@@ -43,7 +50,9 @@ public class ConversationService {
                                ChatEventBatchRepository chatEventBatchRepository,
                                ChatEventRepository chatEventRepository,
                                ContextRecapRepository contextRecapRepository,
+                               AgentRepository agentRepository,
                                ConversationConverter conversationConverter,
+                               ConversationHistoryConverter conversationHistoryConverter,
                                ChatEventBatchConverter chatEventBatchConverter,
                                ChatEventConverter chatEventConverter) {
         this.conversationRepository = conversationRepository;
@@ -51,7 +60,9 @@ public class ConversationService {
         this.chatEventBatchRepository = chatEventBatchRepository;
         this.chatEventRepository = chatEventRepository;
         this.contextRecapRepository = contextRecapRepository;
+        this.agentRepository = agentRepository;
         this.conversationConverter = conversationConverter;
+        this.conversationHistoryConverter = conversationHistoryConverter;
         this.chatEventBatchConverter = chatEventBatchConverter;
         this.chatEventConverter = chatEventConverter;
     }
@@ -68,6 +79,33 @@ public class ConversationService {
         int total = (int) pageResult.getTotalElements();
         int totalPages = (int) Math.ceil((double) total / size);
         return new Pagination<>(list, total, totalPages, page, size);
+    }
+
+    @Transactional(readOnly = true)
+    public Pagination<ConversationHistoryDTO> listHistory(String type, Long agentId, String keyword, Long startTime, Long endTime, int page, int size) {
+        String queryType = type == null || type.isBlank() ? null : type;
+        String queryKeyword = keyword == null || keyword.isBlank() ? null : "%" + keyword + "%";
+        Page<Conversation> pageResult = conversationRepository.findHistory(
+                queryType, agentId, queryKeyword, startTime, endTime, PageRequest.of(page - 1, size));
+        List<Long> agentIds = pageResult.getContent().stream().map(Conversation::getAgentId).distinct().toList();
+        Map<Long, String> agentNameMap = agentRepository.findAllById(agentIds).stream()
+                .collect(java.util.stream.Collectors.toMap(Agent::getId, Agent::getName));
+        List<ConversationHistoryDTO> list = pageResult.getContent().stream()
+                .map(c -> conversationHistoryConverter.toDTO(c, agentNameMap.getOrDefault(c.getAgentId(), "")))
+                .toList();
+        int total = (int) pageResult.getTotalElements();
+        int totalPages = (int) Math.ceil((double) total / size);
+        return new Pagination<>(list, total, totalPages, page, size);
+    }
+
+    @Transactional
+    public void deleteBatch(List<Long> ids) {
+        ids.forEach(this::delete);
+    }
+
+    @Transactional
+    public void deleteAll() {
+        conversationRepository.findAll().stream().map(Conversation::getId).toList().forEach(this::delete);
     }
 
     @Transactional

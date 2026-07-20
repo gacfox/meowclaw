@@ -31,6 +31,7 @@ const ROUTE_LABELS: Record<string, string> = {
   "/skill": "SKILL",
   "/tokens": "tokens 统计",
   "/settings": "用户设置",
+  "/history-sessions": "历史会话",
 };
 
 export function AppHeader() {

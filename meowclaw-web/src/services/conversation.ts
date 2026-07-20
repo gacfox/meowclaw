@@ -1,4 +1,4 @@
-import type { ConversationDTO, ChatEventBatchDTO, PageResult } from "@/types";
+import type { ConversationDTO, ChatEventBatchDTO, PageResult, ConversationHistoryDTO } from "@/types";
 import { getToken } from "./request";
 import { request } from "./request";
 
@@ -75,4 +75,38 @@ export async function waitForTitle(id: number, timeoutMs = 35_000): Promise<stri
   } catch {
     return null;
   }
+}
+
+export interface HistorySessionsQuery {
+  type?: string;
+  agentId?: number;
+  keyword?: string;
+  startTime?: number;
+  endTime?: number;
+  page: number;
+  size: number;
+}
+
+export async function listHistorySessions(query: HistorySessionsQuery): Promise<PageResult<ConversationHistoryDTO>> {
+  const params = new URLSearchParams();
+  params.set("page", String(query.page));
+  params.set("size", String(query.size));
+  if (query.type) params.set("type", query.type);
+  if (query.agentId !== undefined) params.set("agentId", String(query.agentId));
+  if (query.keyword) params.set("keyword", query.keyword);
+  if (query.startTime !== undefined) params.set("startTime", String(query.startTime));
+  if (query.endTime !== undefined) params.set("endTime", String(query.endTime));
+  const res = await request<PageResult<ConversationHistoryDTO>>(`/api/conversation/history?${params}`);
+  return res.data;
+}
+
+export async function batchDeleteConversations(ids: number[]) {
+  return request("/api/conversation/batch", {
+    method: "DELETE",
+    body: JSON.stringify(ids),
+  });
+}
+
+export async function deleteAllConversations() {
+  return request("/api/conversation/all", { method: "DELETE" });
 }
