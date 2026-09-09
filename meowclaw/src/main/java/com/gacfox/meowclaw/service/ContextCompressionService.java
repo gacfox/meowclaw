@@ -1,6 +1,7 @@
 package com.gacfox.meowclaw.service;
 
 import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.gacfox.meowclaw.entity.ChatEventBatch;
 import com.gacfox.meowclaw.entity.ContextRecap;
@@ -88,7 +89,16 @@ public class ContextCompressionService {
             result.add(com.gacfox.proarc.agentic.model.openai.Message.builder()
                     .role(com.gacfox.proarc.agentic.model.openai.Message.ROLE_USER).content(batch.getUserContent()).build());
             for (Message message : messagesByBatch.getOrDefault(batch.getId(), List.of())) {
-                if (age >= 15 && shouldFoldToolMessage(message)) continue;
+                if (age >= 15) {
+                    if (shouldFoldToolMessage(message)) continue;
+                    String finalAnswer = extractFinalAnswerContent(message);
+                    if (finalAnswer != null) {
+                        result.add(com.gacfox.proarc.agentic.model.openai.Message.builder()
+                                .role(com.gacfox.proarc.agentic.model.openai.Message.ROLE_ASSISTANT)
+                                .content(finalAnswer).build());
+                        continue;
+                    }
+                }
                 boolean truncate = age >= 5;
                 var builder = com.gacfox.proarc.agentic.model.openai.Message.builder().role(message.getRole())
                         .content(truncate ? truncateContent(message.getContent()) : message.getContent())
@@ -299,6 +309,32 @@ public class ContextCompressionService {
         } catch (Exception ignored) {
             return true;
         }
+    }
+
+    /**
+     * 提取final_answer工具调用中的最终答复文本，消息不含final_answer调用时返回null
+     */
+    private String extractFinalAnswerContent(Message message) {
+        if (message.getToolCallsJson() == null) {
+            return null;
+        }
+        try {
+            List<ToolCall> calls = OBJECT_MAPPER.readValue(message.getToolCallsJson(), new TypeReference<>() {
+            });
+            for (ToolCall call : calls) {
+                if (!"final_answer".equals(call.getFunction().getName())) continue;
+                try {
+                    JsonNode messageNode = OBJECT_MAPPER.readTree(call.getFunction().getArguments()).get("message");
+                    if (messageNode != null && messageNode.isTextual()) {
+                        return messageNode.asText();
+                    }
+                } catch (Exception ignored) {
+                }
+                return message.getContent();
+            }
+        } catch (Exception ignored) {
+        }
+        return null;
     }
 
     private Set<Long> proactivelyCompressedBatchIds(List<ContextRecap> recaps, List<ChatEventBatch> batches) {
