@@ -166,7 +166,7 @@ function StreamBubble({ steps, content, thinking }: { steps: StreamStep[]; conte
       )}
       {steps.map((step, i) =>
         step.type === "thinking" ? (
-          <details key={i} className="group text-xs text-muted-foreground">
+          <details key={i} className="group text-xs text-muted-foreground" open>
             <summary className="flex cursor-pointer items-center gap-1 list-none [&::-webkit-details-marker]:hidden">
               <ChevronRight className="size-3 shrink-0 transition-transform group-open:rotate-90" />
               思考过程
@@ -486,6 +486,20 @@ export function ChatPage() {
     switch (event.type) {
       case "thinking":
         if (event.content) setStreamSteps((prev) => [...prev, { type: "thinking", content: event.content! }]);
+        break;
+      case "thinking_delta":
+        setStreamSteps((prev) => {
+          const last = prev[prev.length - 1];
+          if (last && last.type === "thinking") {
+            const updated = [...prev];
+            updated[updated.length - 1] = { ...last, content: (last.content ?? "") + (event.content ?? "") };
+            return updated;
+          }
+          return [...prev, { type: "thinking", content: event.content ?? "" }];
+        });
+        break;
+      case "final_answer_delta":
+        setStreamContent((prev) => prev + (event.content ?? ""));
         break;
       case "tool_call":
         setStreamSteps((prev) => [...prev, {

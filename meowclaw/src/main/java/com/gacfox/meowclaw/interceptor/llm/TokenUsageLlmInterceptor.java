@@ -7,6 +7,9 @@ import com.gacfox.proarc.agentic.model.openai.ModelInfo;
 import com.gacfox.proarc.agentic.model.openai.ModelRequest;
 import com.gacfox.proarc.agentic.model.openai.ModelResponse;
 import com.gacfox.proarc.agentic.model.openai.Usage;
+import reactor.core.publisher.Flux;
+
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Tokens消耗拦截器：既累加当前批次的Tokens总量（供批次汇总），
@@ -35,6 +38,25 @@ public class TokenUsageLlmInterceptor implements LlmInterceptor {
             logService.record(context, usage);
         }
         return response;
+    }
+
+    @Override
+    public Flux<ModelResponse> interceptStreaming(ModelRequest request, ModelInfo modelInfo, LlmInterceptorChain chain) {
+        AtomicReference<Usage> lastUsage = new AtomicReference<>();
+        return chain.nextStreaming(request)
+                .doOnNext(chunk -> {
+                    if (chunk.getUsage() != null) {
+                        lastUsage.set(chunk.getUsage());
+                    }
+                })
+                .doOnComplete(() -> {
+                    Usage usage = lastUsage.get();
+                    if (usage != null) {
+                        if (usage.getPromptTokens() != null) accumulator.addInput(usage.getPromptTokens());
+                        if (usage.getCompletionTokens() != null) accumulator.addOutput(usage.getCompletionTokens());
+                        logService.record(context, usage);
+                    }
+                });
     }
 
 }

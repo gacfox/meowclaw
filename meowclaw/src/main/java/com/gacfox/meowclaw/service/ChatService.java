@@ -211,6 +211,7 @@ public class ChatService {
                 .toolNames(toolNames)
                 .temperature(temperature)
                 .maxTokens(llm.getMaxTokens())
+                .streaming(true)
                 .variables(variables)
                 .build();
     }
@@ -250,9 +251,20 @@ public class ChatService {
                             .type("error")
                             .content(response.getContent())
                             .build();
+                    case THINKING_DELTA -> ChatEventDTO.builder()
+                            .type("thinking_delta")
+                            .content(response.getContent())
+                            .build();
+                    case FINAL_ANSWER_DELTA -> ChatEventDTO.builder()
+                            .type("final_answer_delta")
+                            .content(response.getContent())
+                            .build();
                 })
                 .publishOn(Schedulers.boundedElastic())
                 .doOnNext(event -> {
+                    if ("thinking_delta".equals(event.getType()) || "final_answer_delta".equals(event.getType())) {
+                        return;
+                    }
                     chatPersistenceService.saveChatEvent(
                             batchId, eventOrder.getAndIncrement(), event.getType(),
                             event.getContent(), event.getToolName(), event.getToolCallId(), event.getToolArguments());
@@ -261,6 +273,7 @@ public class ChatService {
                         firstFinalAnswer.set(event.getContent());
                     }
                 })
+                .filter(event -> !"thinking".equals(event.getType()) && !"final_answer".equals(event.getType()))
                 .doOnComplete(() -> {
                     List<Message> newMessages =
                             context.getMessages().subList(messageCountBefore, context.getMessages().size());
