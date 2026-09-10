@@ -1,6 +1,8 @@
 package com.gacfox.meowclaw.repository;
 
 import com.gacfox.meowclaw.entity.MemoryNode;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -16,6 +18,13 @@ public interface MemoryNodeRepository extends JpaRepository<MemoryNode, Long> {
     long countByAgentId(Long agentId);
 
     List<MemoryNode> findByAgentIdAndIdIn(Long agentId, Collection<Long> ids);
+
+    @Query("select n from MemoryNode n where n.agentId = :agentId"
+            + " and (:type is null or n.type = :type)"
+            + " and (:keyword is null or n.content like :keyword)"
+            + " order by n.updatedAt desc")
+    Page<MemoryNode> search(@Param("agentId") Long agentId, @Param("type") String type,
+                            @Param("keyword") String keyword, Pageable pageable);
 
     @Modifying
     @Query("update MemoryNode n set n.lastAccessedAt = :ts where n.id in :ids")

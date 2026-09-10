@@ -18,6 +18,7 @@ import { SkillPage } from "@/pages/SkillPage";
 import { TokensStatisticsPage } from "@/pages/TokensStatisticsPage";
 import { WorkspacePage } from "@/pages/WorkspacePage";
 import { HistorySessionsPage } from "@/pages/HistorySessionsPage";
+import { MemoryPage } from "@/pages/MemoryPage";
 import { useEffect, useState } from "react";
 
 function AuthGuard({ children }: { children: React.ReactNode }) {
@@ -120,6 +121,7 @@ function AppRoutes() {
         <Route path="llm" element={<LlmConfigPage />} />
         <Route path="embedding-model" element={<EmbeddingModelConfigPage />} />
         <Route path="agent" element={<AgentConfigPage />} />
+        <Route path="memory" element={<MemoryPage />} />
         <Route path="scheduled-task" element={<ScheduledTaskPage />} />
         <Route path="mcp-service" element={<McpServicePage />} />
         <Route path="skill" element={<SkillPage />} />

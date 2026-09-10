@@ -1,7 +1,7 @@
 package com.gacfox.meowclaw.service;
 
-import com.gacfox.meowclaw.dto.MemoryExtractionResult;
 import com.gacfox.meowclaw.dto.MemoryNodeDTO;
+import com.gacfox.meowclaw.dto.MemoryWriteDecision;
 import com.gacfox.meowclaw.entity.Agent;
 import com.gacfox.meowclaw.entity.MemoryEntity;
 import com.gacfox.meowclaw.entity.MemoryNode;
@@ -11,11 +11,13 @@ import com.gacfox.meowclaw.repository.MemoryEntityRepository;
 import com.gacfox.meowclaw.repository.MemoryNodeEntityRepository;
 import com.gacfox.meowclaw.repository.MemoryNodeRepository;
 import com.gacfox.meowclaw.util.RrfFusionUtil;
+import com.gacfox.proarc.common.model.Pagination;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
-import org.springframework.transaction.TransactionStatus;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
@@ -31,17 +33,17 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.locks.ReentrantLock;
-import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
 /**
- * 记忆核心服务：写入、召回、获取、遗忘。
+ * 记忆核心服务：写入（含相似记忆决策）、召回、遗忘、管理面增删改查。
  */
 @Slf4j
 @Service
 public class MemoryService {
 
     private static final Set<String> VALID_TYPES = Set.of("fact", "preference", "rule");
+    private static final int WRITE_RECALL_LIMIT = 5;
 
     private final ConcurrentHashMap<Long, ReentrantLock> locks = new ConcurrentHashMap<>();
 
@@ -76,7 +78,10 @@ public class MemoryService {
         this.transactionTemplate = new TransactionTemplate(transactionManager);
     }
 
-    public MemoryNodeDTO write(Long agentId, String type, String content, Long conversationId) {
+    /**
+     * 写入记忆：先召回相似记忆，由辅助LLM决策插入/跳过/更新/删除后单事务应用，返回操作摘要
+     */
+    public String write(Long agentId, String type, String content, Long conversationId) {
         validateType(type);
         if (content == null || content.isBlank()) {
             throw new IllegalArgumentException("记忆内容不能为空");
@@ -84,115 +89,93 @@ public class MemoryService {
         ensureAgentExists(agentId);
         lock(agentId);
         try {
-            MemoryExtractionResult extraction;
+            List<MemoryNodeDTO> similar = recallInternal(agentId, content, WRITE_RECALL_LIMIT, false);
+            MemoryWriteDecision decision;
             try {
-                extraction = memoryExtractionService.extract(agentId, type, content, conversationId);
+                decision = memoryExtractionService.decide(agentId, type, content, similar, conversationId);
             } catch (Exception e) {
-                log.warn("记忆结构化抽取失败，降级为普通节点: agentId={}, error={}", agentId, e.getMessage());
-                extraction = MemoryExtractionResult.plain(type, content);
+                log.warn("记忆写入决策失败，降级为直接插入: agentId={}, error={}", agentId, e.getMessage());
+                decision = MemoryWriteDecision.plainAdd(type, content);
             }
-            return writeTransactional(agentId, extraction, conversationId);
+            if (!VALID_TYPES.contains(decision.getType())) {
+                decision.setType(type);
+            }
+
+            Set<Long> similarIds = similar.stream().map(MemoryNodeDTO::getId).collect(Collectors.toSet());
+            List<Long> deletes = decision.getDeletes() == null ? List.of() : decision.getDeletes().stream()
+                    .filter(Objects::nonNull).filter(similarIds::contains).distinct().toList();
+            List<MemoryWriteDecision.MemoryUpdate> updates = decision.getUpdates() == null ? List.of()
+                    : decision.getUpdates().stream()
+                    .filter(u -> u.getMemoryId() != null && similarIds.contains(u.getMemoryId()))
+                    .filter(u -> u.getContent() != null && !u.getContent().isBlank())
+                    .filter(u -> !deletes.contains(u.getMemoryId()))
+                    .toList();
+            boolean skipInsert = Boolean.TRUE.equals(decision.getDuplicate());
+
+            List<MemoryWriteDecision.ExtractedRelation> validRelations = decision.getRelations() == null ? List.of()
+                    : decision.getRelations().stream()
+                    .filter(r -> r.getEntityName() != null && r.getDescription() != null)
+                    .toList();
+            List<float[]> insertVectors = skipInsert ? List.of()
+                    : computeVectors(agentId, decision.getContent(),
+                    validRelations.stream().map(r -> r.getDescription().trim()).toList());
+            List<float[]> updateVectors = embedContents(agentId,
+                    updates.stream().map(u -> u.getContent().trim()).toList());
+            MemoryWriteDecision finalDecision = decision;
+
+            return transactionTemplate.execute(status -> {
+                for (Long deleteId : deletes) {
+                    deleteNodeInternal(agentId, deleteId);
+                }
+                List<MemoryNode> updatedNodes = new ArrayList<>();
+                for (MemoryWriteDecision.MemoryUpdate update : updates) {
+                    updatedNodes.add(updateContentInternal(agentId, update.getMemoryId(), update.getContent().trim()));
+                }
+                MemoryNode inserted = null;
+                List<MemoryNodeEntity> insertedRelations = List.of();
+                if (!skipInsert) {
+                    inserted = insertNodeInternal(agentId, finalDecision, validRelations);
+                    insertedRelations = memoryNodeEntityRepository.findByNodeId(inserted.getId());
+                }
+
+                MemoryNode finalInserted = inserted;
+                List<MemoryNodeEntity> finalInsertedRelations = insertedRelations;
+                registerAfterCommit(() -> {
+                    for (Long deleteId : deletes) {
+                        luceneWriter.deleteNode(agentId, deleteId);
+                    }
+                    for (int i = 0; i < updatedNodes.size(); i++) {
+                        float[] v = i < updateVectors.size() ? updateVectors.get(i) : null;
+                        luceneWriter.addNode(agentId, updatedNodes.get(i), v);
+                    }
+                    if (finalInserted != null) {
+                        float[] contentVector = insertVectors.isEmpty() ? null : insertVectors.get(0);
+                        luceneWriter.addNode(agentId, finalInserted, contentVector);
+                        List<MemoryLuceneWriter.MemoryNodeEntityWithVector> relationWithVectors = new ArrayList<>();
+                        for (int i = 0; i < finalInsertedRelations.size(); i++) {
+                            float[] v = insertVectors.isEmpty() || i + 1 >= insertVectors.size()
+                                    ? null : insertVectors.get(i + 1);
+                            relationWithVectors.add(new MemoryLuceneWriter.MemoryNodeEntityWithVector(
+                                    finalInsertedRelations.get(i), v));
+                        }
+                        luceneWriter.addRelations(agentId, relationWithVectors);
+                    }
+                    luceneWriter.commit(agentId);
+                });
+
+                return buildWriteSummary(finalInserted, updates, deletes);
+            });
         } finally {
             unlock(agentId);
         }
     }
 
-    private MemoryNodeDTO writeTransactional(Long agentId, MemoryExtractionResult extraction, Long conversationId) {
-        return transactionTemplate.execute(status -> {
-            long now = System.currentTimeMillis();
-
-            List<String> entityNames = extraction.getEntities() == null ? List.of()
-                    : extraction.getEntities().stream()
-                    .map(MemoryExtractionResult.ExtractedEntity::getName)
-                    .filter(Objects::nonNull)
-                    .map(String::trim)
-                    .filter(s -> !s.isEmpty())
-                    .distinct()
-                    .toList();
-
-            List<MemoryEntity> existingEntities = entityNames.isEmpty() ? List.of()
-                    : memoryEntityRepository.findByAgentIdAndNameIn(agentId, entityNames);
-            Map<String, MemoryEntity> entityByName = new HashMap<>();
-            for (MemoryEntity e : existingEntities) {
-                entityByName.put(e.getName(), e);
-            }
-            List<MemoryEntity> newEntities = new ArrayList<>();
-            for (String name : entityNames) {
-                if (!entityByName.containsKey(name)) {
-                    MemoryEntity e = new MemoryEntity();
-                    e.setAgentId(agentId);
-                    e.setName(name);
-                    e.setCreatedAt(now);
-                    e.setUpdatedAt(now);
-                    newEntities.add(e);
-                }
-            }
-            if (!newEntities.isEmpty()) {
-                List<MemoryEntity> saved = memoryEntityRepository.saveAll(newEntities);
-                for (MemoryEntity e : saved) {
-                    entityByName.put(e.getName(), e);
-                }
-            }
-
-            MemoryNode node = new MemoryNode();
-            node.setAgentId(agentId);
-            node.setType(extraction.getType());
-            node.setContent(extraction.getContent());
-            node.setCreatedAt(now);
-            node.setUpdatedAt(now);
-            node = memoryNodeRepository.save(node);
-
-            List<MemoryNodeEntity> relations = new ArrayList<>();
-            if (extraction.getRelations() != null) {
-                for (MemoryExtractionResult.ExtractedRelation rel : extraction.getRelations()) {
-                    if (rel.getEntityName() == null || rel.getDescription() == null) continue;
-                    MemoryEntity entity = entityByName.get(rel.getEntityName().trim());
-                    if (entity == null) {
-                        MemoryEntity e = new MemoryEntity();
-                        e.setAgentId(agentId);
-                        e.setName(rel.getEntityName().trim());
-                        e.setCreatedAt(now);
-                        e.setUpdatedAt(now);
-                        entity = memoryEntityRepository.save(e);
-                        entityByName.put(entity.getName(), entity);
-                    }
-                    MemoryNodeEntity nne = new MemoryNodeEntity();
-                    nne.setAgentId(agentId);
-                    nne.setNodeId(node.getId());
-                    nne.setEntityId(entity.getId());
-                    nne.setDescription(rel.getDescription().trim());
-                    nne.setCreatedAt(now);
-                    nne.setUpdatedAt(now);
-                    relations.add(nne);
-                }
-            }
-            if (!relations.isEmpty()) {
-                relations = memoryNodeEntityRepository.saveAll(relations);
-            }
-
-            List<float[]> vectors = computeVectors(agentId, node.getContent(), relations.stream()
-                    .map(MemoryNodeEntity::getDescription)
-                    .toList());
-            float[] contentVector = vectors.isEmpty() ? null : vectors.get(0);
-            List<MemoryLuceneWriter.MemoryNodeEntityWithVector> relationWithVectors = new ArrayList<>();
-            for (int i = 0; i < relations.size(); i++) {
-                float[] v = vectors.isEmpty() || i + 1 >= vectors.size() ? null : vectors.get(i + 1);
-                relationWithVectors.add(new MemoryLuceneWriter.MemoryNodeEntityWithVector(relations.get(i), v));
-            }
-
-            final MemoryNode savedNode = node;
-            registerAfterCommit(() -> {
-                luceneWriter.addNode(agentId, savedNode, contentVector);
-                luceneWriter.addRelations(agentId, relationWithVectors);
-                luceneWriter.commit(agentId);
-            });
-
-            return toNodeDTO(savedNode, relations, entityByName.values());
-        });
-    }
-
     @Transactional
     public List<MemoryNodeDTO> recall(Long agentId, String query, Integer limit) {
+        return recallInternal(agentId, query, limit, true);
+    }
+
+    private List<MemoryNodeDTO> recallInternal(Long agentId, String query, Integer limit, boolean updateAccessTime) {
         ensureAgentExists(agentId);
         int finalLimit = normalizeLimit(limit);
         if (query == null || query.isBlank()) {
@@ -219,19 +202,7 @@ public class MemoryService {
                 : luceneSearcher.searchNodesInSet(agentId, query, queryVector, new HashSet<>(relationNodeIds), pathTopK);
 
         List<Long> fused = RrfFusionUtil.fuse(List.of(pathA, pathB), finalLimit);
-        return loadNodesWithRelations(agentId, fused, true);
-    }
-
-    @Transactional
-    public List<MemoryNodeDTO> get(Long agentId, List<Long> ids) {
-        ensureAgentExists(agentId);
-        if (ids == null || ids.isEmpty()) {
-            return List.of();
-        }
-        if (ids.size() > 3) {
-            throw new IllegalArgumentException("最多同时获取3条记忆");
-        }
-        return loadNodesWithRelations(agentId, ids, true);
+        return loadNodesWithRelations(agentId, fused, updateAccessTime);
     }
 
     public void forget(Long agentId, Long nodeId) {
@@ -242,28 +213,7 @@ public class MemoryService {
         lock(agentId);
         try {
             transactionTemplate.execute(status -> {
-                MemoryNode node = memoryNodeRepository.findByAgentIdAndIdIn(agentId, List.of(nodeId))
-                        .stream().findFirst()
-                        .orElseThrow(() -> new IllegalArgumentException("记忆不存在"));
-
-                List<MemoryNodeEntity> relations = memoryNodeEntityRepository.findByNodeId(nodeId);
-                Set<Long> entityIds = relations.stream()
-                        .map(MemoryNodeEntity::getEntityId)
-                        .collect(Collectors.toSet());
-
-                memoryNodeEntityRepository.deleteByNodeId(nodeId);
-                memoryNodeRepository.delete(node);
-
-                List<Long> orphanEntityIds = new ArrayList<>();
-                for (Long entityId : entityIds) {
-                    if (!memoryNodeEntityRepository.existsByEntityId(entityId)) {
-                        orphanEntityIds.add(entityId);
-                    }
-                }
-                if (!orphanEntityIds.isEmpty()) {
-                    memoryEntityRepository.deleteAllById(orphanEntityIds);
-                }
-
+                deleteNodeInternal(agentId, nodeId);
                 registerAfterCommit(() -> {
                     luceneWriter.deleteNode(agentId, nodeId);
                     luceneWriter.commit(agentId);
@@ -273,6 +223,217 @@ public class MemoryService {
         } finally {
             unlock(agentId);
         }
+    }
+
+    @Transactional(readOnly = true)
+    public Pagination<MemoryNodeDTO> list(Long agentId, String type, String keyword, int page, int size) {
+        ensureAgentExists(agentId);
+        String queryType = (type == null || type.isBlank()) ? null : type;
+        String queryKeyword = (keyword == null || keyword.isBlank()) ? null : "%" + keyword + "%";
+        Page<MemoryNode> pageResult = memoryNodeRepository.search(
+                agentId, queryType, queryKeyword, PageRequest.of(page - 1, size));
+        List<Long> ids = pageResult.getContent().stream().map(MemoryNode::getId).toList();
+        List<MemoryNodeDTO> list = loadNodesWithRelations(agentId, ids, false);
+        int total = (int) pageResult.getTotalElements();
+        int totalPages = (int) Math.ceil((double) total / size);
+        return new Pagination<>(list, total, totalPages, page, size);
+    }
+
+    /**
+     * 手动创建记忆：内容原样直写，不经过LLM抽取
+     */
+    public MemoryNodeDTO createManual(Long agentId, String type, String content) {
+        validateType(type);
+        if (content == null || content.isBlank()) {
+            throw new IllegalArgumentException("记忆内容不能为空");
+        }
+        ensureAgentExists(agentId);
+        lock(agentId);
+        try {
+            float[] vector = embedSingle(agentId, content);
+            return transactionTemplate.execute(status -> {
+                long now = System.currentTimeMillis();
+                MemoryNode node = new MemoryNode();
+                node.setAgentId(agentId);
+                node.setType(type);
+                node.setContent(content);
+                node.setCreatedAt(now);
+                node.setUpdatedAt(now);
+                MemoryNode saved = memoryNodeRepository.save(node);
+                registerAfterCommit(() -> {
+                    luceneWriter.addNode(agentId, saved, vector);
+                    luceneWriter.commit(agentId);
+                });
+                return toNodeDTO(saved, List.of(), List.of());
+            });
+        } finally {
+            unlock(agentId);
+        }
+    }
+
+    /**
+     * 手动编辑记忆：仅允许修改类型与内容，实体关系保持不变
+     */
+    public MemoryNodeDTO updateManual(Long id, String type, String content) {
+        MemoryNode node = memoryNodeRepository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("记忆不存在"));
+        if (type != null) {
+            validateType(type);
+        }
+        if (content != null && content.isBlank()) {
+            throw new IllegalArgumentException("记忆内容不能为空");
+        }
+        Long agentId = node.getAgentId();
+        lock(agentId);
+        try {
+            String newContent = content != null ? content : node.getContent();
+            float[] vector = embedSingle(agentId, newContent);
+            transactionTemplate.execute(status -> {
+                if (type != null) {
+                    node.setType(type);
+                }
+                node.setContent(newContent);
+                node.setUpdatedAt(System.currentTimeMillis());
+                memoryNodeRepository.save(node);
+                registerAfterCommit(() -> {
+                    luceneWriter.addNode(agentId, node, vector);
+                    luceneWriter.commit(agentId);
+                });
+                return null;
+            });
+            return loadNodesWithRelations(agentId, List.of(id), false).get(0);
+        } finally {
+            unlock(agentId);
+        }
+    }
+
+    public void deleteManual(Long id) {
+        MemoryNode node = memoryNodeRepository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("记忆不存在"));
+        forget(node.getAgentId(), id);
+    }
+
+    private MemoryNode insertNodeInternal(Long agentId, MemoryWriteDecision decision,
+                                          List<MemoryWriteDecision.ExtractedRelation> validRelations) {
+        long now = System.currentTimeMillis();
+
+        List<String> entityNames = decision.getEntities() == null ? List.of()
+                : decision.getEntities().stream()
+                .map(MemoryWriteDecision.ExtractedEntity::getName)
+                .filter(Objects::nonNull)
+                .map(String::trim)
+                .filter(s -> !s.isEmpty())
+                .distinct()
+                .toList();
+
+        List<MemoryEntity> existingEntities = entityNames.isEmpty() ? List.of()
+                : memoryEntityRepository.findByAgentIdAndNameIn(agentId, entityNames);
+        Map<String, MemoryEntity> entityByName = new HashMap<>();
+        for (MemoryEntity e : existingEntities) {
+            entityByName.put(e.getName(), e);
+        }
+        List<MemoryEntity> newEntities = new ArrayList<>();
+        for (String name : entityNames) {
+            if (!entityByName.containsKey(name)) {
+                MemoryEntity e = new MemoryEntity();
+                e.setAgentId(agentId);
+                e.setName(name);
+                e.setCreatedAt(now);
+                e.setUpdatedAt(now);
+                newEntities.add(e);
+            }
+        }
+        if (!newEntities.isEmpty()) {
+            for (MemoryEntity e : memoryEntityRepository.saveAll(newEntities)) {
+                entityByName.put(e.getName(), e);
+            }
+        }
+
+        MemoryNode node = new MemoryNode();
+        node.setAgentId(agentId);
+        node.setType(decision.getType());
+        node.setContent(decision.getContent());
+        node.setCreatedAt(now);
+        node.setUpdatedAt(now);
+        node = memoryNodeRepository.save(node);
+
+        List<MemoryNodeEntity> relations = new ArrayList<>();
+        for (MemoryWriteDecision.ExtractedRelation rel : validRelations) {
+            MemoryEntity entity = entityByName.get(rel.getEntityName().trim());
+            if (entity == null) {
+                MemoryEntity e = new MemoryEntity();
+                e.setAgentId(agentId);
+                e.setName(rel.getEntityName().trim());
+                e.setCreatedAt(now);
+                e.setUpdatedAt(now);
+                entity = memoryEntityRepository.save(e);
+                entityByName.put(entity.getName(), entity);
+            }
+            MemoryNodeEntity nne = new MemoryNodeEntity();
+            nne.setAgentId(agentId);
+            nne.setNodeId(node.getId());
+            nne.setEntityId(entity.getId());
+            nne.setDescription(rel.getDescription().trim());
+            nne.setCreatedAt(now);
+            nne.setUpdatedAt(now);
+            relations.add(nne);
+        }
+        if (!relations.isEmpty()) {
+            memoryNodeEntityRepository.saveAll(relations);
+        }
+        return node;
+    }
+
+    private void deleteNodeInternal(Long agentId, Long nodeId) {
+        MemoryNode node = memoryNodeRepository.findByAgentIdAndIdIn(agentId, List.of(nodeId))
+                .stream().findFirst()
+                .orElseThrow(() -> new IllegalArgumentException("记忆不存在: " + nodeId));
+
+        List<MemoryNodeEntity> relations = memoryNodeEntityRepository.findByNodeId(nodeId);
+        Set<Long> entityIds = relations.stream()
+                .map(MemoryNodeEntity::getEntityId)
+                .collect(Collectors.toSet());
+
+        memoryNodeEntityRepository.deleteByNodeId(nodeId);
+        memoryNodeRepository.delete(node);
+
+        List<Long> orphanEntityIds = new ArrayList<>();
+        for (Long entityId : entityIds) {
+            if (!memoryNodeEntityRepository.existsByEntityId(entityId)) {
+                orphanEntityIds.add(entityId);
+            }
+        }
+        if (!orphanEntityIds.isEmpty()) {
+            memoryEntityRepository.deleteAllById(orphanEntityIds);
+        }
+    }
+
+    private MemoryNode updateContentInternal(Long agentId, Long nodeId, String content) {
+        MemoryNode node = memoryNodeRepository.findByAgentIdAndIdIn(agentId, List.of(nodeId))
+                .stream().findFirst()
+                .orElseThrow(() -> new IllegalArgumentException("记忆不存在: " + nodeId));
+        node.setContent(content);
+        node.setUpdatedAt(System.currentTimeMillis());
+        return memoryNodeRepository.save(node);
+    }
+
+    private String buildWriteSummary(MemoryNode inserted, List<MemoryWriteDecision.MemoryUpdate> updates,
+                                     List<Long> deletes) {
+        StringBuilder summary = new StringBuilder();
+        if (inserted != null) {
+            summary.append("记忆已写入(id=").append(inserted.getId()).append(")");
+        } else {
+            summary.append("新记忆与已有记忆重复，跳过写入");
+        }
+        if (!updates.isEmpty()) {
+            summary.append("，更新记忆");
+            summary.append(updates.stream().map(u -> "id=" + u.getMemoryId()).collect(Collectors.joining("、", "(", ")")));
+        }
+        if (!deletes.isEmpty()) {
+            summary.append("，删除记忆");
+            summary.append(deletes.stream().map(id -> "id=" + id).collect(Collectors.joining("、", "(", ")")));
+        }
+        return summary.toString();
     }
 
     private List<MemoryNodeDTO> loadNodesWithRelations(Long agentId, List<Long> ids, boolean updateAccessTime) {
@@ -375,6 +536,26 @@ public class MemoryService {
         } catch (Exception e) {
             throw new IllegalStateException("记忆向量生成失败: " + e.getMessage(), e);
         }
+    }
+
+    private float[] embedSingle(Long agentId, String text) {
+        Long embeddingModelId = getEmbeddingModelId(agentId);
+        if (embeddingModelId == null) {
+            return null;
+        }
+        List<float[]> results = embeddingService.embed(embeddingModelId, List.of(text));
+        return results.isEmpty() ? null : results.get(0);
+    }
+
+    private List<float[]> embedContents(Long agentId, List<String> contents) {
+        if (contents.isEmpty()) {
+            return List.of();
+        }
+        Long embeddingModelId = getEmbeddingModelId(agentId);
+        if (embeddingModelId == null) {
+            return List.of();
+        }
+        return embeddingService.embed(embeddingModelId, contents);
     }
 
     private Long getEmbeddingModelId(Long agentId) {

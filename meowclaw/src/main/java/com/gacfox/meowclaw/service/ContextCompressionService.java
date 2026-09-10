@@ -235,7 +235,7 @@ public class ContextCompressionService {
                                 .role(com.gacfox.proarc.agentic.model.openai.Message.ROLE_SYSTEM).content(recapSystemPrompt).build(),
                         com.gacfox.proarc.agentic.model.openai.Message.builder()
                                 .role(com.gacfox.proarc.agentic.model.openai.Message.ROLE_USER).content(prompt).build()))
-                .temperature(0.1).maxTokens(1200).build());
+                .temperature(0.1).maxTokens(llmClient.getModelInfo().getMaxTokens()).build());
         String content = response.extractBlockingContent();
         if (content == null || content.isBlank()) throw new IllegalStateException("上下文摘要为空");
         return content;

@@ -1,6 +1,7 @@
 package com.gacfox.meowclaw.service;
 
-import com.gacfox.meowclaw.dto.MemoryExtractionResult;
+import com.gacfox.meowclaw.dto.MemoryNodeDTO;
+import com.gacfox.meowclaw.dto.MemoryWriteDecision;
 import com.gacfox.meowclaw.entity.Agent;
 import com.gacfox.meowclaw.entity.Llm;
 import com.gacfox.meowclaw.entity.MemoryEntity;
@@ -34,7 +35,7 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
- * 调用辅助LLM抽取记忆结构
+ * 调用辅助LLM对记忆写入做决策并抽取记忆结构
  */
 @Slf4j
 @Service
@@ -50,7 +51,7 @@ public class MemoryExtractionService {
     private final LlmLoggingInterceptor llmLoggingInterceptor;
     private final TokenUsageLogService tokenUsageLogService;
 
-    @Value("classpath:prompt/memory-extraction-prompt.md")
+    @Value("classpath:prompt/memory-write-prompt.md")
     private Resource promptResource;
 
     private String promptTemplate;
@@ -79,33 +80,40 @@ public class MemoryExtractionService {
         this.promptTemplate = promptResource.getContentAsString(StandardCharsets.UTF_8);
     }
 
-    public MemoryExtractionResult extract(Long agentId, String type, String content, Long conversationId) {
+    /**
+     * 结合相似记忆决策新记忆的写入方式：插入/跳过/更新已有/删除已有，并抽取新记忆结构
+     */
+    public MemoryWriteDecision decide(Long agentId, String type, String content,
+                                      List<MemoryNodeDTO> similarMemories, Long conversationId) {
         Agent agent = agentRepository.findById(agentId)
                 .orElseThrow(() -> new IllegalArgumentException("智能体不存在"));
         Llm secondaryLlm = llmRepository.findById(agent.getSecondaryLlmId())
                 .orElseThrow(() -> new IllegalArgumentException("辅助LLM配置不存在"));
 
-        String referenceEntities = buildReferenceEntities(agentId, content);
+        String similar = similarMemories == null ? "" : similarMemories.stream()
+                .map(node -> "- [" + node.getId() + "] (" + node.getType() + ") " + node.getContent())
+                .collect(Collectors.joining("\n"));
         String userPrompt = PromptTemplate.build(promptTemplate, Map.of(
                 "type", type,
                 "content", content,
-                "existingEntities", referenceEntities
+                "similarMemories", similar,
+                "existingEntities", buildReferenceEntities(agentId, content)
         ));
 
         LlmClient client = buildLlmClient(secondaryLlm, agentId, conversationId);
         StructuredExecutor executor = new StructuredExecutor(client);
-        StructuredChatRequest<MemoryExtractionResult> request = StructuredChatRequest.<MemoryExtractionResult>builder()
+        StructuredChatRequest<MemoryWriteDecision> request = StructuredChatRequest.<MemoryWriteDecision>builder()
                 .messages(List.of(Message.builder()
                         .role(Message.ROLE_USER)
                         .content(userPrompt)
                         .build()))
-                .responseType(MemoryExtractionResult.class)
-                .toolName("extract_memory")
+                .responseType(MemoryWriteDecision.class)
+                .toolName("decide_memory_write")
                 .temperature(0.1)
-                .maxTokens(1200)
+                .maxTokens(secondaryLlm.getMaxTokens())
                 .build();
 
-        MemoryExtractionResult result = executor.execute(request).extract();
+        MemoryWriteDecision result = executor.execute(request).extract();
         if (result.getType() == null) {
             result.setType(type);
         }

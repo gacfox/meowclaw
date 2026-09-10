@@ -111,6 +111,13 @@ public class ChatService {
 
                 List<String> toolNames = new ArrayList<>(parseJsonArray(agent.getEnabledTools()));
                 toolNames.addAll(parseJsonArray(agent.getEnabledMcpTools()));
+                toolNames.removeIf(name -> {
+                    if (toolRegistry.getAgenticTool(name) == null) {
+                        log.warn("工具未注册，已从启用列表忽略: {}", name);
+                        return true;
+                    }
+                    return false;
+                });
                 ReActAgentExecutor executor = buildExecutor(llmClient, toolNames);
 
                 AgentContext context = buildAgentContext(agent, conv, llm, userContent, toolNames, llmClient);

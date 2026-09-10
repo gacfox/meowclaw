@@ -246,3 +246,25 @@ export interface FileContent {
   content: string | null;
   dataUrl: string | null;
 }
+
+export interface MemoryEntityDTO {
+  id: number;
+  name: string;
+}
+
+export interface MemoryRelationDTO {
+  id: number;
+  entityId: number;
+  description: string;
+}
+
+export interface MemoryNodeDTO {
+  id: number;
+  type: string;
+  content: string;
+  lastAccessedAt: number | null;
+  createdAt: number;
+  updatedAt: number;
+  entities: MemoryEntityDTO[] | null;
+  relations: MemoryRelationDTO[] | null;
+}

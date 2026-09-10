@@ -1,5 +1,5 @@
 import { Link, useLocation } from "react-router-dom";
-import { MessageSquare, Cpu, Database, Sparkles, Clock, Plug, Package, BarChart3, FolderTree, History } from "lucide-react";
+import { MessageSquare, Cpu, Database, Sparkles, Clock, Plug, Package, BarChart3, FolderTree, History, Brain } from "lucide-react";
 import {
   Sidebar,
   SidebarContent,
@@ -64,6 +64,14 @@ export function AppSidebar() {
                   <Link to="/agent">
                     <Sparkles />
                     <span>智能体</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              <SidebarMenuItem>
+                <SidebarMenuButton tooltip="记忆" asChild isActive={location.pathname === "/memory"}>
+                  <Link to="/memory">
+                    <Brain />
+                    <span>记忆</span>
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
