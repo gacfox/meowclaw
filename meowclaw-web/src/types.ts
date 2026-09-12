@@ -94,10 +94,17 @@ export interface ChatEventDTO {
   toolArguments: string | null;
 }
 
+export interface ChatAttachmentDTO {
+  name: string;
+  url: string;
+  mimeType: string;
+}
+
 export interface ChatEventBatchDTO {
   id: number;
   conversationId: number;
   userContent: string;
+  attachments: ChatAttachmentDTO[] | null;
   type: "USER" | "CONTEXT_COMPACTION";
   status: string;
   errorMessage: string | null;

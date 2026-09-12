@@ -59,6 +59,7 @@ CREATE TABLE IF NOT EXISTS mc_chat_event_batch (
     id BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
     conversation_id BIGINT NOT NULL COMMENT '关联会话ID',
     user_content TEXT NOT NULL COMMENT '用户输入内容',
+    attachments TEXT COMMENT '附件JSON数组:[{name,url,mimeType}]',
     type VARCHAR(32) NOT NULL DEFAULT 'USER' COMMENT '批次类型(USER=用户任务,CONTEXT_COMPACTION=上下文主动压缩)',
     status VARCHAR(20) NOT NULL DEFAULT 'RUNNING' COMMENT '批次状态(RUNNING=执行中,COMPLETED=已完成,ERROR=出错)',
     error_message TEXT COMMENT '错误信息(仅ERROR状态)',

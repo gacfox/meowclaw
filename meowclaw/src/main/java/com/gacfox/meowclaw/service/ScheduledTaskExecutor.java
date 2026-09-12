@@ -62,7 +62,7 @@ public class ScheduledTaskExecutor {
 
         // Execute chat synchronously
         try {
-            chatService.chat(conversationId, task.getUserPrompt()).collectList().block();
+            chatService.chat(conversationId, task.getUserPrompt(), null).collectList().block();
             execution.setStatus("SUCCESS");
         } catch (Exception e) {
             log.error("Scheduled task {} execution failed", taskId, e);

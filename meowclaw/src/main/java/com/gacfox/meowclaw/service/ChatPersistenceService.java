@@ -38,10 +38,11 @@ public class ChatPersistenceService {
     }
 
     @Transactional
-    public ChatEventBatch createBatch(Long conversationId, String userContent) {
+    public ChatEventBatch createBatch(Long conversationId, String userContent, String attachmentsJson) {
         ChatEventBatch batch = new ChatEventBatch();
         batch.setConversationId(conversationId);
         batch.setUserContent(userContent);
+        batch.setAttachments(attachmentsJson);
         batch.setType("USER");
         batch.setStatus("RUNNING");
         batch.setCreatedAt(System.currentTimeMillis());

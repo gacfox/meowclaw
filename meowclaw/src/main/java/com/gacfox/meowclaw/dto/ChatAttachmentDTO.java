@@ -5,13 +5,12 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
-import java.util.List;
-
 @Getter
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
-public class SendMessageRequest {
-    private String content;
-    private List<String> images;
+public class ChatAttachmentDTO {
+    private String name;
+    private String url;
+    private String mimeType;
 }

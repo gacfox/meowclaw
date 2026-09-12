@@ -39,7 +39,7 @@ export async function listBatches(conversationId: number): Promise<ChatEventBatc
   return res.data;
 }
 
-export async function chatStream(conversationId: number, content: string, signal?: AbortSignal): Promise<ReadableStream<Uint8Array>> {
+export async function chatStream(conversationId: number, content: string, images?: string[], signal?: AbortSignal): Promise<ReadableStream<Uint8Array>> {
   const token = getToken();
   const headers: Record<string, string> = { "Content-Type": "application/json" };
   if (token) {
@@ -48,7 +48,7 @@ export async function chatStream(conversationId: number, content: string, signal
   const res = await fetch(`/api/conversation/${conversationId}/chat`, {
     method: "POST",
     headers,
-    body: JSON.stringify({ content }),
+    body: JSON.stringify({ content, images: images && images.length > 0 ? images : undefined }),
     signal,
   });
   return res.body!;

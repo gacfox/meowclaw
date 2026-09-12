@@ -3,6 +3,7 @@ package com.gacfox.meowclaw.service;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.gacfox.meowclaw.dto.ChatAttachmentDTO;
 import com.gacfox.meowclaw.entity.ChatEventBatch;
 import com.gacfox.meowclaw.entity.ContextRecap;
 import com.gacfox.meowclaw.entity.Llm;
@@ -49,6 +50,7 @@ public class ContextCompressionService {
     private final ChatPersistenceService persistenceService;
     private final TokenUsageLogService tokenUsageLogService;
     private final LlmLoggingInterceptor llmLoggingInterceptor;
+    private final ChatAttachmentService chatAttachmentService;
     private final reactor.netty.http.client.HttpClient httpClient;
 
     @Value("classpath:prompt/context-recap-prompt.md")
@@ -59,6 +61,7 @@ public class ContextCompressionService {
     public ContextCompressionService(ChatEventBatchRepository batchRepository, ContextRecapRepository recapRepository,
                                      MessageRepository messageRepository, ChatPersistenceService persistenceService,
                                      TokenUsageLogService tokenUsageLogService, LlmLoggingInterceptor llmLoggingInterceptor,
+                                     ChatAttachmentService chatAttachmentService,
                                      reactor.netty.http.client.HttpClient httpClient) {
         this.batchRepository = batchRepository;
         this.recapRepository = recapRepository;
@@ -66,6 +69,7 @@ public class ContextCompressionService {
         this.persistenceService = persistenceService;
         this.tokenUsageLogService = tokenUsageLogService;
         this.llmLoggingInterceptor = llmLoggingInterceptor;
+        this.chatAttachmentService = chatAttachmentService;
         this.httpClient = httpClient;
     }
 
@@ -86,8 +90,20 @@ public class ContextCompressionService {
             ChatEventBatch batch = batches.get(i);
             if (skipped.contains(batch.getId())) continue;
             int age = batches.size() - i;
+            List<ChatAttachmentDTO> attachments = parseAttachments(batch.getAttachments());
+            Object userMessageContent = batch.getUserContent();
+            if (!attachments.isEmpty()) {
+                if (age < 5) {
+                    List<Map<String, Object>> parts = new ArrayList<>();
+                    parts.add(Map.of("type", "text", "text", batch.getUserContent()));
+                    parts.addAll(chatAttachmentService.loadImageParts(attachments));
+                    userMessageContent = parts;
+                } else {
+                    userMessageContent = batch.getUserContent() + "\n[用户发送了" + attachments.size() + "张图片]";
+                }
+            }
             result.add(com.gacfox.proarc.agentic.model.openai.Message.builder()
-                    .role(com.gacfox.proarc.agentic.model.openai.Message.ROLE_USER).content(batch.getUserContent()).build());
+                    .role(com.gacfox.proarc.agentic.model.openai.Message.ROLE_USER).content(userMessageContent).build());
             for (Message message : messagesByBatch.getOrDefault(batch.getId(), List.of())) {
                 if (age >= 15) {
                     if (shouldFoldToolMessage(message)) continue;
@@ -244,7 +260,12 @@ public class ContextCompressionService {
     private String batchText(ChatEventBatch batch, Map<Long, List<Message>> messagesByBatch) {
         StringBuilder text = new StringBuilder();
         text.append("=== Batch ").append(batch.getId()).append(" ===\n");
-        text.append("【用户】\n").append(batch.getUserContent()).append("\n\n");
+        text.append("【用户】\n").append(batch.getUserContent());
+        List<ChatAttachmentDTO> attachments = parseAttachments(batch.getAttachments());
+        if (!attachments.isEmpty()) {
+            text.append("\n[用户发送了").append(attachments.size()).append("张图片]");
+        }
+        text.append("\n\n");
         text.append("【交互过程】\n");
 
         List<Message> messages = messagesByBatch.getOrDefault(batch.getId(), List.of());
@@ -361,5 +382,15 @@ public class ContextCompressionService {
         if (value == null || value.codePointCount(0, value.length()) <= 100) return value;
         int end = value.offsetByCodePoints(0, 100);
         return value.substring(0, end) + TRUNCATED;
+    }
+
+    private List<ChatAttachmentDTO> parseAttachments(String json) {
+        if (json == null || json.isBlank()) return List.of();
+        try {
+            return OBJECT_MAPPER.readValue(json, new TypeReference<>() {
+            });
+        } catch (Exception e) {
+            return List.of();
+        }
     }
 }

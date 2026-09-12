@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useSearchParams } from "react-router-dom";
-import type { AgentDTO, ConversationDTO, ChatEventBatchDTO, ChatEventDTO, PageResult } from "@/types";
+import type { AgentDTO, ConversationDTO, ChatEventBatchDTO, ChatEventDTO, PageResult, LlmDTO } from "@/types";
 import { listAgents } from "@/services/agent";
+import { listLlms } from "@/services/llm";
 import { listConversations, createConversation, getConversation, deleteConversation, renameConversation, listBatches, chatStream, truncateAfterBatch, waitForTitle } from "@/services/conversation";
 import { useAuthStore } from "@/stores/auth";
 import { Button } from "@/components/ui/button";
@@ -14,7 +15,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import {
   Table, TableBody, TableCell, TableRow,
 } from "@/components/ui/table";
-import { Plus, Send, Trash2, Loader2, Wrench, ChevronRight, Copy, Pencil, RefreshCw, ArrowUp, ArrowDown, Check, Clock, TriangleAlert, X } from "lucide-react";
+import { Plus, Send, Trash2, Loader2, Wrench, ChevronRight, Copy, Pencil, RefreshCw, ArrowUp, ArrowDown, Check, Clock, TriangleAlert, X, ImagePlus } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Alert, AlertTitle, AlertDescription, AlertAction } from "@/components/ui/alert";
@@ -208,6 +209,9 @@ export function ChatPage() {
   const [sending, setSending] = useState(false);
   const [generatingTitleId, setGeneratingTitleId] = useState<number | null>(null);
   const [optimisticContent, setOptimisticContent] = useState<string | null>(null);
+  const [optimisticImages, setOptimisticImages] = useState<string[]>([]);
+  const [pendingImages, setPendingImages] = useState<{ dataUrl: string; name: string }[]>([]);
+  const [llms, setLlms] = useState<LlmDTO[]>([]);
   const [streamContent, setStreamContent] = useState("");
   const [streamSteps, setStreamSteps] = useState<StreamStep[]>([]);
   const [streamError, setStreamError] = useState<string | null>(null);
@@ -223,9 +227,13 @@ export function ChatPage() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const convoListRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const currentConvo = conversations.find((c) => c.id === selectedConvoId);
   const currentAgent = currentConvo ? agents.find((a) => a.id === currentConvo.agentId) : null;
+  const canVision = currentAgent
+    ? (llms.find((l) => l.id === currentAgent.llmId)?.capabilities ?? "").split(",").map((s) => s.trim()).includes("vision")
+    : false;
 
   useEffect(() => {
     listAgents().then((list) => {
@@ -235,6 +243,7 @@ export function ChatPage() {
       const validAgentId = urlAgentId && list.some((a) => a.id === urlAgentId) ? urlAgentId : list[0]?.id ?? null;
       setSelectedAgentId(validAgentId);
     });
+    listLlms().then(setLlms).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -402,10 +411,11 @@ export function ChatPage() {
     triggerChat(content);
   };
 
-  const triggerChat = async (content: string) => {
+  const triggerChat = async (content: string, images: string[] = []) => {
     if (!selectedConvoId || sending) return;
     setSending(true);
     setOptimisticContent(content);
+    setOptimisticImages(images);
     setStreamContent("");
     setStreamSteps([]);
     setStreamError(null);
@@ -413,7 +423,7 @@ export function ChatPage() {
     try {
       const controller = new AbortController();
       abortRef.current = controller;
-      const stream = await chatStream(selectedConvoId, content, controller.signal);
+      const stream = await chatStream(selectedConvoId, content, images, controller.signal);
 
       const reader = stream.getReader();
       const decoder = new TextDecoder();
@@ -447,6 +457,7 @@ export function ChatPage() {
         listBatches(convoId).then((newBatches) => {
           setBatches(newBatches);
           setOptimisticContent(null);
+          setOptimisticImages([]);
           setStreamContent("");
           setStreamSteps([]);
           setStreamError(null);
@@ -473,11 +484,45 @@ export function ChatPage() {
     }
   };
 
+  const MAX_PENDING_IMAGES = 5;
+
+  const handleImageSelect = async (files: FileList | null) => {
+    if (!files || files.length === 0) return;
+    const remaining = MAX_PENDING_IMAGES - pendingImages.length;
+    if (remaining <= 0) {
+      toast.error(`最多上传 ${MAX_PENDING_IMAGES} 张图片`);
+      return;
+    }
+    const selected = Array.from(files).slice(0, remaining);
+    if (files.length > remaining) {
+      toast.error(`最多上传 ${MAX_PENDING_IMAGES} 张图片`);
+    }
+    for (const file of selected) {
+      if (file.size > 10 * 1024 * 1024) {
+        toast.error(`图片 ${file.name} 超过 10MB`);
+        continue;
+      }
+      try {
+        const dataUrl = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result as string);
+          reader.onerror = () => reject(new Error("读取图片失败"));
+          reader.readAsDataURL(file);
+        });
+        setPendingImages((prev) => [...prev, { dataUrl, name: file.name }]);
+      } catch {
+        toast.error(`读取图片 ${file.name} 失败`);
+      }
+    }
+  };
+
   const handleSend = () => {
-    if (!input.trim() || !selectedConvoId || sending) return;
+    if ((!input.trim() && pendingImages.length === 0) || !selectedConvoId || sending) return;
     const content = input.trim();
+    const images = pendingImages.map((p) => p.dataUrl);
     setInput("");
-    triggerChat(content);
+    setPendingImages([]);
+    triggerChat(content, images);
   };
 
   const handleStreamEvent = (event: ChatEventDTO) => {
@@ -708,6 +753,15 @@ export function ChatPage() {
                               </div>
                             ) : (
                               <div className="rounded-lg bg-primary px-4 py-2 text-sm text-primary-foreground">
+                                {batch.attachments && batch.attachments.length > 0 && (
+                                  <div className="mb-2 flex flex-wrap gap-2">
+                                    {batch.attachments.map((att) => (
+                                      <a key={att.name} href={att.url} target="_blank" rel="noreferrer">
+                                        <img src={att.url} alt={att.name} className="max-h-40 rounded" />
+                                      </a>
+                                    ))}
+                                  </div>
+                                )}
                                 <div className="whitespace-pre-wrap">{batch.userContent}</div>
                               </div>
                             )}
@@ -799,10 +853,17 @@ export function ChatPage() {
                   })}
 
                   {/* Optimistic user bubble during streaming */}
-                  {optimisticContent && (
+                  {(optimisticContent !== null || optimisticImages.length > 0) && (
                     <div className="flex items-start justify-end gap-2">
                       <div className="max-w-[80%] rounded-lg bg-primary px-4 py-2 text-sm text-primary-foreground">
-                        <div className="whitespace-pre-wrap">{optimisticContent}</div>
+                        {optimisticImages.length > 0 && (
+                          <div className="mb-2 flex flex-wrap gap-2">
+                            {optimisticImages.map((dataUrl, i) => (
+                              <img key={i} src={dataUrl} alt="" className="max-h-40 rounded" />
+                            ))}
+                          </div>
+                        )}
+                        {optimisticContent && <div className="whitespace-pre-wrap">{optimisticContent}</div>}
                       </div>
                       <Avatar className="mt-0.5 size-7 shrink-0">
                         <AvatarImage src={user?.avatarUrl ?? undefined} />
@@ -829,18 +890,59 @@ export function ChatPage() {
             </div>
 
             <div className="border-t p-4">
-              <div className="mx-auto flex max-w-3xl gap-2">
-                <Input
-                  value={input}
-                  onChange={(e) => setInput(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
-                  placeholder="输入消息..."
-                  disabled={sending}
-                  className="flex-1"
-                />
-                <Button onClick={handleSend} disabled={sending || !input.trim()}>
-                  <Send className="size-4" />
-                </Button>
+              <div className="mx-auto max-w-3xl">
+                {pendingImages.length > 0 && (
+                  <div className="mb-2 flex flex-wrap gap-2">
+                    {pendingImages.map((img, i) => (
+                      <div key={i} className="relative">
+                        <img src={img.dataUrl} alt={img.name} className="size-14 rounded border object-cover" />
+                        <button
+                          className="absolute -right-1.5 -top-1.5 rounded-full bg-destructive p-0.5 text-destructive-foreground"
+                          onClick={() => setPendingImages((prev) => prev.filter((_, idx) => idx !== i))}
+                          title="移除"
+                        >
+                          <X className="size-3" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <div className="flex gap-2">
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/png,image/jpeg,image/webp,image/gif"
+                    multiple
+                    className="hidden"
+                    onChange={(e) => { handleImageSelect(e.target.files); e.target.value = ""; }}
+                  />
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <span>
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          disabled={!canVision || sending}
+                          onClick={() => fileInputRef.current?.click()}
+                        >
+                          <ImagePlus className="size-4" />
+                        </Button>
+                      </span>
+                    </TooltipTrigger>
+                    <TooltipContent>{canVision ? "上传图片" : "当前模型不支持图片输入"}</TooltipContent>
+                  </Tooltip>
+                  <Input
+                    value={input}
+                    onChange={(e) => setInput(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
+                    placeholder="输入消息..."
+                    disabled={sending}
+                    className="flex-1"
+                  />
+                  <Button onClick={handleSend} disabled={sending || (!input.trim() && pendingImages.length === 0)}>
+                    <Send className="size-4" />
+                  </Button>
+                </div>
               </div>
             </div>
           </>

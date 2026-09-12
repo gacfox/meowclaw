@@ -28,6 +28,9 @@ public class ChatEventBatch {
     @Column(name = "user_content", nullable = false, columnDefinition = "TEXT")
     private String userContent;
 
+    @Column(name = "attachments", columnDefinition = "TEXT")
+    private String attachments;
+
     @Column(name = "type", nullable = false, length = 32)
     private String type;
 

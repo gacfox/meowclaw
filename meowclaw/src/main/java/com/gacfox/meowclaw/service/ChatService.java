@@ -2,6 +2,7 @@ package com.gacfox.meowclaw.service;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.gacfox.meowclaw.dto.ChatAttachmentDTO;
 import com.gacfox.meowclaw.dto.ChatEventDTO;
 import com.gacfox.meowclaw.entity.Agent;
 import com.gacfox.meowclaw.entity.ChatEventBatch;
@@ -61,6 +62,7 @@ public class ChatService {
     private final TitleGenerationRegistryService titleGenerationRegistryService;
     private final TokenUsageLogService tokenUsageLogService;
     private final ContextCompressionService contextCompressionService;
+    private final ChatAttachmentService chatAttachmentService;
 
     @Autowired
     public ChatService(ConversationService conversationService,
@@ -74,7 +76,8 @@ public class ChatService {
                        LlmLoggingInterceptor llmLoggingInterceptor,
                        TitleGenerationRegistryService titleGenerationRegistryService,
                        TokenUsageLogService tokenUsageLogService,
-                       ContextCompressionService contextCompressionService) {
+                       ContextCompressionService contextCompressionService,
+                       ChatAttachmentService chatAttachmentService) {
         this.conversationService = conversationService;
         this.chatPersistenceService = chatPersistenceService;
         this.agentRepository = agentRepository;
@@ -87,11 +90,16 @@ public class ChatService {
         this.titleGenerationRegistryService = titleGenerationRegistryService;
         this.tokenUsageLogService = tokenUsageLogService;
         this.contextCompressionService = contextCompressionService;
+        this.chatAttachmentService = chatAttachmentService;
     }
 
-    public Flux<ChatEventDTO> chat(Long conversationId, String userContent) {
+    public Flux<ChatEventDTO> chat(Long conversationId, String userContent, List<String> images) {
         return Flux.<ChatEventDTO>create(sink -> {
             try {
+                boolean hasImages = images != null && !images.isEmpty();
+                if ((userContent == null || userContent.isBlank()) && !hasImages) {
+                    throw new IllegalArgumentException("消息内容不能为空");
+                }
                 Conversation conv = conversationService.getById(conversationId);
                 Agent agent = agentRepository.findById(conv.getAgentId())
                         .orElseThrow(() -> new IllegalArgumentException("智能体不存在"));
@@ -99,10 +107,17 @@ public class ChatService {
                         .orElseThrow(() -> new IllegalArgumentException("LLM配置不存在"));
                 Llm secondaryLlm = llmRepository.findById(agent.getSecondaryLlmId())
                         .orElseThrow(() -> new IllegalArgumentException("辅助LLM配置不存在"));
+                if (hasImages && !hasVisionCapability(llm)) {
+                    throw new IllegalArgumentException("当前模型不支持图片输入");
+                }
 
                 tryProactiveCompression(conversationId, secondaryLlm, sink);
 
-                ChatEventBatch batch = chatPersistenceService.createBatch(conversationId, userContent);
+                List<ChatAttachmentDTO> attachments = chatAttachmentService.store(images);
+                String attachmentsJson = attachments.isEmpty() ? null
+                        : OBJECT_MAPPER.writeValueAsString(attachments);
+                ChatEventBatch batch = chatPersistenceService.createBatch(
+                        conversationId, userContent == null ? "" : userContent, attachmentsJson);
                 Long batchId = batch.getId();
 
                 TokenUsageAccumulator tokenAccum = new TokenUsageAccumulator();
@@ -120,10 +135,11 @@ public class ChatService {
                 });
                 ReActAgentExecutor executor = buildExecutor(llmClient, toolNames);
 
-                AgentContext context = buildAgentContext(agent, conv, llm, userContent, toolNames, llmClient);
+                AgentContext context = buildAgentContext(agent, conv, llm, userContent, images, toolNames, llmClient);
                 boolean isFirstBatch = conv.getTitle() == null || conv.getTitle().isBlank();
 
-                executeAgent(context, executor, batchId, conversationId, userContent, llm, secondaryLlm, secondaryLlmClient, tokenAccum, isFirstBatch, sink);
+                executeAgent(context, executor, batchId, conversationId,
+                        userContent == null ? "" : userContent, llm, secondaryLlm, secondaryLlmClient, tokenAccum, isFirstBatch, sink);
             } catch (Exception e) {
                 sink.error(e);
             }
@@ -181,7 +197,7 @@ public class ChatService {
     }
 
     private AgentContext buildAgentContext(Agent agent, Conversation conv, Llm llm, String userContent,
-                                           List<String> toolNames, LlmClient llmClient) {
+                                           List<String> images, List<String> toolNames, LlmClient llmClient) {
         String workspaceFolder = agent.getWorkspaceFolder();
         Map<String, Object> variables = new HashMap<>();
         if (workspaceFolder != null && !workspaceFolder.isBlank()) {
@@ -209,8 +225,15 @@ public class ChatService {
         messages.add(Message.builder()
                 .role(Message.ROLE_SYSTEM).content("").build());
         messages.addAll(contextCompressionService.buildMessages(conv.getId()));
+        Object userMessageContent = userContent;
+        if (images != null && !images.isEmpty()) {
+            List<Map<String, Object>> parts = new ArrayList<>();
+            parts.add(Map.of("type", "text", "text", userContent == null ? "" : userContent));
+            parts.addAll(chatAttachmentService.toImageParts(images));
+            userMessageContent = parts;
+        }
         messages.add(Message.builder()
-                .role(Message.ROLE_USER).content(userContent).build());
+                .role(Message.ROLE_USER).content(userMessageContent).build());
 
         return AgentContext.builder()
                 .messages(messages)
@@ -344,6 +367,19 @@ public class ChatService {
                 .maxTokens(llm.getMaxTokens())
                 .contextLength(llm.getContextLength())
                 .build();
+    }
+
+    private boolean hasVisionCapability(Llm llm) {
+        String capabilities = llm.getCapabilities();
+        if (capabilities == null) {
+            return false;
+        }
+        for (String capability : capabilities.split(",")) {
+            if ("vision".equalsIgnoreCase(capability.trim())) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private void generateTitle(Long conversationId, String userContent, String finalAnswer, LlmClient llmClient) {
