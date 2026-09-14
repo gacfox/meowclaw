@@ -23,7 +23,7 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
-import { CalendarIcon, ExternalLink, History, RotateCcw, Search, Trash2 } from "lucide-react";
+import { CalendarIcon, ExternalLink, RotateCcw, Search, Trash2 } from "lucide-react";
 
 const DEFAULT_SIZE = 20;
 const ALL_VALUE = "ALL";
@@ -218,12 +218,9 @@ export function HistorySessionsPage() {
   }, [data.current, totalPages]);
 
   return (
-    <div className="flex flex-col gap-4 p-4">
+    <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-xl font-semibold flex items-center gap-2">
-          <History className="size-5" />
-          历史会话
-        </h1>
+        <h1 className="text-2xl font-semibold">历史会话</h1>
       </div>
 
       <div className="flex flex-wrap items-end gap-3 rounded-lg border bg-card p-4">

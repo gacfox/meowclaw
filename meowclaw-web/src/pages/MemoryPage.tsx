@@ -21,7 +21,7 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
-import { Brain, Pencil, Plus, RotateCcw, Search, Trash2 } from "lucide-react";
+import { Pencil, Plus, RotateCcw, Search, Trash2 } from "lucide-react";
 
 const DEFAULT_SIZE = 20;
 const ALL_VALUE = "ALL";
@@ -181,12 +181,9 @@ export function MemoryPage() {
   const formOpen = createOpen || editTarget !== null;
 
   return (
-    <div className="flex flex-col gap-4 p-4">
+    <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-xl font-semibold flex items-center gap-2">
-          <Brain className="size-5" />
-          记忆
-        </h1>
+        <h1 className="text-2xl font-semibold">记忆</h1>
         <Button onClick={openCreate} disabled={!agentId}>
           <Plus className="mr-1 size-4" />
           添加记忆
