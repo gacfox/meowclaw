@@ -228,6 +228,7 @@ export function ChatPage() {
   const convoListRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const editTextareaRef = useRef<HTMLTextAreaElement>(null);
 
   const currentConvo = conversations.find((c) => c.id === selectedConvoId);
   const currentAgent = currentConvo ? agents.find((a) => a.id === currentConvo.agentId) : null;
@@ -245,6 +246,17 @@ export function ChatPage() {
     });
     listLlms().then(setLlms).catch(() => {});
   }, []);
+
+  useEffect(() => {
+    const el = editTextareaRef.current;
+    if (!el || editingBatchId === null) return;
+    el.style.height = "auto";
+    const lineHeight = parseFloat(getComputedStyle(el).lineHeight) || 20;
+    const maxHeight = lineHeight * 5 + 4;
+    const target = Math.min(el.scrollHeight, maxHeight);
+    el.style.height = `${target}px`;
+    el.style.overflowY = el.scrollHeight > maxHeight ? "auto" : "hidden";
+  }, [editDraft, editingBatchId]);
 
   useEffect(() => {
     if (!selectedAgentId) return;
@@ -731,15 +743,16 @@ export function ChatPage() {
                     <div key={batch.id} className="space-y-2">
                       {/* User bubble */}
                       <div className="flex flex-col items-end">
-                        <div className="flex items-start justify-end gap-2">
-                          <div className="flex max-w-[80%] flex-col">
+                        <div className={`flex items-start justify-end gap-2 ${editingBatchId === batch.id ? "w-full" : ""}`}>
+                          <div className={`flex ${editingBatchId === batch.id ? "w-[80%]" : "max-w-[80%]"} flex-col`}>
                             {editingBatchId === batch.id ? (
                               <div className="rounded-lg bg-primary px-4 py-2 text-sm text-primary-foreground">
                                 <textarea
+                                  ref={editTextareaRef}
                                   value={editDraft}
                                   onChange={(e) => setEditDraft(e.target.value)}
                                   className="w-full resize-none bg-transparent text-sm outline-none"
-                                  rows={Math.min(editDraft.split("\n").length, 10)}
+                                  rows={1}
                                   autoFocus
                                   onKeyDown={(e) => {
                                     if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); confirmEdit(); }
@@ -940,7 +953,7 @@ export function ChatPage() {
                     className="flex-1"
                   />
                   <Button onClick={handleSend} disabled={sending || (!input.trim() && pendingImages.length === 0)}>
-                    <Send className="size-4" />
+                    {sending ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}
                   </Button>
                 </div>
               </div>
