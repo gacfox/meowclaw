@@ -4,6 +4,7 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.gacfox.meowclaw.dto.ChatAttachmentDTO;
 import com.gacfox.meowclaw.dto.ChatEventDTO;
+import com.gacfox.meowclaw.dto.MemoryNodeDTO;
 import com.gacfox.meowclaw.entity.Agent;
 import com.gacfox.meowclaw.entity.ChatEventBatch;
 import com.gacfox.meowclaw.entity.Conversation;
@@ -43,6 +44,7 @@ import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Service
@@ -63,6 +65,7 @@ public class ChatService {
     private final TokenUsageLogService tokenUsageLogService;
     private final ContextCompressionService contextCompressionService;
     private final ChatAttachmentService chatAttachmentService;
+    private final MemoryService memoryService;
 
     @Autowired
     public ChatService(ConversationService conversationService,
@@ -77,7 +80,8 @@ public class ChatService {
                        TitleGenerationRegistryService titleGenerationRegistryService,
                        TokenUsageLogService tokenUsageLogService,
                        ContextCompressionService contextCompressionService,
-                       ChatAttachmentService chatAttachmentService) {
+                       ChatAttachmentService chatAttachmentService,
+                       MemoryService memoryService) {
         this.conversationService = conversationService;
         this.chatPersistenceService = chatPersistenceService;
         this.agentRepository = agentRepository;
@@ -91,6 +95,7 @@ public class ChatService {
         this.tokenUsageLogService = tokenUsageLogService;
         this.contextCompressionService = contextCompressionService;
         this.chatAttachmentService = chatAttachmentService;
+        this.memoryService = memoryService;
     }
 
     public Flux<ChatEventDTO> chat(Long conversationId, String userContent, List<String> images) {
@@ -218,6 +223,28 @@ public class ChatService {
         variables.put("cwd", currentCwd);
         variables.put("agentId", agent.getId());
         variables.put("conversationId", conv.getId());
+
+        if (Boolean.TRUE.equals(agent.getAggressiveMemoryRecall())) {
+            try {
+                List<MemoryNodeDTO> memories = memoryService.recall(agent.getId(), userContent, 5);
+                if (!memories.isEmpty()) {
+                    variables.put("recalledMemories", memories.stream()
+                            .map(memory -> {
+                                StringBuilder line = new StringBuilder("- [")
+                                        .append(memory.getType()).append("] ").append(memory.getContent());
+                                if (memory.getEntities() != null && !memory.getEntities().isEmpty()) {
+                                    line.append("（相关实体：").append(memory.getEntities().stream()
+                                            .map(MemoryNodeDTO.MemoryEntityDTO::getName)
+                                            .collect(Collectors.joining("、"))).append("）");
+                                }
+                                return line.toString();
+                            })
+                            .collect(Collectors.joining("\n")));
+                }
+            } catch (Exception e) {
+                log.warn("激进记忆召回失败，跳过注入: agentId={}, error={}", agent.getId(), e.getMessage());
+            }
+        }
 
         Double temperature = llm.getTemperature() != null ? llm.getTemperature() / 100.0 : 0.7;
 

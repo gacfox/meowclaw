@@ -16,6 +16,7 @@ export async function createAgent(data: {
   secondaryLlmId?: number;
   embeddingModelId?: number;
   workspaceFolder?: string;
+  aggressiveMemoryRecall?: boolean;
 }): Promise<AgentDTO> {
   const res = await request<AgentDTO>("/api/agent", {
     method: "POST",
@@ -34,6 +35,7 @@ export async function updateAgent(id: number, data: {
   secondaryLlmId?: number;
   embeddingModelId?: number;
   workspaceFolder?: string;
+  aggressiveMemoryRecall?: boolean;
 }): Promise<AgentDTO> {
   const res = await request<AgentDTO>(`/api/agent/${id}`, {
     method: "PUT",

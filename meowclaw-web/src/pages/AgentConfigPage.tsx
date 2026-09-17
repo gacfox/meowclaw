@@ -58,6 +58,7 @@ interface AgentFormData {
   secondaryLlmId: string;
   embeddingModelId: string;
   workspaceFolder: string;
+  aggressiveMemoryRecall: boolean;
 }
 
 const emptyForm: AgentFormData = {
@@ -69,6 +70,7 @@ const emptyForm: AgentFormData = {
   secondaryLlmId: "",
   embeddingModelId: "none",
   workspaceFolder: "",
+  aggressiveMemoryRecall: false,
 };
 
 export function AgentConfigPage() {
@@ -131,6 +133,7 @@ export function AgentConfigPage() {
       secondaryLlmId: agent.secondaryLlmId?.toString() ?? "",
       embeddingModelId: agent.embeddingModelId?.toString() ?? "none",
       workspaceFolder: agent.workspaceFolder ?? "",
+      aggressiveMemoryRecall: agent.aggressiveMemoryRecall ?? false,
     });
     setDialogOpen(true);
   };
@@ -155,6 +158,7 @@ export function AgentConfigPage() {
         secondaryLlmId: parseInt(form.secondaryLlmId),
         embeddingModelId: form.embeddingModelId !== "none" ? parseInt(form.embeddingModelId) : undefined,
         workspaceFolder: form.workspaceFolder || undefined,
+        aggressiveMemoryRecall: form.aggressiveMemoryRecall,
       };
       if (editing) {
         await updateAgent(editing.id, data);
@@ -218,6 +222,7 @@ export function AgentConfigPage() {
         secondaryLlmId: copyingAgent.secondaryLlmId ?? undefined,
         embeddingModelId: copyingAgent.embeddingModelId ?? undefined,
         workspaceFolder: copyIndependentWorkspace ? undefined : (copyingAgent.workspaceFolder ?? undefined),
+        aggressiveMemoryRecall: copyingAgent.aggressiveMemoryRecall ?? false,
       });
       await fetchData();
       setCopyDialogOpen(false);
@@ -334,7 +339,7 @@ export function AgentConfigPage() {
 
       {/* Create / Edit Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-3xl">
+        <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>{editing ? "编辑智能体" : "添加智能体"}</DialogTitle>
           </DialogHeader>
@@ -438,6 +443,19 @@ export function AgentConfigPage() {
                   ))}
                 </SelectContent>
               </Select>
+            </div>
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center justify-between">
+                <Label htmlFor="aggressive-memory-recall">激进记忆召回</Label>
+                <Switch
+                  id="aggressive-memory-recall"
+                  checked={form.aggressiveMemoryRecall}
+                  onCheckedChange={(checked) => setForm({ ...form, aggressiveMemoryRecall: checked })}
+                />
+              </div>
+              <p className="text-xs text-muted-foreground">
+                开启后，每次对话都会自动用您的输入召回相关记忆并注入提示词，无需智能体主动调用 memory_recall 工具
+              </p>
             </div>
             <div className="flex flex-col gap-2">
               <Label>工作区路径</Label>

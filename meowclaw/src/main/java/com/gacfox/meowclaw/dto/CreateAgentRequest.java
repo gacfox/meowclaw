@@ -38,4 +38,6 @@ public class CreateAgentRequest {
 
     @Size(max = 500, message = "工作区路径长度不能超过500")
     private String workspaceFolder;
+
+    private Boolean aggressiveMemoryRecall;
 }

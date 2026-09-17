@@ -60,6 +60,7 @@ export interface AgentDTO {
   secondaryLlmId: number | null;
   embeddingModelId: number | null;
   workspaceFolder: string | null;
+  aggressiveMemoryRecall: boolean | null;
   createdAt: number;
   updatedAt: number;
 }

@@ -49,6 +49,9 @@ public class Agent {
     @Column(name = "workspace_folder", length = 500)
     private String workspaceFolder;
 
+    @Column(name = "aggressive_memory_recall", nullable = false)
+    private Boolean aggressiveMemoryRecall;
+
     @Column(name = "created_at", nullable = false)
     private Long createdAt;
 

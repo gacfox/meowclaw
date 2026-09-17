@@ -50,7 +50,10 @@ public class AgentSystemPromptRefreshInterceptor implements AgentInterceptor {
         Long conversationId = conversationIdObj instanceof Long ? (Long) conversationIdObj : null;
         String recap = conversationId != null ? contextCompressionService.buildRecapText(conversationId) : null;
 
-        String systemContent = systemPromptService.build(agent, cwd, recap);
+        Object memoriesObj = context.getVariables().get("recalledMemories");
+        String recalledMemories = memoriesObj instanceof String ? (String) memoriesObj : null;
+
+        String systemContent = systemPromptService.build(agent, cwd, recap, recalledMemories);
 
         boolean replaced = false;
         for (Message msg : context.getMessages()) {

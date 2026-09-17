@@ -20,6 +20,7 @@ public class AgentDTO {
     private Long secondaryLlmId;
     private Long embeddingModelId;
     private String workspaceFolder;
+    private Boolean aggressiveMemoryRecall;
     private Long createdAt;
     private Long updatedAt;
 }

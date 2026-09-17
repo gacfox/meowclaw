@@ -61,3 +61,11 @@
 
 {{recap}}
 {{/hasRecap}}
+
+{{#hasMemories}}
+# 相关长期记忆
+
+以下是根据用户本次输入自动召回的长期记忆，供参考：
+
+{{memories}}
+{{/hasMemories}}

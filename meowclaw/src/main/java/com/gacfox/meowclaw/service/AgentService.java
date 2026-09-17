@@ -53,6 +53,7 @@ public class AgentService {
         agent.setLlmId(req.getLlmId());
         agent.setSecondaryLlmId(req.getSecondaryLlmId());
         agent.setEmbeddingModelId(req.getEmbeddingModelId());
+        agent.setAggressiveMemoryRecall(Boolean.TRUE.equals(req.getAggressiveMemoryRecall()));
         long now = System.currentTimeMillis();
         agent.setCreatedAt(now);
         agent.setUpdatedAt(now);
@@ -87,6 +88,7 @@ public class AgentService {
         if (req.getSecondaryLlmId() != null) agent.setSecondaryLlmId(req.getSecondaryLlmId());
         agent.setEmbeddingModelId(req.getEmbeddingModelId());
         if (req.getWorkspaceFolder() != null) agent.setWorkspaceFolder(req.getWorkspaceFolder());
+        if (req.getAggressiveMemoryRecall() != null) agent.setAggressiveMemoryRecall(req.getAggressiveMemoryRecall());
         agent.setUpdatedAt(System.currentTimeMillis());
         return agentConverter.toDTO(agentRepository.save(agent));
     }

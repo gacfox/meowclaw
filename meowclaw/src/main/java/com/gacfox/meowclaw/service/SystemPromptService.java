@@ -63,6 +63,18 @@ public class SystemPromptService {
      * @param recap 会话历史摘要，可为 null
      */
     public String build(Agent agent, String cwd, String recap) {
+        return build(agent, cwd, recap, null);
+    }
+
+    /**
+     * 构建系统提示词，并注入会话历史摘要与召回的长期记忆
+     *
+     * @param agent    智能体配置
+     * @param cwd      当前工作目录，可为 null
+     * @param recap    会话历史摘要，可为 null
+     * @param memories 召回的长期记忆文本，可为 null
+     */
+    public String build(Agent agent, String cwd, String recap, String memories) {
         Map<String, Object> vars = new HashMap<>();
 
         String persona = agent.getPersona();
@@ -79,6 +91,10 @@ public class SystemPromptService {
         boolean hasRecap = recap != null && !recap.isBlank();
         vars.put("hasRecap", hasRecap);
         vars.put("recap", hasRecap ? recap.strip() : null);
+
+        boolean hasMemories = memories != null && !memories.isBlank();
+        vars.put("hasMemories", hasMemories);
+        vars.put("memories", hasMemories ? memories.strip() : null);
 
         vars.put("osName", System.getProperty("os.name"));
         vars.put("currentTime", LocalDateTime.now().format(DATE_TIME_FORMATTER));
