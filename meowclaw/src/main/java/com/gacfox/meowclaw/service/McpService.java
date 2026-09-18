@@ -34,6 +34,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Duration;
+import java.net.URI;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -282,7 +283,15 @@ public class McpService {
         String prefix = entity.getName() + TOOL_NAME_SEPARATOR;
         List<String> usedBy = new ArrayList<>();
         for (Agent agent : agentRepository.findAll()) {
-            for (String tool : parseStringArray(agent.getEnabledMcpTools())) {
+            String toolsJson = agent.getEnabledMcpTools();
+            List<String> enabledMcpTools = Collections.emptyList();
+            if (toolsJson != null && !toolsJson.isBlank()) {
+                try {
+                    enabledMcpTools = OBJECT_MAPPER.readValue(toolsJson, new TypeReference<>() {});
+                } catch (Exception ignored) {
+                }
+            }
+            for (String tool : enabledMcpTools) {
                 if (tool.startsWith(prefix)) {
                     usedBy.add(agent.getName());
                     break;
@@ -321,18 +330,73 @@ public class McpService {
             return new Connection(client, tools);
         } catch (Exception e) {
             safeClose(client);
-            throw new McpConnectionException(e.getMessage(), e);
+            StringBuilder message = new StringBuilder(
+                    e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName());
+            for (Throwable cause = e.getCause(); cause != null && cause.getMessage() != null
+                    && !message.toString().contains(cause.getMessage()); cause = cause.getCause()) {
+                message.append(" <- ").append(cause.getMessage());
+            }
+            throw new McpConnectionException(message.toString(), e);
         }
     }
 
     private McpClientTransport buildTransport(String protocol, String configJson) {
-        Map<String, Object> config = parseConfig(configJson);
+        Map<String, Object> config;
+        try {
+            config = OBJECT_MAPPER.readValue(configJson, new TypeReference<>() {});
+        } catch (Exception e) {
+            throw new IllegalArgumentException("协议配置JSON解析失败: " + e.getMessage(), e);
+        }
+        Map<String, String> headers = new LinkedHashMap<>();
+        if (config.get("headers") instanceof Map<?, ?> rawHeaders) {
+            for (Map.Entry<?, ?> entry : rawHeaders.entrySet()) {
+                if (entry.getKey() != null && entry.getValue() != null) {
+                    headers.put(String.valueOf(entry.getKey()), String.valueOf(entry.getValue()));
+                }
+            }
+        }
         return switch (protocol) {
             case "STDIO" -> buildStdioTransport(config);
-            case "STREAMABLE_HTTP" -> HttpClientStreamableHttpTransport.builder(getRequiredString(config, "url")).build();
-            case "SSE" -> HttpClientSseClientTransport.builder(getRequiredString(config, "url")).build();
+            case "STREAMABLE_HTTP" -> {
+                String[] parts = splitBaseAndEndpoint(getRequiredString(config, "url"));
+                HttpClientStreamableHttpTransport.Builder builder =
+                        HttpClientStreamableHttpTransport.builder(parts[0]).endpoint(parts[1]);
+                if (!headers.isEmpty()) {
+                    builder.httpRequestCustomizer((requestBuilder, method, uri, body, context) ->
+                            headers.forEach(requestBuilder::setHeader));
+                }
+                yield builder.build();
+            }
+            case "SSE" -> {
+                String[] parts = splitBaseAndEndpoint(getRequiredString(config, "url"));
+                HttpClientSseClientTransport.Builder builder =
+                        HttpClientSseClientTransport.builder(parts[0]).sseEndpoint(parts[1]);
+                if (!headers.isEmpty()) {
+                    builder.httpRequestCustomizer((requestBuilder, method, uri, body, context) ->
+                            headers.forEach(requestBuilder::setHeader));
+                }
+                yield builder.build();
+            }
             default -> throw new IllegalArgumentException("不支持的协议: " + protocol);
         };
+    }
+
+    /**
+     * 把完整 URL 拆为 SDK 要求的 baseUri(scheme://authority)与 endpoint;
+     * MCP Java SDK 的 builder 只接受 baseUri,endpoint 默认为 /mcp,不拆分会丢失原始路径。
+     */
+    private String[] splitBaseAndEndpoint(String url) {
+        URI uri = URI.create(url);
+        if (uri.getScheme() == null || uri.getAuthority() == null) {
+            throw new IllegalArgumentException("MCP 服务 URL 不合法: " + url);
+        }
+        String base = uri.getScheme() + "://" + uri.getAuthority();
+        StringBuilder endpoint = new StringBuilder(
+                uri.getRawPath() != null && !uri.getRawPath().isEmpty() ? uri.getRawPath() : "/");
+        if (uri.getRawQuery() != null) {
+            endpoint.append('?').append(uri.getRawQuery());
+        }
+        return new String[]{base, endpoint.toString()};
     }
 
     private McpClientTransport buildStdioTransport(Map<String, Object> config) {
@@ -381,14 +445,6 @@ public class McpService {
         }
     }
 
-    private Map<String, Object> parseConfig(String json) {
-        try {
-            return OBJECT_MAPPER.readValue(json, new TypeReference<>() {});
-        } catch (Exception e) {
-            throw new IllegalArgumentException("协议配置JSON解析失败: " + e.getMessage(), e);
-        }
-    }
-
     private String getRequiredString(Map<String, Object> config, String key) {
         Object value = config.get(key);
         if (value == null || String.valueOf(value).isBlank()) {
@@ -401,7 +457,9 @@ public class McpService {
         String prefix = service.getName() + TOOL_NAME_SEPARATOR;
         for (McpToolInfo tool : tools) {
             String fullToolName = prefix + tool.getName();
-            unregisterQuietly(fullToolName);
+            if (toolRegistry.getAgenticTool(fullToolName) != null) {
+                toolRegistry.unregister(fullToolName);
+            }
             ToolDefinition toolDef = new ToolDefinition(
                     fullToolName,
                     tool.getDescription(),
@@ -429,7 +487,9 @@ public class McpService {
 
     private ToolInvoker buildInvoker(McpSyncClient client, String originalToolName) {
         return (arguments, ctx) -> {
-            Map<String, Object> args = parseArguments(arguments);
+            Map<String, Object> args = arguments == null || arguments.isBlank()
+                    ? Map.of()
+                    : OBJECT_MAPPER.readValue(arguments, new TypeReference<>() {});
             McpSchema.CallToolRequest request = new McpSchema.CallToolRequest.Builder()
                     .name(originalToolName)
                     .arguments(args)
@@ -472,12 +532,6 @@ public class McpService {
         }
     }
 
-    private void unregisterQuietly(String toolName) {
-        if (toolRegistry.getAgenticTool(toolName) != null) {
-            toolRegistry.unregister(toolName);
-        }
-    }
-
     private McpServiceDTO toDTO(McpServiceConfig entity) {
         McpServiceDTO dto = converter.toDTO(entity);
         dto.setTools(parseToolsCache(entity.getToolsCache()).stream()
@@ -505,22 +559,6 @@ public class McpService {
         } catch (Exception e) {
             throw new RuntimeException("Failed to serialize MCP tools cache", e);
         }
-    }
-
-    private List<String> parseStringArray(String json) {
-        if (json == null || json.isBlank()) return Collections.emptyList();
-        try {
-            return OBJECT_MAPPER.readValue(json, new TypeReference<>() {});
-        } catch (Exception e) {
-            return Collections.emptyList();
-        }
-    }
-
-    private static Map<String, Object> parseArguments(String arguments) throws Exception {
-        if (arguments == null || arguments.isBlank()) {
-            return Map.of();
-        }
-        return OBJECT_MAPPER.readValue(arguments, new TypeReference<>() {});
     }
 
     private void validateProtocol(String protocol) {
