@@ -12,10 +12,12 @@ import com.gacfox.meowclaw.repository.MemoryNodeEntityRepository;
 import com.gacfox.meowclaw.repository.MemoryNodeRepository;
 import com.gacfox.meowclaw.util.RrfFusionUtil;
 import com.gacfox.proarc.common.model.Pagination;
+import jakarta.annotation.PreDestroy;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Transactional;
@@ -76,6 +78,18 @@ public class MemoryService {
         this.luceneSearcher = luceneSearcher;
         this.agentRepository = agentRepository;
         this.transactionTemplate = new TransactionTemplate(transactionManager);
+    }
+
+    /**
+     * 异步写入记忆：由线程池执行后立即返回，不阻塞调用方；同一agent的写入仍由锁串行执行
+     */
+    @Async
+    public void writeAsync(Long agentId, String type, String content, Long conversationId) {
+        try {
+            write(agentId, type, content, conversationId);
+        } catch (Exception e) {
+            log.error("异步记忆写入失败: agentId={}, content={}", agentId, content, e);
+        }
     }
 
     /**

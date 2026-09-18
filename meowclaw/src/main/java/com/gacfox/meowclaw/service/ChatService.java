@@ -11,6 +11,7 @@ import com.gacfox.meowclaw.entity.Conversation;
 import com.gacfox.meowclaw.entity.Llm;
 import com.gacfox.meowclaw.repository.AgentRepository;
 import com.gacfox.meowclaw.repository.LlmRepository;
+import com.gacfox.meowclaw.util.CapabilityUtil;
 import com.gacfox.meowclaw.interceptor.agent.AgentLoggingInterceptor;
 import com.gacfox.meowclaw.interceptor.agent.AgentSystemPromptRefreshInterceptor;
 import com.gacfox.meowclaw.interceptor.llm.LlmLoggingInterceptor;
@@ -393,20 +394,12 @@ public class ChatService {
                 .sk(llm.getSk())
                 .maxTokens(llm.getMaxTokens())
                 .contextLength(llm.getContextLength())
+                .capabilities(CapabilityUtil.parse(llm.getCapabilities()))
                 .build();
     }
 
     private boolean hasVisionCapability(Llm llm) {
-        String capabilities = llm.getCapabilities();
-        if (capabilities == null) {
-            return false;
-        }
-        for (String capability : capabilities.split(",")) {
-            if ("vision".equalsIgnoreCase(capability.trim())) {
-                return true;
-            }
-        }
-        return false;
+        return CapabilityUtil.parse(llm.getCapabilities()).contains("vision");
     }
 
     private void generateTitle(Long conversationId, String userContent, String finalAnswer, LlmClient llmClient) {
@@ -421,6 +414,7 @@ public class ChatService {
                                     .content(prompt)
                                     .build()))
                     .temperature(0.7)
+                    .enableThinking(false)
                     .build();
             ModelResponse response = llmClient.blockingChat(request);
             title = response.extractBlockingContent();

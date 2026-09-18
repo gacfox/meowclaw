@@ -15,6 +15,7 @@ import com.gacfox.meowclaw.interceptor.llm.TokenUsageLlmInterceptor;
 import com.gacfox.meowclaw.repository.ChatEventBatchRepository;
 import com.gacfox.meowclaw.repository.ContextRecapRepository;
 import com.gacfox.meowclaw.repository.MessageRepository;
+import com.gacfox.meowclaw.util.CapabilityUtil;
 import com.gacfox.proarc.agentic.client.LlmClient;
 import com.gacfox.proarc.agentic.client.OpenAiLlmClient;
 import com.gacfox.proarc.agentic.client.interceptor.builtin.RetryInterceptor;
@@ -224,6 +225,7 @@ public class ContextCompressionService {
                         .sk(llm.getSk())
                         .maxTokens(llm.getMaxTokens())
                         .contextLength(llm.getContextLength())
+                        .capabilities(CapabilityUtil.parse(llm.getCapabilities()))
                         .build())
                 .httpClient(httpClient)
                 .interceptors(List.of(llmLoggingInterceptor,
@@ -251,7 +253,7 @@ public class ContextCompressionService {
                                 .role(com.gacfox.proarc.agentic.model.openai.Message.ROLE_SYSTEM).content(recapSystemPrompt).build(),
                         com.gacfox.proarc.agentic.model.openai.Message.builder()
                                 .role(com.gacfox.proarc.agentic.model.openai.Message.ROLE_USER).content(prompt).build()))
-                .temperature(0.1).maxTokens(llmClient.getModelInfo().getMaxTokens()).build());
+                .temperature(0.1).enableThinking(false).maxTokens(llmClient.getModelInfo().getMaxTokens()).build());
         String content = response.extractBlockingContent();
         if (content == null || content.isBlank()) throw new IllegalStateException("上下文摘要为空");
         return content;

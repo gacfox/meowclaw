@@ -24,12 +24,13 @@ public class MemoryTool {
         this.memoryService = memoryService;
     }
 
-    @AgenticTool(name = "memory_write", description = "写入一条长期记忆，type 必须是 fact/preference/rule 之一。系统会自动召回相似记忆并进行去重、更新或删除决策，写入前无需先 recall 查重，但相同内容严禁多次重复调用。该工具是高成本耗时操作")
+    @AgenticTool(name = "memory_write", description = "写入一条长期记忆，type 必须是 fact/preference/rule 之一。写入是异步的：提交后立即返回，系统后台自动完成相似记忆查重、结构抽取与入库，无需等待；相同内容严禁多次重复调用")
     public String write(@AgenticToolParam(name = "param", description = "写入参数") MemoryWriteParam param,
                         AgentContext ctx) {
         Long agentId = (Long) ctx.getVariables().get("agentId");
         Long conversationId = (Long) ctx.getVariables().get("conversationId");
-        return memoryService.write(agentId, param.getType(), param.getContent(), conversationId);
+        memoryService.writeAsync(agentId, param.getType(), param.getContent(), conversationId);
+        return "已提交后台写入";
     }
 
     @AgenticTool(name = "memory_recall", description = "根据查询召回相关长期记忆")

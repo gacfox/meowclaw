@@ -12,6 +12,7 @@ import com.gacfox.meowclaw.interceptor.llm.TokenUsageLlmInterceptor;
 import com.gacfox.meowclaw.repository.AgentRepository;
 import com.gacfox.meowclaw.repository.LlmRepository;
 import com.gacfox.meowclaw.repository.MemoryEntityRepository;
+import com.gacfox.meowclaw.util.CapabilityUtil;
 import com.gacfox.proarc.agentic.client.LlmClient;
 import com.gacfox.proarc.agentic.client.OpenAiLlmClient;
 import com.gacfox.proarc.agentic.client.interceptor.builtin.RetryInterceptor;
@@ -161,6 +162,7 @@ public class MemoryExtractionService {
                 .sk(llm.getSk())
                 .maxTokens(llm.getMaxTokens())
                 .contextLength(llm.getContextLength())
+                .capabilities(CapabilityUtil.parse(llm.getCapabilities()))
                 .build();
         TokenUsageContext tokenUsageContext = new TokenUsageContext(
                 llm.getId(), agentId, conversationId, null, llm.getModel());
