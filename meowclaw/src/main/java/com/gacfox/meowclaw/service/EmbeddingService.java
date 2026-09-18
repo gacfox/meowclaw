@@ -61,8 +61,7 @@ public class EmbeddingService {
         EmbeddingRequest request = new EmbeddingRequest(
                 model.getModel(),
                 inputs,
-                "float",
-                model.getDimensions()
+                "float"
         );
 
         String endpointUrl = model.getEndpointUrl();
@@ -110,11 +109,15 @@ public class EmbeddingService {
         }
     }
 
+    /**
+     * @param model          模型名
+     * @param input          待嵌入文本
+     * @param encodingFormat 编码格式。不下发 dimensions 参数:多数 OpenAI 兼容端点(如 SiliconFlow)不支持,会返回 400
+     */
     public record EmbeddingRequest(
             String model,
             Object input,
-            @JsonProperty("encoding_format") String encodingFormat,
-            Integer dimensions
+            @JsonProperty("encoding_format") String encodingFormat
     ) {
     }
 
