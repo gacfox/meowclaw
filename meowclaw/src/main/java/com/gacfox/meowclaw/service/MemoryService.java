@@ -1,5 +1,7 @@
 package com.gacfox.meowclaw.service;
 
+import com.gacfox.meowclaw.dto.MemoryEntityDTO;
+import com.gacfox.meowclaw.dto.MemoryGraphDTO;
 import com.gacfox.meowclaw.dto.MemoryNodeDTO;
 import com.gacfox.meowclaw.dto.MemoryWriteDecision;
 import com.gacfox.meowclaw.entity.Agent;
@@ -240,17 +242,73 @@ public class MemoryService {
     }
 
     @Transactional(readOnly = true)
-    public Pagination<MemoryNodeDTO> list(Long agentId, String type, String keyword, int page, int size) {
+    public Pagination<MemoryNodeDTO> list(Long agentId, String type, String keyword, Long entityId, int page, int size) {
         ensureAgentExists(agentId);
         String queryType = (type == null || type.isBlank()) ? null : type;
         String queryKeyword = (keyword == null || keyword.isBlank()) ? null : "%" + keyword + "%";
         Page<MemoryNode> pageResult = memoryNodeRepository.search(
-                agentId, queryType, queryKeyword, PageRequest.of(page - 1, size));
+                agentId, queryType, queryKeyword, entityId, PageRequest.of(page - 1, size));
         List<Long> ids = pageResult.getContent().stream().map(MemoryNode::getId).toList();
         List<MemoryNodeDTO> list = loadNodesWithRelations(agentId, ids, false);
         int total = (int) pageResult.getTotalElements();
         int totalPages = (int) Math.ceil((double) total / size);
         return new Pagination<>(list, total, totalPages, page, size);
+    }
+
+    /**
+     * 召回预览：与memory_recall同一检索链路，但不更新访问时间，供管理页调试使用
+     */
+    @Transactional(readOnly = true)
+    public List<MemoryNodeDTO> recallPreview(Long agentId, String query, Integer limit) {
+        return recallInternal(agentId, query, limit, false);
+    }
+
+    /**
+     * 列出智能体的全部实体及其关联记忆数，按记忆数降序
+     */
+    @Transactional(readOnly = true)
+    public List<MemoryEntityDTO> listEntities(Long agentId) {
+        ensureAgentExists(agentId);
+        Map<Long, Long> countMap = new HashMap<>();
+        for (Object[] row : memoryNodeEntityRepository.countByEntityForAgent(agentId)) {
+            countMap.put((Long) row[0], (Long) row[1]);
+        }
+        return memoryEntityRepository.findByAgentId(agentId).stream()
+                .map(e -> new MemoryEntityDTO(e.getId(), e.getName(), countMap.getOrDefault(e.getId(), 0L)))
+                .sorted((a, b) -> Long.compare(b.getMemoryCount(), a.getMemoryCount()))
+                .toList();
+    }
+
+    /**
+     * 记忆-实体关系图谱数据：取最近100条记忆及其关系
+     */
+    @Transactional(readOnly = true)
+    public MemoryGraphDTO graph(Long agentId) {
+        ensureAgentExists(agentId);
+        Page<MemoryNode> pageResult = memoryNodeRepository.search(agentId, null, null, null,
+                PageRequest.of(0, 100));
+        List<MemoryNode> nodes = pageResult.getContent();
+        List<Long> nodeIds = nodes.stream().map(MemoryNode::getId).toList();
+
+        List<MemoryNodeEntity> relations = nodeIds.isEmpty() ? List.of()
+                : memoryNodeEntityRepository.findByNodeIdIn(nodeIds);
+        Set<Long> entityIds = relations.stream().map(MemoryNodeEntity::getEntityId).collect(Collectors.toSet());
+        Map<Long, MemoryEntity> entityMap = new HashMap<>();
+        for (MemoryEntity e : memoryEntityRepository.findAllById(entityIds)) {
+            entityMap.put(e.getId(), e);
+        }
+
+        MemoryGraphDTO graph = new MemoryGraphDTO();
+        graph.setMemories(nodes.stream()
+                .map(n -> new MemoryGraphDTO.GraphMemory(n.getId(), n.getType(), n.getContent()))
+                .toList());
+        graph.setEntities(entityMap.values().stream()
+                .map(e -> new MemoryGraphDTO.GraphEntity(e.getId(), e.getName()))
+                .toList());
+        graph.setRelations(relations.stream()
+                .map(r -> new MemoryGraphDTO.GraphRelation(r.getNodeId(), r.getEntityId(), r.getDescription()))
+                .toList());
+        return graph;
     }
 
     /**

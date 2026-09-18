@@ -22,9 +22,12 @@ public interface MemoryNodeRepository extends JpaRepository<MemoryNode, Long> {
     @Query("select n from MemoryNode n where n.agentId = :agentId"
             + " and (:type is null or n.type = :type)"
             + " and (:keyword is null or n.content like :keyword)"
+            + " and (:entityId is null or exists (select 1 from MemoryNodeEntity r"
+            + " where r.nodeId = n.id and r.entityId = :entityId))"
             + " order by n.updatedAt desc")
     Page<MemoryNode> search(@Param("agentId") Long agentId, @Param("type") String type,
-                            @Param("keyword") String keyword, Pageable pageable);
+                            @Param("keyword") String keyword, @Param("entityId") Long entityId,
+                            Pageable pageable);
 
     @Modifying
     @Query("update MemoryNode n set n.lastAccessedAt = :ts where n.id in :ids")

@@ -27,4 +27,7 @@ public interface MemoryNodeEntityRepository extends JpaRepository<MemoryNodeEnti
 
     @Query("select count(r) > 0 from MemoryNodeEntity r where r.entityId = :entityId")
     boolean existsByEntityId(@Param("entityId") Long entityId);
+
+    @Query("select r.entityId, count(r) from MemoryNodeEntity r where r.agentId = :agentId group by r.entityId")
+    List<Object[]> countByEntityForAgent(@Param("agentId") Long agentId);
 }

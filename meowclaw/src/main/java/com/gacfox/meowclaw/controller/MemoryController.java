@@ -1,6 +1,8 @@
 package com.gacfox.meowclaw.controller;
 
 import com.gacfox.meowclaw.dto.CreateMemoryRequest;
+import com.gacfox.meowclaw.dto.MemoryEntityDTO;
+import com.gacfox.meowclaw.dto.MemoryGraphDTO;
 import com.gacfox.meowclaw.dto.MemoryNodeDTO;
 import com.gacfox.meowclaw.dto.UpdateMemoryRequest;
 import com.gacfox.meowclaw.service.MemoryService;
@@ -18,6 +20,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.List;
+
 @RestController
 @RequestMapping("/api/memory")
 public class MemoryController {
@@ -32,9 +36,27 @@ public class MemoryController {
     public ApiResult<Pagination<MemoryNodeDTO>> list(@RequestParam Long agentId,
                                                      @RequestParam(required = false) String type,
                                                      @RequestParam(required = false) String keyword,
+                                                     @RequestParam(required = false) Long entityId,
                                                      @RequestParam(defaultValue = "1") int page,
                                                      @RequestParam(defaultValue = "20") int size) {
-        return ApiResult.success(memoryService.list(agentId, type, keyword, page, size));
+        return ApiResult.success(memoryService.list(agentId, type, keyword, entityId, page, size));
+    }
+
+    @GetMapping("/recall-preview")
+    public ApiResult<List<MemoryNodeDTO>> recallPreview(@RequestParam Long agentId,
+                                                        @RequestParam String query,
+                                                        @RequestParam(required = false) Integer limit) {
+        return ApiResult.success(memoryService.recallPreview(agentId, query, limit));
+    }
+
+    @GetMapping("/entities")
+    public ApiResult<List<MemoryEntityDTO>> listEntities(@RequestParam Long agentId) {
+        return ApiResult.success(memoryService.listEntities(agentId));
+    }
+
+    @GetMapping("/graph")
+    public ApiResult<MemoryGraphDTO> graph(@RequestParam Long agentId) {
+        return ApiResult.success(memoryService.graph(agentId));
     }
 
     @PostMapping
