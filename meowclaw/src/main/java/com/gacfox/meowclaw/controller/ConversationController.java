@@ -122,6 +122,16 @@ public class ConversationController {
         return chatService.chat(id, req.getContent(), req.getImages());
     }
 
+    @GetMapping(value = "/{id}/watch", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    public Flux<ChatEventDTO> watch(@PathVariable Long id) {
+        return chatService.watch(id);
+    }
+
+    @GetMapping("/running-ids")
+    public ApiResult<List<Long>> runningIds() {
+        return ApiResult.success(chatService.runningConversationIds());
+    }
+
     @GetMapping("/{id}/title-wait")
     public DeferredResult<ApiResult<Map<String, String>>> waitTitle(@PathVariable Long id) {
         DeferredResult<ApiResult<Map<String, String>>> result = new DeferredResult<>(TITLE_WAIT_TIMEOUT_MS);

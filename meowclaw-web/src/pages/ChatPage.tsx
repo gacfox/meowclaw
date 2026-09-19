@@ -3,7 +3,7 @@ import { useSearchParams } from "react-router-dom";
 import type { AgentDTO, ConversationDTO, ChatEventBatchDTO, ChatEventDTO, PageResult, LlmDTO } from "@/types";
 import { listAgents } from "@/services/agent";
 import { listLlms } from "@/services/llm";
-import { listConversations, createConversation, getConversation, deleteConversation, renameConversation, listBatches, chatStream, truncateAfterBatch, waitForTitle } from "@/services/conversation";
+import { listConversations, createConversation, getConversation, deleteConversation, renameConversation, listBatches, chatStream, watchStream, listRunningConversations, truncateAfterBatch, waitForTitle } from "@/services/conversation";
 import { useAuthStore } from "@/stores/auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -206,7 +206,6 @@ export function ChatPage() {
   const [loadingBatches, setLoadingBatches] = useState(false);
 
   const [input, setInput] = useState("");
-  const [sending, setSending] = useState(false);
   const [generatingTitleId, setGeneratingTitleId] = useState<number | null>(null);
   const [optimisticContent, setOptimisticContent] = useState<string | null>(null);
   const [optimisticImages, setOptimisticImages] = useState<string[]>([]);
@@ -216,6 +215,7 @@ export function ChatPage() {
   const [streamSteps, setStreamSteps] = useState<StreamStep[]>([]);
   const [streamError, setStreamError] = useState<string | null>(null);
   const [streamConvoId, setStreamConvoId] = useState<number | null>(null);
+  const [runningConvoIds, setRunningConvoIds] = useState<Set<number>>(new Set());
   const [contextStatusMap, setContextStatusMap] = useState<Record<number, "NORMAL" | "LOW" | "VERY_LOW">>({});
   const [dismissedStatusMap, setDismissedStatusMap] = useState<Record<number, boolean>>({});
   const [deleteTargetId, setDeleteTargetId] = useState<number | null>(null);
@@ -231,16 +231,23 @@ export function ChatPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const editTextareaRef = useRef<HTMLTextAreaElement>(null);
   const selectedConvoIdRef = useRef<number | null>(null);
+  const streamConvoIdRef = useRef<number | null>(null);
 
   useEffect(() => {
     selectedConvoIdRef.current = selectedConvoId;
   }, [selectedConvoId]);
+
+  useEffect(() => {
+    streamConvoIdRef.current = streamConvoId;
+  }, [streamConvoId]);
 
   const currentConvo = conversations.find((c) => c.id === selectedConvoId);
   const currentAgent = currentConvo ? agents.find((a) => a.id === currentConvo.agentId) : null;
   const canVision = currentAgent
     ? (llms.find((l) => l.id === currentAgent.llmId)?.capabilities ?? "").split(",").map((s) => s.trim()).includes("vision")
     : false;
+  const isCurrentConvoRunning = selectedConvoId != null
+    && (streamConvoId === selectedConvoId || runningConvoIds.has(selectedConvoId));
 
   useEffect(() => {
     listAgents().then((list) => {
@@ -252,6 +259,97 @@ export function ChatPage() {
     });
     listLlms().then(setLlms).catch(() => {});
   }, []);
+
+  const refreshRunningConversations = useCallback(async () => {
+    try {
+      const ids = await listRunningConversations();
+      const merged = new Set(ids);
+      const attached = streamConvoIdRef.current;
+      if (attached != null) merged.add(attached);
+      setRunningConvoIds(merged);
+    } catch { /* 忽略轮询失败 */ }
+  }, []);
+
+  useEffect(() => {
+    refreshRunningConversations();
+  }, [refreshRunningConversations]);
+
+  useEffect(() => {
+    if (runningConvoIds.size === 0) return;
+    const timer = setInterval(refreshRunningConversations, 3000);
+    return () => clearInterval(timer);
+  }, [runningConvoIds.size > 0, refreshRunningConversations]);
+
+  const consumeEventStream = async (convoId: number, stream: ReadableStream<Uint8Array>) => {
+    const reader = stream.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split("\n");
+      buffer = lines.pop() ?? "";
+      for (const line of lines) {
+        if (line.startsWith("data:")) {
+          const jsonStr = line.slice(5).trim();
+          if (!jsonStr || jsonStr === "[DONE]") continue;
+          try {
+            handleStreamEvent(convoId, JSON.parse(jsonStr) as ChatEventDTO);
+          } catch { /* 跳过无法解析的行 */ }
+        }
+      }
+    }
+  };
+
+  const finishStream = (convoId: number) => {
+    if (streamConvoIdRef.current === convoId) {
+      setStreamConvoId(null);
+      setOptimisticContent(null);
+      setOptimisticImages([]);
+      setStreamContent("");
+      setStreamSteps([]);
+      setStreamError(null);
+    }
+    listBatches(convoId).then((newBatches) => {
+      if (selectedConvoIdRef.current === convoId) {
+        setBatches(newBatches);
+      }
+    });
+    refreshRunningConversations();
+    setGeneratingTitleId(convoId);
+    waitForTitle(convoId).then((title) => {
+      setGeneratingTitleId(null);
+      if (title) {
+        setConversations((prev) =>
+          prev.map((c) => (c.id === convoId ? { ...c, title } : c))
+        );
+      }
+    });
+  };
+
+  const attachWatch = async (convoId: number, runningBatch?: ChatEventBatchDTO) => {
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+    setStreamConvoId(convoId);
+    setStreamContent("");
+    setStreamSteps([]);
+    setStreamError(null);
+    if (runningBatch) {
+      setOptimisticContent(runningBatch.userContent);
+      setOptimisticImages((runningBatch.attachments ?? []).map((a) => a.url));
+    }
+    try {
+      const stream = await watchStream(convoId, controller.signal);
+      await consumeEventStream(convoId, stream);
+    } catch (e: unknown) {
+      if (e instanceof DOMException && e.name === "AbortError") return;
+    }
+    if (streamConvoIdRef.current === convoId) {
+      finishStream(convoId);
+    }
+  };
 
   useEffect(() => {
     const el = editTextareaRef.current;
@@ -301,13 +399,28 @@ export function ChatPage() {
   }, [selectedAgentId]);
 
   useEffect(() => {
+    abortRef.current?.abort();
+    setStreamConvoId(null);
+    setOptimisticContent(null);
+    setOptimisticImages([]);
+    setStreamContent("");
+    setStreamSteps([]);
+    setStreamError(null);
     if (!selectedConvoId) {
       setBatches([]);
       return;
     }
+    const convoId = selectedConvoId;
     setLoadingBatches(true);
-    listBatches(selectedConvoId)
-      .then(setBatches)
+    listBatches(convoId)
+      .then((loaded) => {
+        setBatches(loaded);
+        const runningBatch = loaded.find((b) => b.status === "RUNNING");
+        if (runningBatch) {
+          setRunningConvoIds((prev) => new Set(prev).add(convoId));
+          attachWatch(convoId, runningBatch);
+        }
+      })
       .finally(() => setLoadingBatches(false));
   }, [selectedConvoId]);
 
@@ -399,13 +512,13 @@ export function ChatPage() {
   };
 
   const handleEdit = (batch: ChatEventBatchDTO) => {
-    if (sending) return;
+    if (isCurrentConvoRunning) return;
     setEditingBatchId(batch.id);
     setEditDraft(batch.userContent);
   };
 
   const confirmEdit = async () => {
-    if (!selectedConvoId || !editingBatchId || !editDraft.trim()) return;
+    if (!selectedConvoId || !editingBatchId || !editDraft.trim() || isCurrentConvoRunning) return;
     const content = editDraft.trim();
     const batchId = editingBatchId;
     setEditingBatchId(null);
@@ -421,7 +534,7 @@ export function ChatPage() {
   };
 
   const handleRegenerate = async (batch: ChatEventBatchDTO) => {
-    if (!selectedConvoId || sending) return;
+    if (!selectedConvoId || isCurrentConvoRunning) return;
     const content = batch.userContent;
     abortRef.current?.abort();
     await truncateAfterBatch(selectedConvoId, batch.id, true);
@@ -430,78 +543,27 @@ export function ChatPage() {
   };
 
   const triggerChat = async (content: string, images: string[] = []) => {
-    if (!selectedConvoId || sending) return;
+    if (!selectedConvoId || streamConvoId === selectedConvoId || runningConvoIds.has(selectedConvoId)) return;
     const chatConvoId = selectedConvoId;
     setStreamConvoId(chatConvoId);
-    setSending(true);
     setOptimisticContent(content);
     setOptimisticImages(images);
     setStreamContent("");
     setStreamSteps([]);
     setStreamError(null);
+    setRunningConvoIds((prev) => new Set(prev).add(chatConvoId));
 
     try {
       const controller = new AbortController();
       abortRef.current = controller;
       const stream = await chatStream(chatConvoId, content, images, controller.signal);
-
-      const reader = stream.getReader();
-      const decoder = new TextDecoder();
-      let buffer = "";
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split("\n");
-        buffer = lines.pop() ?? "";
-
-        for (const line of lines) {
-          if (line.startsWith("data:")) {
-            const jsonStr = line.slice(5).trim();
-            if (!jsonStr || jsonStr === "[DONE]") continue;
-            try {
-              const event: ChatEventDTO = JSON.parse(jsonStr);
-              handleStreamEvent(chatConvoId, event);
-            } catch { /* skip malformed */ }
-          }
-        }
-      }
+      await consumeEventStream(chatConvoId, stream);
     } catch (e: unknown) {
       if (e instanceof DOMException && e.name === "AbortError") return;
       setStreamError(e instanceof Error ? e.message : "发送失败");
-    } finally {
-      setSending(false);
-      listBatches(chatConvoId).then((newBatches) => {
-        if (selectedConvoIdRef.current === chatConvoId) {
-          setBatches(newBatches);
-        }
-        setOptimisticContent(null);
-        setOptimisticImages([]);
-        setStreamContent("");
-        setStreamSteps([]);
-        setStreamError(null);
-        setStreamConvoId(null);
-      });
-      const wasFirstBatch = !currentConvo?.title;
-      if (wasFirstBatch) {
-        setGeneratingTitleId(chatConvoId);
-        waitForTitle(chatConvoId).then((title) => {
-          setGeneratingTitleId(null);
-          if (title) {
-            setConversations((prev) =>
-              prev.map((c) => (c.id === chatConvoId ? { ...c, title } : c))
-            );
-          }
-        });
-      } else {
-        getConversation(chatConvoId).then((updated) => {
-          setConversations((prev) =>
-            prev.map((c) => (c.id === chatConvoId ? updated : c))
-          );
-        });
-      }
     }
+    if (streamConvoIdRef.current !== chatConvoId) return;
+    finishStream(chatConvoId);
   };
 
   const MAX_PENDING_IMAGES = 5;
@@ -537,7 +599,7 @@ export function ChatPage() {
   };
 
   const handleSend = () => {
-    if ((!input.trim() && pendingImages.length === 0) || !selectedConvoId || sending) return;
+    if ((!input.trim() && pendingImages.length === 0) || !selectedConvoId || isCurrentConvoRunning) return;
     const content = input.trim();
     const images = pendingImages.map((p) => p.dataUrl);
     setInput("");
@@ -634,7 +696,7 @@ export function ChatPage() {
 
         <div className="flex-1 overflow-y-auto" ref={convoListRef} onScroll={handleConvoScroll}>
           {conversations.map((convo) => {
-            const titleBusy = !convo.title && ((sending && streamConvoId === convo.id) || generatingTitleId === convo.id);
+            const convoBusy = runningConvoIds.has(convo.id) || (!convo.title && generatingTitleId === convo.id);
             const renaming = renamingId === convo.id;
             return (
             <div
@@ -658,8 +720,8 @@ export function ChatPage() {
               ) : (
                 <>
                   <span className="flex-1 truncate">{convo.title ?? "新对话"}</span>
-                  {titleBusy && <Loader2 className="size-3 shrink-0 animate-spin text-muted-foreground" />}
-                  {!titleBusy && (
+                  {convoBusy && <Loader2 className="size-3 shrink-0 animate-spin text-muted-foreground" />}
+                  {!convoBusy && (
                     <Button
                       variant="ghost"
                       size="icon-xs"
@@ -733,7 +795,7 @@ export function ChatPage() {
                       </AnimatePresence>
                     );
                   })()}
-                  {batches.filter((batch) => !(streamConvoId === selectedConvoId && sending && batch.status === "RUNNING")).map((batch) => {
+                  {batches.filter((batch) => !(streamConvoId === selectedConvoId && batch.status === "RUNNING")).map((batch) => {
                     if (batch.type === "CONTEXT_COMPACTION") {
                       const notice = batch.events.find((event) => event.type === "context_compression")?.content;
                       return (
@@ -832,7 +894,7 @@ export function ChatPage() {
                             </Tooltip>
                             <Tooltip>
                               <TooltipTrigger asChild>
-                                <Button variant="ghost" size="icon-xs" onClick={() => handleRegenerate(batch)} disabled={sending}>
+                                <Button variant="ghost" size="icon-xs" onClick={() => handleRegenerate(batch)} disabled={isCurrentConvoRunning}>
                                   <RefreshCw className="size-3" />
                                 </Button>
                               </TooltipTrigger>
@@ -892,13 +954,13 @@ export function ChatPage() {
                   )}
 
                   {/* Streaming agent response */}
-                  {streamConvoId === selectedConvoId && (sending || streamContent || streamError || streamSteps.length > 0) && (
+                  {streamConvoId === selectedConvoId && (
                     <div className="flex items-start justify-start gap-2">
                       <Avatar className="mt-0.5 size-7 shrink-0">
                         <AvatarImage src={currentAgent?.avatarUrl ?? undefined} />
                         <AvatarFallback className="text-xs">{currentAgent?.name?.[0]?.toUpperCase() ?? "A"}</AvatarFallback>
                       </Avatar>
-                      <StreamBubble steps={streamSteps} content={streamContent} thinking={sending && !streamContent && !streamError && streamSteps.length === 0} />
+                      <StreamBubble steps={streamSteps} content={streamContent} thinking={!streamContent && !streamError && streamSteps.length === 0} />
                       {streamError && <div className="text-destructive">{streamError}</div>}
                     </div>
                   )}
@@ -941,7 +1003,7 @@ export function ChatPage() {
                         <Button
                           variant="outline"
                           size="icon"
-                          disabled={!canVision || sending}
+                          disabled={!canVision || isCurrentConvoRunning}
                           onClick={() => fileInputRef.current?.click()}
                         >
                           <ImagePlus className="size-4" />
@@ -954,12 +1016,12 @@ export function ChatPage() {
                     value={input}
                     onChange={(e) => setInput(e.target.value)}
                     onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
-                    placeholder="输入消息..."
-                    disabled={sending}
+                    placeholder={isCurrentConvoRunning ? "正在执行中..." : "输入消息..."}
+                    disabled={isCurrentConvoRunning}
                     className="flex-1"
                   />
-                  <Button onClick={handleSend} disabled={sending || (!input.trim() && pendingImages.length === 0)}>
-                    {sending ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}
+                  <Button onClick={handleSend} disabled={isCurrentConvoRunning || (!input.trim() && pendingImages.length === 0)}>
+                    {isCurrentConvoRunning ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}
                   </Button>
                 </div>
               </div>

@@ -32,8 +32,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
-import reactor.core.publisher.FluxSink;
 import reactor.core.publisher.Mono;
+import reactor.core.publisher.Sinks;
 import reactor.core.scheduler.Schedulers;
 import reactor.netty.http.client.HttpClient;
 
@@ -43,6 +43,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
@@ -99,68 +100,100 @@ public class ChatService {
         this.memoryService = memoryService;
     }
 
+    private final Map<Long, Sinks.Many<ChatEventDTO>> activeRuns = new ConcurrentHashMap<>();
+
     public Flux<ChatEventDTO> chat(Long conversationId, String userContent, List<String> images) {
-        return Flux.<ChatEventDTO>create(sink -> {
-            try {
-                boolean hasImages = images != null && !images.isEmpty();
-                if ((userContent == null || userContent.isBlank()) && !hasImages) {
-                    throw new IllegalArgumentException("消息内容不能为空");
-                }
-                Conversation conv = conversationService.getById(conversationId);
-                Agent agent = agentRepository.findById(conv.getAgentId())
-                        .orElseThrow(() -> new IllegalArgumentException("智能体不存在"));
-                Llm llm = llmRepository.findById(agent.getLlmId())
-                        .orElseThrow(() -> new IllegalArgumentException("LLM配置不存在"));
-                Llm secondaryLlm = llmRepository.findById(agent.getSecondaryLlmId())
-                        .orElseThrow(() -> new IllegalArgumentException("辅助LLM配置不存在"));
-                if (hasImages && !hasVisionCapability(llm)) {
-                    throw new IllegalArgumentException("当前模型不支持图片输入");
-                }
+        Sinks.Many<ChatEventDTO> runSink = Sinks.many().replay().all();
+        if (activeRuns.putIfAbsent(conversationId, runSink) != null) {
+            return Flux.just(ChatEventDTO.builder()
+                    .type("error").content("当前会话正在执行中，请稍后再试").build());
+        }
+        Schedulers.boundedElastic().schedule(() -> startChat(conversationId, userContent, images, runSink));
+        return runSink.asFlux();
+    }
 
-                tryProactiveCompression(conversationId, secondaryLlm, sink);
+    /**
+     * 订阅指定会话正在执行中的事件流，用于刷新或切换会话后重连；会话未在执行时返回空流
+     */
+    public Flux<ChatEventDTO> watch(Long conversationId) {
+        Sinks.Many<ChatEventDTO> runSink = activeRuns.get(conversationId);
+        return runSink != null ? runSink.asFlux() : Flux.empty();
+    }
 
-                List<ChatAttachmentDTO> attachments = chatAttachmentService.store(images);
-                String attachmentsJson = attachments.isEmpty() ? null
-                        : OBJECT_MAPPER.writeValueAsString(attachments);
-                ChatEventBatch batch = chatPersistenceService.createBatch(
-                        conversationId, userContent == null ? "" : userContent, attachmentsJson);
-                Long batchId = batch.getId();
+    /**
+     * 当前正在执行中的会话ID列表
+     */
+    public List<Long> runningConversationIds() {
+        return List.copyOf(activeRuns.keySet());
+    }
 
-                TokenUsageAccumulator tokenAccum = new TokenUsageAccumulator();
-                LlmClient llmClient = buildMainLlmClient(llm, batchId, conv, tokenAccum);
-                LlmClient secondaryLlmClient = buildAuxiliaryLlmClient(secondaryLlm, batchId, conv);
-
-                List<String> toolNames = new ArrayList<>(parseJsonArray(agent.getEnabledTools()));
-                toolNames.addAll(parseJsonArray(agent.getEnabledMcpTools()));
-                toolNames.removeIf(name -> {
-                    if (toolRegistry.getAgenticTool(name) == null) {
-                        log.warn("工具未注册，已从启用列表忽略: {}", name);
-                        return true;
-                    }
-                    return false;
-                });
-                ReActAgentExecutor executor = buildExecutor(llmClient, toolNames);
-
-                AgentContext context = buildAgentContext(agent, conv, llm, userContent, images, toolNames, llmClient);
-                boolean isFirstBatch = conv.getTitle() == null || conv.getTitle().isBlank();
-
-                executeAgent(context, executor, batchId, conversationId,
-                        userContent == null ? "" : userContent, llm, secondaryLlm, secondaryLlmClient, tokenAccum, isFirstBatch, sink);
-            } catch (Exception e) {
-                sink.error(e);
+    private void startChat(Long conversationId, String userContent, List<String> images,
+                           Sinks.Many<ChatEventDTO> runSink) {
+        Long batchId = null;
+        try {
+            boolean hasImages = images != null && !images.isEmpty();
+            if ((userContent == null || userContent.isBlank()) && !hasImages) {
+                throw new IllegalArgumentException("消息内容不能为空");
             }
-        }).subscribeOn(Schedulers.boundedElastic());
+            Conversation conv = conversationService.getById(conversationId);
+            Agent agent = agentRepository.findById(conv.getAgentId())
+                    .orElseThrow(() -> new IllegalArgumentException("智能体不存在"));
+            Llm llm = llmRepository.findById(agent.getLlmId())
+                    .orElseThrow(() -> new IllegalArgumentException("LLM配置不存在"));
+            Llm secondaryLlm = llmRepository.findById(agent.getSecondaryLlmId())
+                    .orElseThrow(() -> new IllegalArgumentException("辅助LLM配置不存在"));
+            if (hasImages && !hasVisionCapability(llm)) {
+                throw new IllegalArgumentException("当前模型不支持图片输入");
+            }
+
+            tryProactiveCompression(conversationId, secondaryLlm, runSink);
+
+            List<ChatAttachmentDTO> attachments = chatAttachmentService.store(images);
+            String attachmentsJson = attachments.isEmpty() ? null
+                    : OBJECT_MAPPER.writeValueAsString(attachments);
+            ChatEventBatch batch = chatPersistenceService.createBatch(
+                    conversationId, userContent == null ? "" : userContent, attachmentsJson);
+            batchId = batch.getId();
+
+            TokenUsageAccumulator tokenAccum = new TokenUsageAccumulator();
+            LlmClient llmClient = buildMainLlmClient(llm, batchId, conv, tokenAccum);
+            LlmClient secondaryLlmClient = buildAuxiliaryLlmClient(secondaryLlm, batchId, conv);
+
+            List<String> toolNames = new ArrayList<>(parseJsonArray(agent.getEnabledTools()));
+            toolNames.addAll(parseJsonArray(agent.getEnabledMcpTools()));
+            toolNames.removeIf(name -> {
+                if (toolRegistry.getAgenticTool(name) == null) {
+                    log.warn("工具未注册，已从启用列表忽略: {}", name);
+                    return true;
+                }
+                return false;
+            });
+            ReActAgentExecutor executor = buildExecutor(llmClient, toolNames);
+
+            AgentContext context = buildAgentContext(agent, conv, llm, userContent, images, toolNames, llmClient);
+            boolean isFirstBatch = conv.getTitle() == null || conv.getTitle().isBlank();
+
+            executeAgent(context, executor, batchId, conversationId,
+                    userContent == null ? "" : userContent, llm, secondaryLlm, secondaryLlmClient, tokenAccum, isFirstBatch, runSink);
+        } catch (Exception e) {
+            log.error("Chat execution failed for conversation {}", conversationId, e);
+            if (batchId != null) {
+                chatPersistenceService.failBatch(batchId, e.getMessage());
+            }
+            runSink.tryEmitError(e);
+            activeRuns.remove(conversationId);
+        }
     }
 
     private void tryProactiveCompression(Long conversationId, Llm llm,
-                                         reactor.core.publisher.FluxSink<ChatEventDTO> sink) {
+                                         Sinks.Many<ChatEventDTO> sink) {
         if (!"VERY_LOW".equals(conversationService.getContextStatus(conversationId))) {
             return;
         }
         try {
             if (contextCompressionService.proactivelyCompress(conversationId, llm,
                     conversationService.getContextPromptTokens(conversationId))) {
-                sink.next(ChatEventDTO.builder().type("context_compression")
+                sink.tryEmitNext(ChatEventDTO.builder().type("context_compression")
                         .content("系统已进行主动上下文压缩，以继续执行当前任务。").build());
             }
         } catch (Exception compressionError) {
@@ -278,7 +311,7 @@ public class ChatService {
                               String userContent,
                               Llm llm, Llm secondaryLlm, LlmClient secondaryLlmClient,
                               TokenUsageAccumulator tokenAccum, boolean isFirstBatch,
-                              FluxSink<ChatEventDTO> sink) {
+                              Sinks.Many<ChatEventDTO> sink) {
         int messageCountBefore = context.getMessages().size();
         AtomicInteger eventOrder = new AtomicInteger(0);
         AtomicReference<String> firstFinalAnswer = new AtomicReference<>();
@@ -359,7 +392,7 @@ public class ChatService {
                         }
                     }
                     conversationService.updateContextHealth(conversationId, promptTokens, contextLength, contextStatus);
-                    sink.next(ChatEventDTO.builder().type("context_status").content(contextStatus).build());
+                    sink.tryEmitNext(ChatEventDTO.builder().type("context_status").content(contextStatus).build());
                     try {
                         contextCompressionService.afterBatch(conversationId, batchId, secondaryLlm);
                     } catch (Exception recapError) {
@@ -383,7 +416,15 @@ public class ChatService {
                     log.error("Chat execution error for conversation {}", conversationId, e);
                     chatPersistenceService.failBatch(batchId, e.getMessage());
                 })
-                .subscribe(sink::next, sink::error, sink::complete);
+                .subscribe(sink::tryEmitNext,
+                        e -> {
+                            sink.tryEmitError(e);
+                            activeRuns.remove(conversationId);
+                        },
+                        () -> {
+                            sink.tryEmitComplete();
+                            activeRuns.remove(conversationId);
+                        });
     }
 
     private ModelInfo buildModelInfo(Llm llm) {

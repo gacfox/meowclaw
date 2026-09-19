@@ -54,6 +54,21 @@ export async function chatStream(conversationId: number, content: string, images
   return res.body!;
 }
 
+export async function watchStream(conversationId: number, signal?: AbortSignal): Promise<ReadableStream<Uint8Array>> {
+  const token = getToken();
+  const headers: Record<string, string> = {};
+  if (token) {
+    headers["Authorization"] = `Bearer ${token}`;
+  }
+  const res = await fetch(`/api/conversation/${conversationId}/watch`, { headers, signal });
+  return res.body!;
+}
+
+export async function listRunningConversations(): Promise<number[]> {
+  const res = await request<number[]>("/api/conversation/running-ids");
+  return res.data;
+}
+
 export async function truncateAfterBatch(conversationId: number, batchId: number, includeSelf = false) {
   return request(`/api/conversation/${conversationId}/batch/${batchId}/truncate?includeSelf=${includeSelf}`, {
     method: "DELETE",
