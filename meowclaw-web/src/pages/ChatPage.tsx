@@ -215,6 +215,7 @@ export function ChatPage() {
   const [streamContent, setStreamContent] = useState("");
   const [streamSteps, setStreamSteps] = useState<StreamStep[]>([]);
   const [streamError, setStreamError] = useState<string | null>(null);
+  const [streamConvoId, setStreamConvoId] = useState<number | null>(null);
   const [contextStatusMap, setContextStatusMap] = useState<Record<number, "NORMAL" | "LOW" | "VERY_LOW">>({});
   const [dismissedStatusMap, setDismissedStatusMap] = useState<Record<number, boolean>>({});
   const [deleteTargetId, setDeleteTargetId] = useState<number | null>(null);
@@ -229,6 +230,11 @@ export function ChatPage() {
   const abortRef = useRef<AbortController | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const editTextareaRef = useRef<HTMLTextAreaElement>(null);
+  const selectedConvoIdRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    selectedConvoIdRef.current = selectedConvoId;
+  }, [selectedConvoId]);
 
   const currentConvo = conversations.find((c) => c.id === selectedConvoId);
   const currentAgent = currentConvo ? agents.find((a) => a.id === currentConvo.agentId) : null;
@@ -425,6 +431,8 @@ export function ChatPage() {
 
   const triggerChat = async (content: string, images: string[] = []) => {
     if (!selectedConvoId || sending) return;
+    const chatConvoId = selectedConvoId;
+    setStreamConvoId(chatConvoId);
     setSending(true);
     setOptimisticContent(content);
     setOptimisticImages(images);
@@ -435,7 +443,7 @@ export function ChatPage() {
     try {
       const controller = new AbortController();
       abortRef.current = controller;
-      const stream = await chatStream(selectedConvoId, content, images, controller.signal);
+      const stream = await chatStream(chatConvoId, content, images, controller.signal);
 
       const reader = stream.getReader();
       const decoder = new TextDecoder();
@@ -454,7 +462,7 @@ export function ChatPage() {
             if (!jsonStr || jsonStr === "[DONE]") continue;
             try {
               const event: ChatEventDTO = JSON.parse(jsonStr);
-              handleStreamEvent(event);
+              handleStreamEvent(chatConvoId, event);
             } catch { /* skip malformed */ }
           }
         }
@@ -464,34 +472,34 @@ export function ChatPage() {
       setStreamError(e instanceof Error ? e.message : "发送失败");
     } finally {
       setSending(false);
-      if (selectedConvoId) {
-        const convoId = selectedConvoId;
-        listBatches(convoId).then((newBatches) => {
+      listBatches(chatConvoId).then((newBatches) => {
+        if (selectedConvoIdRef.current === chatConvoId) {
           setBatches(newBatches);
-          setOptimisticContent(null);
-          setOptimisticImages([]);
-          setStreamContent("");
-          setStreamSteps([]);
-          setStreamError(null);
-        });
-        const wasFirstBatch = !currentConvo?.title;
-        if (wasFirstBatch) {
-          setGeneratingTitleId(convoId);
-          waitForTitle(convoId).then((title) => {
-            setGeneratingTitleId(null);
-            if (title) {
-              setConversations((prev) =>
-                prev.map((c) => (c.id === convoId ? { ...c, title } : c))
-              );
-            }
-          });
-        } else {
-          getConversation(convoId).then((updated) => {
-            setConversations((prev) =>
-              prev.map((c) => (c.id === convoId ? updated : c))
-            );
-          });
         }
+        setOptimisticContent(null);
+        setOptimisticImages([]);
+        setStreamContent("");
+        setStreamSteps([]);
+        setStreamError(null);
+        setStreamConvoId(null);
+      });
+      const wasFirstBatch = !currentConvo?.title;
+      if (wasFirstBatch) {
+        setGeneratingTitleId(chatConvoId);
+        waitForTitle(chatConvoId).then((title) => {
+          setGeneratingTitleId(null);
+          if (title) {
+            setConversations((prev) =>
+              prev.map((c) => (c.id === chatConvoId ? { ...c, title } : c))
+            );
+          }
+        });
+      } else {
+        getConversation(chatConvoId).then((updated) => {
+          setConversations((prev) =>
+            prev.map((c) => (c.id === chatConvoId ? updated : c))
+          );
+        });
       }
     }
   };
@@ -537,9 +545,7 @@ export function ChatPage() {
     triggerChat(content, images);
   };
 
-  const handleStreamEvent = (event: ChatEventDTO) => {
-    const convoId = selectedConvoId;
-    if (!convoId) return;
+  const handleStreamEvent = (convoId: number, event: ChatEventDTO) => {
     switch (event.type) {
       case "thinking":
         if (event.content) setStreamSteps((prev) => [...prev, { type: "thinking", content: event.content! }]);
@@ -628,7 +634,7 @@ export function ChatPage() {
 
         <div className="flex-1 overflow-y-auto" ref={convoListRef} onScroll={handleConvoScroll}>
           {conversations.map((convo) => {
-            const titleBusy = !convo.title && ((sending && selectedConvoId === convo.id) || generatingTitleId === convo.id);
+            const titleBusy = !convo.title && ((sending && streamConvoId === convo.id) || generatingTitleId === convo.id);
             const renaming = renamingId === convo.id;
             return (
             <div
@@ -727,7 +733,7 @@ export function ChatPage() {
                       </AnimatePresence>
                     );
                   })()}
-                  {batches.map((batch) => {
+                  {batches.filter((batch) => !(streamConvoId === selectedConvoId && sending && batch.status === "RUNNING")).map((batch) => {
                     if (batch.type === "CONTEXT_COMPACTION") {
                       const notice = batch.events.find((event) => event.type === "context_compression")?.content;
                       return (
@@ -866,7 +872,7 @@ export function ChatPage() {
                   })}
 
                   {/* Optimistic user bubble during streaming */}
-                  {(optimisticContent !== null || optimisticImages.length > 0) && (
+                  {(optimisticContent !== null || optimisticImages.length > 0) && streamConvoId === selectedConvoId && (
                     <div className="flex items-start justify-end gap-2">
                       <div className="max-w-[80%] rounded-lg bg-primary px-4 py-2 text-sm text-primary-foreground">
                         {optimisticImages.length > 0 && (
@@ -886,7 +892,7 @@ export function ChatPage() {
                   )}
 
                   {/* Streaming agent response */}
-                  {(sending || streamContent || streamError || streamSteps.length > 0) && (
+                  {streamConvoId === selectedConvoId && (sending || streamContent || streamError || streamSteps.length > 0) && (
                     <div className="flex items-start justify-start gap-2">
                       <Avatar className="mt-0.5 size-7 shrink-0">
                         <AvatarImage src={currentAgent?.avatarUrl ?? undefined} />
