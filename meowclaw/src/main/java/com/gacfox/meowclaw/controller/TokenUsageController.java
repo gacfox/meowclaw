@@ -1,7 +1,7 @@
 package com.gacfox.meowclaw.controller;
 
 import com.gacfox.meowclaw.dto.TokenStatsDTO;
-import com.gacfox.meowclaw.service.TokenUsageLogService;
+import com.gacfox.meowclaw.service.LlmCallLogService;
 import com.gacfox.proarc.common.model.ApiResult;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -13,11 +13,11 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/tokens")
 public class TokenUsageController {
 
-    private final TokenUsageLogService tokenUsageLogService;
+    private final LlmCallLogService llmCallLogService;
 
     @Autowired
-    public TokenUsageController(TokenUsageLogService tokenUsageLogService) {
-        this.tokenUsageLogService = tokenUsageLogService;
+    public TokenUsageController(LlmCallLogService llmCallLogService) {
+        this.llmCallLogService = llmCallLogService;
     }
 
     /**
@@ -31,6 +31,6 @@ public class TokenUsageController {
     public ApiResult<TokenStatsDTO> stats(@RequestParam long start,
                                           @RequestParam long end,
                                           @RequestParam(required = false) Long llmId) {
-        return ApiResult.success(tokenUsageLogService.stats(start, end, llmId));
+        return ApiResult.success(llmCallLogService.stats(start, end, llmId));
     }
 }

@@ -1,5 +1,5 @@
 import { Link, useLocation } from "react-router-dom";
-import { MessageSquare, Cpu, Database, Sparkles, Clock, Plug, Package, BarChart3, FolderTree, History, Brain } from "lucide-react";
+import { MessageSquare, Cpu, Database, Sparkles, Clock, Plug, Package, BarChart3, FolderTree, History, Brain, Activity } from "lucide-react";
 import {
   Sidebar,
   SidebarContent,
@@ -120,6 +120,14 @@ export function AppSidebar() {
                   <Link to="/tokens">
                     <BarChart3 />
                     <span>tokens 统计</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              <SidebarMenuItem>
+                <SidebarMenuButton tooltip="追踪观测" asChild isActive={location.pathname === "/trace"}>
+                  <Link to="/trace">
+                    <Activity />
+                    <span>追踪观测</span>
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>

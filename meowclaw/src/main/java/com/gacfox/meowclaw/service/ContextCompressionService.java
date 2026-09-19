@@ -10,8 +10,8 @@ import com.gacfox.meowclaw.entity.Llm;
 import com.gacfox.meowclaw.entity.Message;
 import com.gacfox.meowclaw.interceptor.llm.LlmLoggingInterceptor;
 import com.gacfox.meowclaw.interceptor.llm.TokenUsageAccumulator;
+import com.gacfox.meowclaw.interceptor.llm.LlmCallRecordInterceptor;
 import com.gacfox.meowclaw.interceptor.llm.TokenUsageContext;
-import com.gacfox.meowclaw.interceptor.llm.TokenUsageLlmInterceptor;
 import com.gacfox.meowclaw.repository.ChatEventBatchRepository;
 import com.gacfox.meowclaw.repository.ContextRecapRepository;
 import com.gacfox.meowclaw.repository.MessageRepository;
@@ -49,7 +49,7 @@ public class ContextCompressionService {
     private final ContextRecapRepository recapRepository;
     private final MessageRepository messageRepository;
     private final ChatPersistenceService persistenceService;
-    private final TokenUsageLogService tokenUsageLogService;
+    private final LlmCallLogService llmCallLogService;
     private final LlmLoggingInterceptor llmLoggingInterceptor;
     private final ChatAttachmentService chatAttachmentService;
     private final reactor.netty.http.client.HttpClient httpClient;
@@ -61,14 +61,14 @@ public class ContextCompressionService {
 
     public ContextCompressionService(ChatEventBatchRepository batchRepository, ContextRecapRepository recapRepository,
                                      MessageRepository messageRepository, ChatPersistenceService persistenceService,
-                                     TokenUsageLogService tokenUsageLogService, LlmLoggingInterceptor llmLoggingInterceptor,
+                                     LlmCallLogService llmCallLogService, LlmLoggingInterceptor llmLoggingInterceptor,
                                      ChatAttachmentService chatAttachmentService,
                                      reactor.netty.http.client.HttpClient httpClient) {
         this.batchRepository = batchRepository;
         this.recapRepository = recapRepository;
         this.messageRepository = messageRepository;
         this.persistenceService = persistenceService;
-        this.tokenUsageLogService = tokenUsageLogService;
+        this.llmCallLogService = llmCallLogService;
         this.llmLoggingInterceptor = llmLoggingInterceptor;
         this.chatAttachmentService = chatAttachmentService;
         this.httpClient = httpClient;
@@ -215,7 +215,7 @@ public class ContextCompressionService {
 
     private LlmClient buildCompressionLlmClient(Llm llm, Long conversationId, Long batchId) {
         TokenUsageContext tokenUsageContext = new TokenUsageContext(
-                llm.getId(), null, conversationId, batchId, llm.getModel());
+                llm.getId(), null, conversationId, batchId, llm.getModel(), "recap");
         TokenUsageAccumulator tokenAccum = new TokenUsageAccumulator();
         return OpenAiLlmClient.builder()
                 .modelInfo(ModelInfo.builder()
@@ -229,7 +229,7 @@ public class ContextCompressionService {
                         .build())
                 .httpClient(httpClient)
                 .interceptors(List.of(llmLoggingInterceptor,
-                        new TokenUsageLlmInterceptor(tokenAccum, tokenUsageLogService, tokenUsageContext),
+                        new LlmCallRecordInterceptor(tokenAccum, llmCallLogService, tokenUsageContext),
                         new RetryInterceptor()))
                 .build();
     }
@@ -386,7 +386,7 @@ public class ContextCompressionService {
         return value.substring(0, end) + TRUNCATED;
     }
 
-    private List<ChatAttachmentDTO> parseAttachments(String json) {
+    List<ChatAttachmentDTO> parseAttachments(String json) {
         if (json == null || json.isBlank()) return List.of();
         try {
             return OBJECT_MAPPER.readValue(json, new TypeReference<>() {

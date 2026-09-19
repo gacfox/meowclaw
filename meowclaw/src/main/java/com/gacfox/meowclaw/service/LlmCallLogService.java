@@ -4,11 +4,13 @@ import com.gacfox.meowclaw.dto.TokenStatsDTO;
 import com.gacfox.meowclaw.dto.TokenStatsDTO.TokenModelSeries;
 import com.gacfox.meowclaw.dto.TokenStatsDTO.TokenStatsSummary;
 import com.gacfox.meowclaw.dto.TokenStatsDTO.TokenTopModel;
+import com.gacfox.meowclaw.dto.TokenUsageStatsRow;
 import com.gacfox.meowclaw.entity.Llm;
-import com.gacfox.meowclaw.entity.TokenUsageLog;
+import com.gacfox.meowclaw.entity.LlmCallLog;
 import com.gacfox.meowclaw.interceptor.llm.TokenUsageContext;
+import com.gacfox.meowclaw.repository.LlmCallLogRepository;
 import com.gacfox.meowclaw.repository.LlmRepository;
-import com.gacfox.meowclaw.repository.TokenUsageLogRepository;
+import com.gacfox.proarc.agentic.model.openai.ModelResponse;
 import com.gacfox.proarc.agentic.model.openai.Usage;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -25,36 +27,57 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 @Service
-public class TokenUsageLogService {
+public class LlmCallLogService {
 
-    private final TokenUsageLogRepository tokenUsageLogRepository;
+    private static final com.fasterxml.jackson.databind.ObjectMapper OBJECT_MAPPER =
+            new com.fasterxml.jackson.databind.ObjectMapper();
+
+    private final LlmCallLogRepository llmCallLogRepository;
     private final LlmRepository llmRepository;
 
-    public TokenUsageLogService(TokenUsageLogRepository tokenUsageLogRepository, LlmRepository llmRepository) {
-        this.tokenUsageLogRepository = tokenUsageLogRepository;
+    public LlmCallLogService(LlmCallLogRepository llmCallLogRepository, LlmRepository llmRepository) {
+        this.llmCallLogRepository = llmCallLogRepository;
         this.llmRepository = llmRepository;
     }
 
     /**
-     * 记录一次LLM调用的Tokens消耗明细
+     * 记录一次LLM调用的完整明细（tokens、内容、耗时、状态）
      */
     @Transactional
-    public void record(TokenUsageContext ctx, Usage usage) {
-        long input = usage.getPromptTokens() != null ? usage.getPromptTokens() : 0L;
-        long output = usage.getCompletionTokens() != null ? usage.getCompletionTokens() : 0L;
-        long total = usage.getTotalTokens() != null ? usage.getTotalTokens() : input + output;
+    public void recordCall(TokenUsageContext ctx, String requestMessages, ModelResponse response,
+                           long durationMs, String status, String errorMessage) {
+        Usage usage = response != null ? response.getUsage() : null;
+        long input = usage != null && usage.getPromptTokens() != null ? usage.getPromptTokens() : 0L;
+        long output = usage != null && usage.getCompletionTokens() != null ? usage.getCompletionTokens() : 0L;
+        long total = usage != null && usage.getTotalTokens() != null ? usage.getTotalTokens() : input + output;
 
-        TokenUsageLog log = new TokenUsageLog();
+        LlmCallLog log = new LlmCallLog();
         log.setLlmId(ctx.llmId());
         log.setAgentId(ctx.agentId());
         log.setConversationId(ctx.conversationId());
         log.setBatchId(ctx.batchId());
         log.setModel(ctx.model());
+        log.setPurpose(ctx.purpose());
+        log.setRequestMessages(requestMessages);
+        if (response != null) {
+            log.setResponseContent(response.extractBlockingContent());
+            log.setReasoningContent(response.extractBlockingReasoningContent());
+            var toolCalls = response.extractBlockingToolCalls();
+            if (toolCalls != null && !toolCalls.isEmpty()) {
+                try {
+                    log.setResponseToolCalls(OBJECT_MAPPER.writeValueAsString(toolCalls));
+                } catch (Exception ignored) {
+                }
+            }
+        }
         log.setInputTokens(input);
         log.setOutputTokens(output);
         log.setTotalTokens(total);
+        log.setDurationMs(durationMs);
+        log.setStatus(status);
+        log.setErrorMessage(errorMessage);
         log.setCreatedAt(System.currentTimeMillis());
-        tokenUsageLogRepository.save(log);
+        llmCallLogRepository.save(log);
     }
 
     /**
@@ -66,12 +89,12 @@ public class TokenUsageLogService {
      */
     @Transactional(readOnly = true)
     public TokenStatsDTO stats(long start, long end, Long llmId) {
-        List<TokenUsageLog> all = tokenUsageLogRepository.findByCreatedAtBetween(start, end);
+        List<TokenUsageStatsRow> all = llmCallLogRepository.findStatsRows(start, end);
         Map<Long, String> llmNameById = llmRepository.findAll().stream()
                 .collect(Collectors.toMap(Llm::getId, Llm::getName, (a, b) -> a));
 
-        List<TokenUsageLog> scoped = (llmId == null) ? all
-                : all.stream().filter(l -> llmId.equals(l.getLlmId())).toList();
+        List<TokenUsageStatsRow> scoped = (llmId == null) ? all
+                : all.stream().filter(l -> llmId.equals(l.llmId())).toList();
 
         List<String> dates = buildDateList(start, end);
 
@@ -83,11 +106,11 @@ public class TokenUsageLogService {
                 .build();
     }
 
-    private TokenStatsSummary buildSummary(List<TokenUsageLog> rows) {
+    private TokenStatsSummary buildSummary(List<TokenUsageStatsRow> rows) {
         long input = 0, output = 0;
-        for (TokenUsageLog l : rows) {
-            input += l.getInputTokens();
-            output += l.getOutputTokens();
+        for (TokenUsageStatsRow l : rows) {
+            input += l.inputTokens();
+            output += l.outputTokens();
         }
         return TokenStatsSummary.builder()
                 .totalInputTokens(input)
@@ -97,8 +120,8 @@ public class TokenUsageLogService {
                 .build();
     }
 
-    private List<TokenTopModel> buildTopModels(List<TokenUsageLog> all, Map<Long, String> llmNameById) {
-        Map<Long, List<TokenUsageLog>> grouped = groupByLlm(all);
+    private List<TokenTopModel> buildTopModels(List<TokenUsageStatsRow> all, Map<Long, String> llmNameById) {
+        Map<Long, List<TokenUsageStatsRow>> grouped = groupByLlm(all);
         return grouped.entrySet().stream()
                 .map(e -> toTopModel(e.getKey(), e.getValue(), llmNameById))
                 .sorted(Comparator.comparingLong(TokenTopModel::getCallCount).reversed())
@@ -117,8 +140,8 @@ public class TokenUsageLogService {
         return dates;
     }
 
-    private List<TokenModelSeries> buildModelSeries(List<TokenUsageLog> scoped, List<String> dates,
-                                                     Map<Long, String> llmNameById) {
+    private List<TokenModelSeries> buildModelSeries(List<TokenUsageStatsRow> scoped, List<String> dates,
+                                                    Map<Long, String> llmNameById) {
         if (dates.isEmpty()) {
             return List.of();
         }
@@ -130,22 +153,22 @@ public class TokenUsageLogService {
 
         // key=llmId, value=按日累加的[输入,输出,合计,调用量]
         Map<Long, long[][]> accum = new LinkedHashMap<>();
-        for (TokenUsageLog l : scoped) {
+        for (TokenUsageStatsRow l : scoped) {
             int idx = dateIndex.getOrDefault(
-                    Instant.ofEpochMilli(l.getCreatedAt()).atZone(zone).toLocalDate(), -1);
+                    Instant.ofEpochMilli(l.createdAt()).atZone(zone).toLocalDate(), -1);
             if (idx < 0) {
                 continue;
             }
-            long[][] arr = accum.computeIfAbsent(groupKey(l.getLlmId()), k -> new long[4][dates.size()]);
-            arr[0][idx] += l.getInputTokens();
-            arr[1][idx] += l.getOutputTokens();
-            arr[2][idx] += l.getTotalTokens();
+            long[][] arr = accum.computeIfAbsent(groupKey(l.llmId()), k -> new long[4][dates.size()]);
+            arr[0][idx] += l.inputTokens();
+            arr[1][idx] += l.outputTokens();
+            arr[2][idx] += l.totalTokens();
             arr[3][idx] += 1;
         }
 
         Map<Long, String> modelByLlm = scoped.stream()
-                .filter(l -> l.getModel() != null)
-                .collect(Collectors.toMap(l -> groupKey(l.getLlmId()), TokenUsageLog::getModel, (a, b) -> a));
+                .filter(l -> l.model() != null)
+                .collect(Collectors.toMap(l -> groupKey(l.llmId()), TokenUsageStatsRow::model, (a, b) -> a));
 
         return accum.entrySet().stream()
                 .map(e -> {
@@ -170,15 +193,15 @@ public class TokenUsageLogService {
                 .toList();
     }
 
-    private Map<Long, List<TokenUsageLog>> groupByLlm(List<TokenUsageLog> rows) {
+    private Map<Long, List<TokenUsageStatsRow>> groupByLlm(List<TokenUsageStatsRow> rows) {
         return rows.stream().collect(Collectors.groupingBy(
-                l -> groupKey(l.getLlmId()), LinkedHashMap::new, Collectors.toList()));
+                l -> groupKey(l.llmId()), LinkedHashMap::new, Collectors.toList()));
     }
 
-    private TokenTopModel toTopModel(Long llmId, List<TokenUsageLog> rows, Map<Long, String> llmNameById) {
-        long input = rows.stream().mapToLong(TokenUsageLog::getInputTokens).sum();
-        long output = rows.stream().mapToLong(TokenUsageLog::getOutputTokens).sum();
-        String model = rows.get(0).getModel();
+    private TokenTopModel toTopModel(Long llmId, List<TokenUsageStatsRow> rows, Map<Long, String> llmNameById) {
+        long input = rows.stream().mapToLong(TokenUsageStatsRow::inputTokens).sum();
+        long output = rows.stream().mapToLong(TokenUsageStatsRow::outputTokens).sum();
+        String model = rows.get(0).model();
         return TokenTopModel.builder()
                 .llmId(llmId)
                 .llmName(resolveName(llmId, model, llmNameById))

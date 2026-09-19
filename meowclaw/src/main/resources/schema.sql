@@ -175,22 +175,31 @@ CREATE TABLE IF NOT EXISTS mc_skill_package (
     PRIMARY KEY (id)
 );
 
-CREATE TABLE IF NOT EXISTS mc_token_usage_log (
+CREATE TABLE IF NOT EXISTS mc_llm_call_log (
     id BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
     llm_id BIGINT COMMENT '关联LLM配置ID',
     agent_id BIGINT COMMENT '关联智能体ID',
     conversation_id BIGINT COMMENT '关联会话ID',
     batch_id BIGINT COMMENT '关联批次ID',
     model VARCHAR(100) COMMENT '模型名快照(供LLM被删除时回退展示)',
+    purpose VARCHAR(32) COMMENT '调用用途：agent主循环/title标题/recap摘要/memory记忆',
+    request_messages TEXT COMMENT '请求消息列表JSON',
+    response_content TEXT COMMENT '响应内容',
+    response_tool_calls TEXT COMMENT '响应工具调用JSON',
+    reasoning_content TEXT COMMENT '推理内容',
     input_tokens BIGINT NOT NULL DEFAULT 0 COMMENT '输入token数',
     output_tokens BIGINT NOT NULL DEFAULT 0 COMMENT '输出token数',
     total_tokens BIGINT NOT NULL DEFAULT 0 COMMENT '合计token数',
+    duration_ms BIGINT COMMENT '调用耗时(毫秒)',
+    status VARCHAR(20) NOT NULL COMMENT '调用状态：SUCCESS/ERROR',
+    error_message TEXT COMMENT '错误信息',
     created_at BIGINT NOT NULL COMMENT '调用时间(时间戳毫秒)',
     PRIMARY KEY (id)
 );
 
-CREATE INDEX IF NOT EXISTS idx_mc_token_usage_log_llm_id ON mc_token_usage_log(llm_id);
-CREATE INDEX IF NOT EXISTS idx_mc_token_usage_log_created_at ON mc_token_usage_log(created_at);
+CREATE INDEX IF NOT EXISTS idx_mc_llm_call_log_batch_id ON mc_llm_call_log(batch_id);
+CREATE INDEX IF NOT EXISTS idx_mc_llm_call_log_created_at ON mc_llm_call_log(created_at);
+CREATE INDEX IF NOT EXISTS idx_mc_llm_call_log_conversation_id ON mc_llm_call_log(conversation_id);
 
 CREATE TABLE IF NOT EXISTS mc_embedding_model (
     id BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',

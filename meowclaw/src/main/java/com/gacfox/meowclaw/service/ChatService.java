@@ -16,8 +16,8 @@ import com.gacfox.meowclaw.interceptor.agent.AgentLoggingInterceptor;
 import com.gacfox.meowclaw.interceptor.agent.AgentSystemPromptRefreshInterceptor;
 import com.gacfox.meowclaw.interceptor.llm.LlmLoggingInterceptor;
 import com.gacfox.meowclaw.interceptor.llm.TokenUsageAccumulator;
+import com.gacfox.meowclaw.interceptor.llm.LlmCallRecordInterceptor;
 import com.gacfox.meowclaw.interceptor.llm.TokenUsageContext;
-import com.gacfox.meowclaw.interceptor.llm.TokenUsageLlmInterceptor;
 import com.gacfox.proarc.agentic.agent.AgentContext;
 import com.gacfox.proarc.agentic.agent.ReActAgentExecutor;
 import com.gacfox.proarc.agentic.client.LlmClient;
@@ -64,7 +64,7 @@ public class ChatService {
     private final AgentSystemPromptRefreshInterceptor agentSystemPromptRefreshInterceptor;
     private final LlmLoggingInterceptor llmLoggingInterceptor;
     private final TitleGenerationRegistryService titleGenerationRegistryService;
-    private final TokenUsageLogService tokenUsageLogService;
+    private final LlmCallLogService llmCallLogService;
     private final ContextCompressionService contextCompressionService;
     private final ChatAttachmentService chatAttachmentService;
     private final MemoryService memoryService;
@@ -80,7 +80,7 @@ public class ChatService {
                        AgentSystemPromptRefreshInterceptor agentSystemPromptRefreshInterceptor,
                        LlmLoggingInterceptor llmLoggingInterceptor,
                        TitleGenerationRegistryService titleGenerationRegistryService,
-                       TokenUsageLogService tokenUsageLogService,
+                       LlmCallLogService llmCallLogService,
                        ContextCompressionService contextCompressionService,
                        ChatAttachmentService chatAttachmentService,
                        MemoryService memoryService) {
@@ -94,7 +94,7 @@ public class ChatService {
         this.agentSystemPromptRefreshInterceptor = agentSystemPromptRefreshInterceptor;
         this.llmLoggingInterceptor = llmLoggingInterceptor;
         this.titleGenerationRegistryService = titleGenerationRegistryService;
-        this.tokenUsageLogService = tokenUsageLogService;
+        this.llmCallLogService = llmCallLogService;
         this.contextCompressionService = contextCompressionService;
         this.chatAttachmentService = chatAttachmentService;
         this.memoryService = memoryService;
@@ -204,24 +204,24 @@ public class ChatService {
     private LlmClient buildMainLlmClient(Llm llm, Long batchId, Conversation conv,
                                          TokenUsageAccumulator tokenAccum) {
         TokenUsageContext tokenUsageContext = new TokenUsageContext(
-                llm.getId(), conv.getAgentId(), conv.getId(), batchId, llm.getModel());
+                llm.getId(), conv.getAgentId(), conv.getId(), batchId, llm.getModel(), "agent");
         return OpenAiLlmClient.builder()
                 .modelInfo(buildModelInfo(llm))
                 .httpClient(httpClient)
                 .interceptors(List.of(llmLoggingInterceptor,
-                        new TokenUsageLlmInterceptor(tokenAccum, tokenUsageLogService, tokenUsageContext),
+                        new LlmCallRecordInterceptor(tokenAccum, llmCallLogService, tokenUsageContext),
                         new RetryInterceptor()))
                 .build();
     }
 
     private LlmClient buildAuxiliaryLlmClient(Llm llm, Long batchId, Conversation conv) {
         TokenUsageContext tokenUsageContext = new TokenUsageContext(
-                llm.getId(), conv.getAgentId(), conv.getId(), batchId, llm.getModel());
+                llm.getId(), conv.getAgentId(), conv.getId(), batchId, llm.getModel(), "title");
         return OpenAiLlmClient.builder()
                 .modelInfo(buildModelInfo(llm))
                 .httpClient(httpClient)
                 .interceptors(List.of(llmLoggingInterceptor,
-                        new TokenUsageLlmInterceptor(new TokenUsageAccumulator(), tokenUsageLogService, tokenUsageContext),
+                        new LlmCallRecordInterceptor(new TokenUsageAccumulator(), llmCallLogService, tokenUsageContext),
                         new RetryInterceptor()))
                 .build();
     }

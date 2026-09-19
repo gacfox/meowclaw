@@ -12,15 +12,15 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 /**
- * Tokens消耗明细，每次LLM调用一条
+ * LLM调用记录，每次LLM调用一条，同时服务于tokens统计与追踪观测
  */
 @Getter
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
 @Entity
-@Table(name = "mc_token_usage_log")
-public class TokenUsageLog {
+@Table(name = "mc_llm_call_log")
+public class LlmCallLog {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
@@ -40,6 +40,21 @@ public class TokenUsageLog {
     @Column(name = "model", length = 100)
     private String model;
 
+    @Column(name = "purpose", length = 32)
+    private String purpose;
+
+    @Column(name = "request_messages", columnDefinition = "TEXT")
+    private String requestMessages;
+
+    @Column(name = "response_content", columnDefinition = "TEXT")
+    private String responseContent;
+
+    @Column(name = "response_tool_calls", columnDefinition = "TEXT")
+    private String responseToolCalls;
+
+    @Column(name = "reasoning_content", columnDefinition = "TEXT")
+    private String reasoningContent;
+
     @Column(name = "input_tokens", nullable = false)
     private Long inputTokens;
 
@@ -48,6 +63,15 @@ public class TokenUsageLog {
 
     @Column(name = "total_tokens", nullable = false)
     private Long totalTokens;
+
+    @Column(name = "duration_ms")
+    private Long durationMs;
+
+    @Column(name = "status", nullable = false, length = 20)
+    private String status;
+
+    @Column(name = "error_message", columnDefinition = "TEXT")
+    private String errorMessage;
 
     @Column(name = "created_at", nullable = false)
     private Long createdAt;

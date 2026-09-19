@@ -16,6 +16,7 @@ import { ScheduledTaskPage } from "@/pages/ScheduledTaskPage";
 import { McpServicePage } from "@/pages/McpServicePage";
 import { SkillPage } from "@/pages/SkillPage";
 import { TokensStatisticsPage } from "@/pages/TokensStatisticsPage";
+import { TracePage } from "@/pages/TracePage";
 import { WorkspacePage } from "@/pages/WorkspacePage";
 import { HistorySessionsPage } from "@/pages/HistorySessionsPage";
 import { MemoryPage } from "@/pages/MemoryPage";
@@ -126,6 +127,7 @@ function AppRoutes() {
         <Route path="mcp-service" element={<McpServicePage />} />
         <Route path="skill" element={<SkillPage />} />
         <Route path="tokens" element={<TokensStatisticsPage />} />
+        <Route path="trace" element={<TracePage />} />
         <Route path="workspace" element={<WorkspacePage />} />
         <Route path="history-sessions" element={<HistorySessionsPage />} />
       </Route>

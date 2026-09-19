@@ -8,7 +8,7 @@ import com.gacfox.meowclaw.entity.MemoryEntity;
 import com.gacfox.meowclaw.interceptor.llm.LlmLoggingInterceptor;
 import com.gacfox.meowclaw.interceptor.llm.TokenUsageAccumulator;
 import com.gacfox.meowclaw.interceptor.llm.TokenUsageContext;
-import com.gacfox.meowclaw.interceptor.llm.TokenUsageLlmInterceptor;
+import com.gacfox.meowclaw.interceptor.llm.LlmCallRecordInterceptor;
 import com.gacfox.meowclaw.repository.AgentRepository;
 import com.gacfox.meowclaw.repository.LlmRepository;
 import com.gacfox.meowclaw.repository.MemoryEntityRepository;
@@ -50,7 +50,7 @@ public class MemoryExtractionService {
     private final EmbeddingService embeddingService;
     private final HttpClient httpClient;
     private final LlmLoggingInterceptor llmLoggingInterceptor;
-    private final TokenUsageLogService tokenUsageLogService;
+    private final LlmCallLogService llmCallLogService;
 
     @Value("classpath:prompt/memory-write-prompt.md")
     private Resource promptResource;
@@ -65,7 +65,7 @@ public class MemoryExtractionService {
                                    EmbeddingService embeddingService,
                                    HttpClient httpClient,
                                    LlmLoggingInterceptor llmLoggingInterceptor,
-                                   TokenUsageLogService tokenUsageLogService) {
+                                   LlmCallLogService llmCallLogService) {
         this.agentRepository = agentRepository;
         this.llmRepository = llmRepository;
         this.memoryEntityRepository = memoryEntityRepository;
@@ -73,7 +73,7 @@ public class MemoryExtractionService {
         this.embeddingService = embeddingService;
         this.httpClient = httpClient;
         this.llmLoggingInterceptor = llmLoggingInterceptor;
-        this.tokenUsageLogService = tokenUsageLogService;
+        this.llmCallLogService = llmCallLogService;
     }
 
     @PostConstruct
@@ -165,13 +165,13 @@ public class MemoryExtractionService {
                 .capabilities(CapabilityUtil.parse(llm.getCapabilities()))
                 .build();
         TokenUsageContext tokenUsageContext = new TokenUsageContext(
-                llm.getId(), agentId, conversationId, null, llm.getModel());
+                llm.getId(), agentId, conversationId, null, llm.getModel(), "memory");
         return OpenAiLlmClient.builder()
                 .modelInfo(modelInfo)
                 .httpClient(httpClient)
                 .interceptors(List.of(
                         llmLoggingInterceptor,
-                        new TokenUsageLlmInterceptor(new TokenUsageAccumulator(), tokenUsageLogService, tokenUsageContext),
+                        new LlmCallRecordInterceptor(new TokenUsageAccumulator(), llmCallLogService, tokenUsageContext),
                         new RetryInterceptor()))
                 .build();
     }

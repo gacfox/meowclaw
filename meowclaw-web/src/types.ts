@@ -288,3 +288,53 @@ export interface MemoryGraph {
   entities: { id: number; name: string }[];
   relations: { memoryId: number; entityId: number; description: string }[];
 }
+
+export interface TraceItem {
+  batchId: number;
+  conversationId: number;
+  conversationTitle: string | null;
+  agentId: number | null;
+  agentName: string | null;
+  userContent: string;
+  status: string;
+  inputTokens: number | null;
+  outputTokens: number | null;
+  llmCallCount: number;
+  createdAt: number;
+  completedAt: number | null;
+}
+
+export interface LlmCallLogItem {
+  id: number;
+  purpose: string | null;
+  model: string | null;
+  status: string;
+  errorMessage: string | null;
+  inputTokens: number;
+  outputTokens: number;
+  totalTokens: number;
+  durationMs: number | null;
+  requestMessages: string | null;
+  responseContent: string | null;
+  responseToolCalls: string | null;
+  reasoningContent: string | null;
+  createdAt: number;
+}
+
+export interface TraceDetail {
+  batchId: number;
+  conversationId: number;
+  conversationTitle: string | null;
+  agentId: number | null;
+  agentName: string | null;
+  userContent: string;
+  attachments: ChatAttachmentDTO[] | null;
+  status: string;
+  errorMessage: string | null;
+  inputTokens: number | null;
+  outputTokens: number | null;
+  createdAt: number;
+  completedAt: number | null;
+  events: ChatEventDTO[];
+  llmCalls: LlmCallLogItem[];
+}
