@@ -7,6 +7,7 @@ import { listAgents } from "@/services/agent";
 import { listTraces, getTraceDetail, type TraceQuery } from "@/services/trace";
 import type { AgentDTO, LlmCallLogItem, PageResult, TraceDetail, TraceItem } from "@/types";
 import { BatchBubble } from "@/components/chat/ChatEventBubble";
+import { JsonViewer } from "@/components/json-viewer/JsonViewer";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -65,15 +66,6 @@ function formatRange(range?: DateRange): string {
   return `${from} ~ ${format(range.to, "yyyy-MM-dd")}`;
 }
 
-function prettyJson(raw: string | null): string {
-  if (!raw) return "(无)";
-  try {
-    return JSON.stringify(JSON.parse(raw), null, 2);
-  } catch {
-    return raw;
-  }
-}
-
 function LlmCallCard({ call }: { call: LlmCallLogItem }) {
   return (
     <details className="group rounded-lg border text-sm">
@@ -101,10 +93,10 @@ function LlmCallCard({ call }: { call: LlmCallLogItem }) {
             <pre className="mt-1 max-h-64 overflow-auto whitespace-pre-wrap rounded bg-muted p-2">{call.reasoningContent}</pre>
           </details>
         )}
-        <details className="text-xs">
-          <summary className="cursor-pointer text-muted-foreground">请求消息</summary>
-          <pre className="mt-1 max-h-96 overflow-auto whitespace-pre-wrap rounded bg-muted p-2">{prettyJson(call.requestMessages)}</pre>
-        </details>
+        <div className="text-xs">
+          <div className="mb-1 text-muted-foreground">请求消息</div>
+          <JsonViewer raw={call.requestMessages} maxHeightClass="max-h-96" />
+        </div>
         {call.responseContent != null && call.responseContent.trim() !== "" && (
           <div className="text-xs">
             <div className="mb-1 text-muted-foreground">响应内容</div>
@@ -112,10 +104,10 @@ function LlmCallCard({ call }: { call: LlmCallLogItem }) {
           </div>
         )}
         {call.responseToolCalls && (
-          <details className="text-xs">
-            <summary className="cursor-pointer text-muted-foreground">响应工具调用</summary>
-            <pre className="mt-1 max-h-64 overflow-auto whitespace-pre-wrap rounded bg-muted p-2">{prettyJson(call.responseToolCalls)}</pre>
-          </details>
+          <div className="text-xs">
+            <div className="mb-1 text-muted-foreground">响应工具调用</div>
+            <JsonViewer raw={call.responseToolCalls} maxHeightClass="max-h-64" />
+          </div>
         )}
       </div>
     </details>
@@ -363,7 +355,7 @@ export function TracePage() {
       )}
 
       <Sheet open={detail !== null || detailLoading} onOpenChange={(open) => { if (!open) setDetail(null); }}>
-        <SheetContent className="overflow-y-auto px-4 pb-4 sm:max-w-3xl">
+        <SheetContent className="overflow-y-auto px-4 pb-4 data-[side=right]:sm:max-w-5xl">
           {detailLoading && !detail ? (
             <div className="py-16 text-center text-muted-foreground">加载中...</div>
           ) : detail && (
