@@ -314,7 +314,8 @@ export function HistorySessionsPage() {
             <Trash2 className="mr-1 size-4" />
             批量删除
           </Button>
-          <Button variant="outline" onClick={() => setClearAllOpen(true)}>
+          <Button variant="destructive" onClick={() => setClearAllOpen(true)}>
+            <Trash2 className="mr-1 size-4" />
             清空
           </Button>
         </div>
