@@ -122,8 +122,8 @@ MeowClaw内置轻量级的LLM交互追踪能力（类似简化版LangSmith）。
 开始前需要先下载并本地安装项目关联的另一个基础框架，MeowClaw没有使用LangChain4J或SpringAI这类重型框架，而是专门开发了一个轻量级Agent框架`proarc-agentic`。
 
 ```bash
-git clone https://github.com/gacfox/proarc
-cd proarc && mvn clean install
+git clone https://github.com/gacfox/proarc-agentic
+cd proarc-agentic && mvn clean install
 ```
 
 然后构建和运行MeowClaw项目。
