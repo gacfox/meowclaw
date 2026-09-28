@@ -6,7 +6,7 @@ import com.gacfox.meowclaw.dto.InitRequest;
 import com.gacfox.meowclaw.dto.LoginRequest;
 import com.gacfox.meowclaw.dto.UserDTO;
 import com.gacfox.meowclaw.service.UserService;
-import com.gacfox.proarc.common.model.ApiResult;
+import com.gacfox.meowclaw.dto.ApiResult;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.GetMapping;

@@ -65,16 +65,6 @@
         <!-- ProArc Framework -->
         <dependency>
             <groupId>com.gacfox</groupId>
-            <artifactId>proarc-common</artifactId>
-            <version>${proarc.version}</version>
-        </dependency>
-        <dependency>
-            <groupId>com.gacfox</groupId>
-            <artifactId>proarc-kit</artifactId>
-            <version>${proarc.version}</version>
-        </dependency>
-        <dependency>
-            <groupId>com.gacfox</groupId>
             <artifactId>proarc-agentic-spring-boot-starter</artifactId>
             <version>${proarc.version}</version>
         </dependency>

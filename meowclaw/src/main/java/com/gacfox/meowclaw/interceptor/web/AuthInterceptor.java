@@ -3,7 +3,7 @@ package com.gacfox.meowclaw.interceptor.web;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.gacfox.meowclaw.dto.UserDTO;
 import com.gacfox.meowclaw.util.JwtUtil;
-import com.gacfox.proarc.common.model.ApiResult;
+import com.gacfox.meowclaw.dto.ApiResult;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.beans.factory.annotation.Autowired;

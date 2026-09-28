@@ -1,6 +1,6 @@
 package com.gacfox.meowclaw.exception;
 
-import com.gacfox.proarc.common.model.ApiResult;
+import com.gacfox.meowclaw.dto.ApiResult;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.MethodArgumentNotValidException;

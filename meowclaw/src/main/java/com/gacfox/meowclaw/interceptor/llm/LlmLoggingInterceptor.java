@@ -6,7 +6,7 @@ import com.gacfox.proarc.agentic.exception.LlmProviderException;
 import com.gacfox.proarc.agentic.model.openai.ModelInfo;
 import com.gacfox.proarc.agentic.model.openai.ModelRequest;
 import com.gacfox.proarc.agentic.model.openai.ModelResponse;
-import com.gacfox.proarc.kit.JsonUtil;
+import com.gacfox.meowclaw.util.JsonUtil;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Flux;

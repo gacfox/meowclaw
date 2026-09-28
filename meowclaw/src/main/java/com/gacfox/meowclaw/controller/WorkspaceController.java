@@ -6,7 +6,7 @@ import com.gacfox.meowclaw.dto.FileEntryDTO;
 import com.gacfox.meowclaw.dto.MoveRequest;
 import com.gacfox.meowclaw.dto.SaveFileRequest;
 import com.gacfox.meowclaw.service.WorkspaceService;
-import com.gacfox.proarc.common.model.ApiResult;
+import com.gacfox.meowclaw.dto.ApiResult;
 import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;

@@ -12,7 +12,7 @@ import com.gacfox.meowclaw.repository.ChatEventBatchRepository;
 import com.gacfox.meowclaw.repository.ChatEventRepository;
 import com.gacfox.meowclaw.repository.ConversationRepository;
 import com.gacfox.meowclaw.repository.LlmCallLogRepository;
-import com.gacfox.proarc.common.model.Pagination;
+import com.gacfox.meowclaw.dto.Pagination;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;

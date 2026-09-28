@@ -4,7 +4,7 @@ import com.gacfox.meowclaw.dto.AgentDTO;
 import com.gacfox.meowclaw.dto.CreateAgentRequest;
 import com.gacfox.meowclaw.dto.UpdateAgentRequest;
 import com.gacfox.meowclaw.service.AgentService;
-import com.gacfox.proarc.common.model.ApiResult;
+import com.gacfox.meowclaw.dto.ApiResult;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.DeleteMapping;

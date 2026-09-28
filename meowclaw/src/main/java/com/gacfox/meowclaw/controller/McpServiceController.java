@@ -7,7 +7,7 @@ import com.gacfox.meowclaw.dto.McpTestResultDTO;
 import com.gacfox.meowclaw.dto.McpToolDTO;
 import com.gacfox.meowclaw.dto.UpdateMcpServiceRequest;
 import com.gacfox.meowclaw.service.McpService;
-import com.gacfox.proarc.common.model.ApiResult;
+import com.gacfox.meowclaw.dto.ApiResult;
 import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;

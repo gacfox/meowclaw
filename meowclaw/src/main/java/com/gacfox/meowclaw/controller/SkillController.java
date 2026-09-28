@@ -4,7 +4,7 @@ import com.gacfox.meowclaw.dto.SkillInstallRequest;
 import com.gacfox.meowclaw.dto.SkillInstallResultDTO;
 import com.gacfox.meowclaw.dto.SkillPackageDTO;
 import com.gacfox.meowclaw.service.SkillService;
-import com.gacfox.proarc.common.model.ApiResult;
+import com.gacfox.meowclaw.dto.ApiResult;
 import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;

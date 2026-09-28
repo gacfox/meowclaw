@@ -13,7 +13,7 @@ import com.gacfox.meowclaw.repository.MemoryEntityRepository;
 import com.gacfox.meowclaw.repository.MemoryNodeEntityRepository;
 import com.gacfox.meowclaw.repository.MemoryNodeRepository;
 import com.gacfox.meowclaw.util.RrfFusionUtil;
-import com.gacfox.proarc.common.model.Pagination;
+import com.gacfox.meowclaw.dto.Pagination;
 import jakarta.annotation.PreDestroy;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;

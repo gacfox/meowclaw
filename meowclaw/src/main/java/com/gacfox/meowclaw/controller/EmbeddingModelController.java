@@ -6,7 +6,7 @@ import com.gacfox.meowclaw.dto.EmbeddingModelTestRequest;
 import com.gacfox.meowclaw.dto.EmbeddingTestResultDTO;
 import com.gacfox.meowclaw.dto.UpdateEmbeddingModelRequest;
 import com.gacfox.meowclaw.service.EmbeddingModelService;
-import com.gacfox.proarc.common.model.ApiResult;
+import com.gacfox.meowclaw.dto.ApiResult;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.DeleteMapping;

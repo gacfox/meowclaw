@@ -4,7 +4,7 @@ import com.gacfox.meowclaw.dto.CreateLlmRequest;
 import com.gacfox.meowclaw.dto.LlmDTO;
 import com.gacfox.meowclaw.dto.UpdateLlmRequest;
 import com.gacfox.meowclaw.service.LlmService;
-import com.gacfox.proarc.common.model.ApiResult;
+import com.gacfox.meowclaw.dto.ApiResult;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.DeleteMapping;
