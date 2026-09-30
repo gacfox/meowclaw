@@ -44,6 +44,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
@@ -100,24 +101,33 @@ public class ChatService {
         this.memoryService = memoryService;
     }
 
-    private final Map<Long, Sinks.Many<ChatEventDTO>> activeRuns = new ConcurrentHashMap<>();
+    private final Map<Long, ActiveRun> activeRuns = new ConcurrentHashMap<>();
+
+    /**
+     * 进行中的会话执行：事件流与协作式停止入口
+     */
+    private static final class ActiveRun {
+        private final Sinks.Many<ChatEventDTO> sink = Sinks.many().replay().all();
+        private final AtomicBoolean stopRequested = new AtomicBoolean();
+        private volatile AgentContext context;
+    }
 
     public Flux<ChatEventDTO> chat(Long conversationId, String userContent, List<String> images) {
-        Sinks.Many<ChatEventDTO> runSink = Sinks.many().replay().all();
-        if (activeRuns.putIfAbsent(conversationId, runSink) != null) {
+        ActiveRun run = new ActiveRun();
+        if (activeRuns.putIfAbsent(conversationId, run) != null) {
             return Flux.just(ChatEventDTO.builder()
                     .type("error").content("当前会话正在执行中，请稍后再试").build());
         }
-        Schedulers.boundedElastic().schedule(() -> startChat(conversationId, userContent, images, runSink));
-        return runSink.asFlux();
+        Schedulers.boundedElastic().schedule(() -> startChat(conversationId, userContent, images, run));
+        return run.sink.asFlux();
     }
 
     /**
      * 订阅指定会话正在执行中的事件流，用于刷新或切换会话后重连；会话未在执行时返回空流
      */
     public Flux<ChatEventDTO> watch(Long conversationId) {
-        Sinks.Many<ChatEventDTO> runSink = activeRuns.get(conversationId);
-        return runSink != null ? runSink.asFlux() : Flux.empty();
+        ActiveRun run = activeRuns.get(conversationId);
+        return run != null ? run.sink.asFlux() : Flux.empty();
     }
 
     /**
@@ -127,8 +137,27 @@ public class ChatService {
         return List.copyOf(activeRuns.keySet());
     }
 
+    /**
+     * 请求停止指定会话正在执行的批次，当前LLM输出或工具执行结束后尽快终止，已产生的内容正常落库
+     *
+     * @return true表示停止请求已受理，false表示会话未在执行中
+     */
+    public boolean stop(Long conversationId) {
+        ActiveRun run = activeRuns.get(conversationId);
+        if (run == null) {
+            return false;
+        }
+        run.stopRequested.set(true);
+        AgentContext context = run.context;
+        if (context != null) {
+            context.requestStop();
+        }
+        return true;
+    }
+
     private void startChat(Long conversationId, String userContent, List<String> images,
-                           Sinks.Many<ChatEventDTO> runSink) {
+                           ActiveRun run) {
+        Sinks.Many<ChatEventDTO> runSink = run.sink;
         Long batchId = null;
         try {
             boolean hasImages = images != null && !images.isEmpty();
@@ -171,6 +200,10 @@ public class ChatService {
             ReActAgentExecutor executor = buildExecutor(llmClient, toolNames);
 
             AgentContext context = buildAgentContext(agent, conv, llm, userContent, images, toolNames, llmClient);
+            run.context = context;
+            if (run.stopRequested.get()) {
+                context.requestStop();
+            }
             boolean isFirstBatch = conv.getTitle() == null || conv.getTitle().isBlank();
 
             executeAgent(context, executor, batchId, conversationId,
@@ -348,6 +381,10 @@ public class ChatService {
                             .build();
                     case FINAL_ANSWER_DELTA -> ChatEventDTO.builder()
                             .type("final_answer_delta")
+                            .content(response.getContent())
+                            .build();
+                    case STOPPED -> ChatEventDTO.builder()
+                            .type("stopped")
                             .content(response.getContent())
                             .build();
                 })

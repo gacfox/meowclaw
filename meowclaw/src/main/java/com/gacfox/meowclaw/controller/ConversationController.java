@@ -132,6 +132,11 @@ public class ConversationController {
         return ApiResult.success(chatService.runningConversationIds());
     }
 
+    @PostMapping("/{id}/stop")
+    public ApiResult<?> stop(@PathVariable Long id) {
+        return chatService.stop(id) ? ApiResult.success() : ApiResult.failure("会话未在执行中");
+    }
+
     @GetMapping("/{id}/title-wait")
     public DeferredResult<ApiResult<Map<String, String>>> waitTitle(@PathVariable Long id) {
         DeferredResult<ApiResult<Map<String, String>>> result = new DeferredResult<>(TITLE_WAIT_TIMEOUT_MS);

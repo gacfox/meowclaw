@@ -69,6 +69,10 @@ export async function listRunningConversations(): Promise<number[]> {
   return res.data;
 }
 
+export async function stopChat(conversationId: number) {
+  return request(`/api/conversation/${conversationId}/stop`, { method: "POST" });
+}
+
 export async function truncateAfterBatch(conversationId: number, batchId: number, includeSelf = false) {
   return request(`/api/conversation/${conversationId}/batch/${batchId}/truncate?includeSelf=${includeSelf}`, {
     method: "DELETE",

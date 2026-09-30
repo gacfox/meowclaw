@@ -3,7 +3,7 @@ import { useSearchParams } from "react-router-dom";
 import type { AgentDTO, ConversationDTO, ChatEventBatchDTO, ChatEventDTO, PageResult, LlmDTO } from "@/types";
 import { listAgents } from "@/services/agent";
 import { listLlms } from "@/services/llm";
-import { listConversations, createConversation, getConversation, deleteConversation, renameConversation, listBatches, chatStream, watchStream, listRunningConversations, truncateAfterBatch, waitForTitle } from "@/services/conversation";
+import { listConversations, createConversation, getConversation, deleteConversation, renameConversation, listBatches, chatStream, watchStream, listRunningConversations, stopChat, truncateAfterBatch, waitForTitle } from "@/services/conversation";
 import { useAuthStore } from "@/stores/auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,7 +12,7 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Send, Trash2, Loader2, ChevronRight, Copy, Pencil, RefreshCw, ArrowUp, ArrowDown, Check, Clock, TriangleAlert, X, ImagePlus } from "lucide-react";
+import { Plus, Send, Trash2, Loader2, ChevronRight, Copy, Pencil, RefreshCw, ArrowUp, ArrowDown, Check, Clock, TriangleAlert, X, ImagePlus, Square } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Alert, AlertTitle, AlertDescription, AlertAction } from "@/components/ui/alert";
@@ -98,6 +98,7 @@ export function ChatPage() {
   const [editDraft, setEditDraft] = useState("");
   const [renamingId, setRenamingId] = useState<number | null>(null);
   const [renameDraft, setRenameDraft] = useState("");
+  const [stopping, setStopping] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const convoListRef = useRef<HTMLDivElement>(null);
@@ -481,6 +482,19 @@ export function ChatPage() {
     triggerChat(content, images);
   };
 
+  const handleStop = async () => {
+    if (selectedConvoId == null || stopping) return;
+    setStopping(true);
+    try {
+      await stopChat(selectedConvoId);
+      toast.success("已请求停止，将在当前步骤结束后终止");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "停止失败");
+    } finally {
+      setStopping(false);
+    }
+  };
+
   const handleStreamEvent = (convoId: number, event: ChatEventDTO) => {
     switch (event.type) {
       case "thinking":
@@ -540,6 +554,8 @@ export function ChatPage() {
         }
         break;
       case "context_compression":
+        break;
+      case "stopped":
         break;
     }
   };
@@ -894,9 +910,15 @@ export function ChatPage() {
                     disabled={isCurrentConvoRunning}
                     className="flex-1"
                   />
-                  <Button onClick={handleSend} disabled={isCurrentConvoRunning || (!input.trim() && pendingImages.length === 0)}>
-                    {isCurrentConvoRunning ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}
-                  </Button>
+                  {isCurrentConvoRunning ? (
+                    <Button variant="destructive" onClick={handleStop} disabled={stopping} title="停止执行">
+                      {stopping ? <Loader2 className="size-4 animate-spin" /> : <Square className="size-4" fill="currentColor" />}
+                    </Button>
+                  ) : (
+                    <Button onClick={handleSend} disabled={!input.trim() && pendingImages.length === 0}>
+                      <Send className="size-4" />
+                    </Button>
+                  )}
                 </div>
               </div>
             </div>

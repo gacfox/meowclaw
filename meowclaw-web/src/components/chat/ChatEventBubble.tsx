@@ -1,7 +1,7 @@
 import type { ChatEventDTO } from "@/types";
 import { Table, TableBody, TableCell, TableRow } from "@/components/ui/table";
 import { MarkdownRenderer } from "@/components/markdown/MarkdownRenderer";
-import { Check, ChevronRight, Wrench } from "lucide-react";
+import { Check, ChevronRight, CircleStop, Wrench } from "lucide-react";
 
 function parseToolArgs(json: string | null | undefined): Record<string, unknown> | null {
   if (!json) return null;
@@ -119,6 +119,14 @@ export function BatchBubble({ events }: { events: ChatEventDTO[] }) {
         }
         if (event.type === "error") {
           return <div key={i} className="text-destructive">{event.content}</div>;
+        }
+        if (event.type === "stopped") {
+          return (
+            <div key={i} className="flex items-center gap-1 text-xs text-muted-foreground">
+              <CircleStop className="size-3" />
+              <span>已手动停止</span>
+            </div>
+          );
         }
         return null;
       })}
