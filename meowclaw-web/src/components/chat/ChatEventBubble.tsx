@@ -81,12 +81,9 @@ export function FinalAnswerIndicator() {
 }
 
 export function BatchBubble({ events }: { events: ChatEventDTO[] }) {
-  const toolResults = new Map<string, string>();
-  for (const e of events) {
-    if (e.type === "tool_result" && e.toolCallId) {
-      toolResults.set(e.toolCallId, e.content ?? "");
-    }
-  }
+  // 执行器保证 tool_result 与 tool_call 严格同序同数；部分模型端点返回空 toolCallId，无法按 id 匹配，故按序配对
+  const toolResults = events.filter((e) => e.type === "tool_result");
+  let resultCursor = 0;
   const finalAnswer = events.find((e) => e.type === "final_answer");
 
   return (
@@ -104,7 +101,8 @@ export function BatchBubble({ events }: { events: ChatEventDTO[] }) {
           );
         }
         if (event.type === "tool_call") {
-          const result = event.toolCallId ? toolResults.get(event.toolCallId) : undefined;
+          const result = toolResults[resultCursor]?.content ?? undefined;
+          resultCursor++;
           if (event.toolName === "final_answer") {
             return <FinalAnswerIndicator key={i} />;
           }
