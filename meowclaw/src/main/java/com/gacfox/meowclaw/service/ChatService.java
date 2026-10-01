@@ -387,6 +387,10 @@ public class ChatService {
                             .type("stopped")
                             .content(response.getContent())
                             .build();
+                    case SUSPENDED -> ChatEventDTO.builder()
+                            .type("suspended")
+                            .content(response.getContent())
+                            .build();
                 })
                 .publishOn(Schedulers.boundedElastic())
                 .doOnNext(event -> {
