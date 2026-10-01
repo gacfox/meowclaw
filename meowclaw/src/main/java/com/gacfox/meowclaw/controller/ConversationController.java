@@ -9,6 +9,7 @@ import com.gacfox.meowclaw.dto.SendMessageRequest;
 import com.gacfox.meowclaw.entity.Conversation;
 import com.gacfox.meowclaw.service.ChatService;
 import com.gacfox.meowclaw.service.ConversationService;
+import com.gacfox.meowclaw.service.GuardrailPolicyService;
 import com.gacfox.meowclaw.service.TitleGenerationRegistryService;
 import com.gacfox.meowclaw.dto.ApiResult;
 import com.gacfox.meowclaw.dto.Pagination;
@@ -39,14 +40,17 @@ public class ConversationController {
     private final ConversationService conversationService;
     private final ChatService chatService;
     private final TitleGenerationRegistryService titleGenerationRegistryService;
+    private final GuardrailPolicyService guardrailPolicyService;
 
     @Autowired
     public ConversationController(ConversationService conversationService,
                                   ChatService chatService,
-                                  TitleGenerationRegistryService titleGenerationRegistryService) {
+                                  TitleGenerationRegistryService titleGenerationRegistryService,
+                                  GuardrailPolicyService guardrailPolicyService) {
         this.conversationService = conversationService;
         this.chatService = chatService;
         this.titleGenerationRegistryService = titleGenerationRegistryService;
+        this.guardrailPolicyService = guardrailPolicyService;
     }
 
     @GetMapping
@@ -135,6 +139,20 @@ public class ConversationController {
     @PostMapping("/{id}/stop")
     public ApiResult<?> stop(@PathVariable Long id) {
         return chatService.stop(id) ? ApiResult.success() : ApiResult.failure("会话未在执行中");
+    }
+
+    @PutMapping("/{id}/guardrail-policy")
+    public ApiResult<ConversationDTO> updateGuardrailPolicy(@PathVariable Long id, @RequestBody Map<String, Long> body) {
+        guardrailPolicyService.updateConversationPolicy(id, body.get("policyId"));
+        return ApiResult.success(conversationService.getDTO(id));
+    }
+
+    @PostMapping("/{id}/approvals/{toolCallId}")
+    public ApiResult<?> decideApproval(@PathVariable Long id, @PathVariable String toolCallId,
+                                       @RequestBody Map<String, String> body) {
+        boolean approved = "approve".equals(body.get("decision"));
+        return chatService.decideApproval(id, toolCallId, approved)
+                ? ApiResult.success() : ApiResult.failure("审批不存在或已处理");
     }
 
     @GetMapping("/{id}/title-wait")

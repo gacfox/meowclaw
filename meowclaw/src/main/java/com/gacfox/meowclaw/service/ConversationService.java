@@ -43,6 +43,7 @@ public class ConversationService {
     private final ConversationHistoryConverter conversationHistoryConverter;
     private final ChatEventBatchConverter chatEventBatchConverter;
     private final ChatEventConverter chatEventConverter;
+    private final GuardrailPolicyService guardrailPolicyService;
 
     @Autowired
     public ConversationService(ConversationRepository conversationRepository,
@@ -54,7 +55,8 @@ public class ConversationService {
                                ConversationConverter conversationConverter,
                                ConversationHistoryConverter conversationHistoryConverter,
                                ChatEventBatchConverter chatEventBatchConverter,
-                               ChatEventConverter chatEventConverter) {
+                               ChatEventConverter chatEventConverter,
+                               GuardrailPolicyService guardrailPolicyService) {
         this.conversationRepository = conversationRepository;
         this.messageRepository = messageRepository;
         this.chatEventBatchRepository = chatEventBatchRepository;
@@ -65,6 +67,18 @@ public class ConversationService {
         this.conversationHistoryConverter = conversationHistoryConverter;
         this.chatEventBatchConverter = chatEventBatchConverter;
         this.chatEventConverter = chatEventConverter;
+        this.guardrailPolicyService = guardrailPolicyService;
+    }
+
+    /**
+     * 实体转DTO，未显式指定安全护栏策略时回填默认策略ID，保证对外暴露的始终是生效策略
+     */
+    private ConversationDTO toDTO(Conversation conv) {
+        ConversationDTO dto = conversationConverter.toDTO(conv);
+        if (dto.getGuardrailPolicyId() == null) {
+            dto.setGuardrailPolicyId(guardrailPolicyService.getDefaultPolicyId());
+        }
+        return dto;
     }
 
     @Transactional(readOnly = true)
@@ -75,7 +89,7 @@ public class ConversationService {
         } else {
             pageResult = conversationRepository.findByAgentIdAndTypeOrderByUpdatedAtDesc(agentId, type, PageRequest.of(page - 1, size));
         }
-        List<ConversationDTO> list = pageResult.getContent().stream().map(conversationConverter::toDTO).toList();
+        List<ConversationDTO> list = pageResult.getContent().stream().map(this::toDTO).toList();
         int total = (int) pageResult.getTotalElements();
         int totalPages = (int) Math.ceil((double) total / size);
         return new Pagination<>(list, total, totalPages, page, size);
@@ -116,7 +130,7 @@ public class ConversationService {
         long now = System.currentTimeMillis();
         conv.setCreatedAt(now);
         conv.setUpdatedAt(now);
-        return conversationConverter.toDTO(conversationRepository.save(conv));
+        return toDTO(conversationRepository.save(conv));
     }
 
     @Transactional
@@ -152,7 +166,7 @@ public class ConversationService {
                 .orElseThrow(() -> new IllegalArgumentException("会话不存在"));
         conv.setTitle(title);
         conv.setUpdatedAt(System.currentTimeMillis());
-        return conversationConverter.toDTO(conversationRepository.save(conv));
+        return toDTO(conversationRepository.save(conv));
     }
 
     @Transactional
@@ -246,7 +260,7 @@ public class ConversationService {
         Conversation conv = conversationRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("会话不存在"));
         conv.setUpdatedAt(System.currentTimeMillis());
-        return conversationConverter.toDTO(conversationRepository.save(conv));
+        return toDTO(conversationRepository.save(conv));
     }
 
     @Transactional(readOnly = true)
@@ -257,7 +271,7 @@ public class ConversationService {
 
     @Transactional(readOnly = true)
     public ConversationDTO getDTO(Long id) {
-        return conversationConverter.toDTO(getById(id));
+        return toDTO(getById(id));
     }
 
     @Transactional(readOnly = true)

@@ -9,12 +9,11 @@ import lombok.Setter;
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
-public class ConversationDTO {
+public class GuardrailPolicyDTO {
     private Long id;
-    private Long agentId;
-    private String title;
-    private String type;
-    private Long guardrailPolicyId;
+    private String name;
+    private String configJson;
+    private Boolean builtin;
     private Long createdAt;
     private Long updatedAt;
 }

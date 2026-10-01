@@ -18,8 +18,10 @@ import com.gacfox.meowclaw.interceptor.llm.LlmLoggingInterceptor;
 import com.gacfox.meowclaw.interceptor.llm.TokenUsageAccumulator;
 import com.gacfox.meowclaw.interceptor.llm.LlmCallRecordInterceptor;
 import com.gacfox.meowclaw.interceptor.llm.TokenUsageContext;
+import com.gacfox.meowclaw.guardrail.GuardrailInterceptor;
 import com.gacfox.proarc.agentic.agent.AgentContext;
 import com.gacfox.proarc.agentic.agent.ReActAgentExecutor;
+import com.gacfox.proarc.agentic.agent.ToolInvocation;
 import com.gacfox.proarc.agentic.client.LlmClient;
 import com.gacfox.proarc.agentic.client.OpenAiLlmClient;
 import com.gacfox.proarc.agentic.client.interceptor.builtin.RetryInterceptor;
@@ -40,10 +42,12 @@ import reactor.netty.http.client.HttpClient;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
@@ -69,6 +73,7 @@ public class ChatService {
     private final ContextCompressionService contextCompressionService;
     private final ChatAttachmentService chatAttachmentService;
     private final MemoryService memoryService;
+    private final GuardrailPolicyService guardrailPolicyService;
 
     @Autowired
     public ChatService(ConversationService conversationService,
@@ -84,7 +89,8 @@ public class ChatService {
                        LlmCallLogService llmCallLogService,
                        ContextCompressionService contextCompressionService,
                        ChatAttachmentService chatAttachmentService,
-                       MemoryService memoryService) {
+                       MemoryService memoryService,
+                       GuardrailPolicyService guardrailPolicyService) {
         this.conversationService = conversationService;
         this.chatPersistenceService = chatPersistenceService;
         this.agentRepository = agentRepository;
@@ -99,6 +105,7 @@ public class ChatService {
         this.contextCompressionService = contextCompressionService;
         this.chatAttachmentService = chatAttachmentService;
         this.memoryService = memoryService;
+        this.guardrailPolicyService = guardrailPolicyService;
     }
 
     private final Map<Long, ActiveRun> activeRuns = new ConcurrentHashMap<>();
@@ -109,7 +116,32 @@ public class ChatService {
     private static final class ActiveRun {
         private final Sinks.Many<ChatEventDTO> sink = Sinks.many().replay().all();
         private final AtomicBoolean stopRequested = new AtomicBoolean();
+        private final AtomicInteger eventOrder = new AtomicInteger(0);
         private volatile AgentContext context;
+        private volatile PendingApproval pendingApproval;
+    }
+
+    /**
+     * 进行中的工具调用审批：执行器线程阻塞在future上直至用户决定或执行被中断
+     */
+    private static final class PendingApproval {
+        private final Long eventId;
+        private final String toolCallId;
+        private final String toolName;
+        private final String toolArguments;
+        private final String policyName;
+        private final int matchedRuleIndex;
+        private final CompletableFuture<GuardrailInterceptor.ApprovalOutcome> future = new CompletableFuture<>();
+
+        private PendingApproval(Long eventId, String toolCallId, String toolName, String toolArguments,
+                                String policyName, int matchedRuleIndex) {
+            this.eventId = eventId;
+            this.toolCallId = toolCallId;
+            this.toolName = toolName;
+            this.toolArguments = toolArguments;
+            this.policyName = policyName;
+            this.matchedRuleIndex = matchedRuleIndex;
+        }
     }
 
     public Flux<ChatEventDTO> chat(Long conversationId, String userContent, List<String> images) {
@@ -152,7 +184,98 @@ public class ChatService {
         if (context != null) {
             context.requestStop();
         }
+        PendingApproval pending = run.pendingApproval;
+        if (pending != null && pending.future.complete(GuardrailInterceptor.ApprovalOutcome.INTERRUPTED)) {
+            settleApprovalEvent(run, pending, "interrupted");
+        }
         return true;
+    }
+
+    /**
+     * 用户对进行中的工具调用审批做出决定
+     *
+     * @return true表示决定已受理，false表示审批不存在或已处理
+     */
+    public boolean decideApproval(Long conversationId, String toolCallId, boolean approved) {
+        ActiveRun run = activeRuns.get(conversationId);
+        PendingApproval pending = run == null ? null : run.pendingApproval;
+        if (pending == null || !pending.toolCallId.equals(toolCallId)) {
+            return false;
+        }
+        GuardrailInterceptor.ApprovalOutcome outcome = approved
+                ? GuardrailInterceptor.ApprovalOutcome.APPROVED : GuardrailInterceptor.ApprovalOutcome.REJECTED;
+        if (!pending.future.complete(outcome)) {
+            return false;
+        }
+        settleApprovalEvent(run, pending, approved ? "approved" : "rejected");
+        return true;
+    }
+
+    /**
+     * 安全护栏审批入口：持久化并广播审批事件后阻塞执行器线程，直至用户决定或执行被中断
+     */
+    private GuardrailInterceptor.ApprovalOutcome awaitApproval(ActiveRun run, Long batchId, Long conversationId,
+                                                               ToolInvocation invocation, String policyName, int matchedRuleIndex) {
+        String content = approvalContent("pending", policyName, matchedRuleIndex, null);
+        Long eventId = chatPersistenceService.saveChatEvent(batchId, run.eventOrder.getAndIncrement(),
+                "approval", content, invocation.getToolName(), invocation.getToolCallId(), invocation.getArguments());
+        PendingApproval pending = new PendingApproval(eventId, invocation.getToolCallId(),
+                invocation.getToolName(), invocation.getArguments(), policyName, matchedRuleIndex);
+        run.pendingApproval = pending;
+        emitRunEvent(run, ChatEventDTO.builder()
+                .id(eventId).type("approval").toolCallId(pending.toolCallId)
+                .toolName(pending.toolName).toolArguments(pending.toolArguments).content(content).build());
+        try {
+            return pending.future.get();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return GuardrailInterceptor.ApprovalOutcome.INTERRUPTED;
+        } catch (ExecutionException e) {
+            log.warn("审批等待异常: conversationId={}", conversationId, e);
+            return GuardrailInterceptor.ApprovalOutcome.INTERRUPTED;
+        } finally {
+            run.pendingApproval = null;
+        }
+    }
+
+    /**
+     * 审批落定：更新事件内容并广播最终状态
+     */
+    private void settleApprovalEvent(ActiveRun run, PendingApproval pending, String decision) {
+        String content = approvalContent(decision, pending.policyName, pending.matchedRuleIndex, System.currentTimeMillis());
+        try {
+            chatPersistenceService.updateChatEventContent(pending.eventId, content);
+        } catch (Exception e) {
+            log.warn("审批事件更新失败: eventId={}", pending.eventId, e);
+        }
+        emitRunEvent(run, ChatEventDTO.builder()
+                .id(pending.eventId).type("approval").toolCallId(pending.toolCallId)
+                .toolName(pending.toolName).toolArguments(pending.toolArguments).content(content).build());
+    }
+
+    private static String approvalContent(String decision, String policyName, int matchedRuleIndex, Long decidedAt) {
+        try {
+            Map<String, Object> map = new LinkedHashMap<>();
+            map.put("decision", decision);
+            map.put("policyName", policyName);
+            map.put("matchedRuleIndex", matchedRuleIndex);
+            map.put("decidedAt", decidedAt);
+            return OBJECT_MAPPER.writeValueAsString(map);
+        } catch (Exception e) {
+            return "{\"decision\":\"" + decision + "\"}";
+        }
+    }
+
+    /**
+     * 向执行中会话广播事件，失败重试以吸收多生产者并发发射
+     */
+    private static void emitRunEvent(ActiveRun run, ChatEventDTO event) {
+        while (true) {
+            Sinks.EmitResult result = run.sink.tryEmitNext(event);
+            if (result != Sinks.EmitResult.FAIL_NON_SERIALIZED) {
+                return;
+            }
+        }
     }
 
     private void startChat(Long conversationId, String userContent, List<String> images,
@@ -197,7 +320,7 @@ public class ChatService {
                 }
                 return false;
             });
-            ReActAgentExecutor executor = buildExecutor(llmClient, toolNames);
+            ReActAgentExecutor executor = buildExecutor(llmClient, toolNames, run, batchId, conversationId);
 
             AgentContext context = buildAgentContext(agent, conv, llm, userContent, images, toolNames, llmClient);
             run.context = context;
@@ -207,7 +330,7 @@ public class ChatService {
             boolean isFirstBatch = conv.getTitle() == null || conv.getTitle().isBlank();
 
             executeAgent(context, executor, batchId, conversationId,
-                    userContent == null ? "" : userContent, llm, secondaryLlm, secondaryLlmClient, tokenAccum, isFirstBatch, runSink);
+                    userContent == null ? "" : userContent, llm, secondaryLlm, secondaryLlmClient, tokenAccum, isFirstBatch, run);
         } catch (Exception e) {
             log.error("Chat execution failed for conversation {}", conversationId, e);
             if (batchId != null) {
@@ -259,12 +382,17 @@ public class ChatService {
                 .build();
     }
 
-    private ReActAgentExecutor buildExecutor(LlmClient llmClient, List<String> toolNames) {
+    private ReActAgentExecutor buildExecutor(LlmClient llmClient, List<String> toolNames,
+                                             ActiveRun run, Long batchId, Long conversationId) {
+        GuardrailInterceptor guardrailInterceptor = new GuardrailInterceptor(guardrailPolicyService,
+                (invocation, policyName, matchedRuleIndex) ->
+                        awaitApproval(run, batchId, conversationId, invocation, policyName, matchedRuleIndex));
         return ReActAgentExecutor.builder()
                 .defaultLlmClient(llmClient)
                 .toolRegistry(toolRegistry)
                 .defaultToolNames(toolNames)
                 .interceptors(List.of(agentSystemPromptRefreshInterceptor, agentLoggingInterceptor))
+                .toolCallInterceptors(List.of(guardrailInterceptor))
                 .build();
     }
 
@@ -344,9 +472,9 @@ public class ChatService {
                               String userContent,
                               Llm llm, Llm secondaryLlm, LlmClient secondaryLlmClient,
                               TokenUsageAccumulator tokenAccum, boolean isFirstBatch,
-                              Sinks.Many<ChatEventDTO> sink) {
+                              ActiveRun run) {
+        Sinks.Many<ChatEventDTO> sink = run.sink;
         int messageCountBefore = context.getMessages().size();
-        AtomicInteger eventOrder = new AtomicInteger(0);
         AtomicReference<String> firstFinalAnswer = new AtomicReference<>();
 
         executor.execute(context)
@@ -398,7 +526,7 @@ public class ChatService {
                         return;
                     }
                     chatPersistenceService.saveChatEvent(
-                            batchId, eventOrder.getAndIncrement(), event.getType(),
+                            batchId, run.eventOrder.getAndIncrement(), event.getType(),
                             event.getContent(), event.getToolName(), event.getToolCallId(), event.getToolArguments());
                     if ("final_answer".equals(event.getType()) && isFirstBatch
                             && firstFinalAnswer.get() == null && event.getContent() != null) {
@@ -457,7 +585,7 @@ public class ChatService {
                     log.error("Chat execution error for conversation {}", conversationId, e);
                     chatPersistenceService.failBatch(batchId, e.getMessage());
                 })
-                .subscribe(sink::tryEmitNext,
+                .subscribe(event -> emitRunEvent(run, event),
                         e -> {
                             sink.tryEmitError(e);
                             activeRuns.remove(conversationId);

@@ -14,6 +14,7 @@ import lombok.Setter;
 @Builder
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class ChatEventDTO {
+    private Long id;
     private String type;
     private String content;
     private String toolName;

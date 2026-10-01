@@ -1,8 +1,8 @@
 import type { ChatEventDTO } from "@/types";
 import { Table, TableBody, TableCell, TableRow } from "@/components/ui/table";
 import { MarkdownRenderer } from "@/components/markdown/MarkdownRenderer";
-import { Check, ChevronRight, CircleStop, Loader2, Wrench } from "lucide-react";
-
+import { parseApprovalContent } from "@/lib/approval";
+import { Check, ChevronRight, CircleStop, Loader2, ShieldCheck, ShieldX, Wrench } from "lucide-react";
 function parseToolArgs(json: string | null | undefined): Record<string, unknown> | null {
   if (!json) return null;
   try {
@@ -83,6 +83,73 @@ export function FinalAnswerIndicator() {
   );
 }
 
+const APPROVAL_LABELS: Record<string, string> = {
+  pending: "等待审批",
+  approved: "已批准",
+  rejected: "已拒绝",
+  interrupted: "已中断",
+};
+
+export function ApprovalDetails({
+  name,
+  args,
+  decision,
+  policyName,
+  matchedRuleIndex,
+}: {
+  name: string;
+  args?: string;
+  decision: string;
+  policyName?: string;
+  matchedRuleIndex?: number;
+}) {
+  const parsed = parseToolArgs(args);
+  return (
+    <details className="group text-xs">
+      <summary className="flex cursor-pointer items-center gap-1 text-muted-foreground list-none [&::-webkit-details-marker]:hidden">
+        <ChevronRight className="size-3 shrink-0 transition-transform group-open:rotate-90" />
+        {decision === "approved" ? (
+          <ShieldCheck className="size-3 text-green-500" />
+        ) : decision === "rejected" ? (
+          <ShieldX className="size-3 text-destructive" />
+        ) : decision === "interrupted" ? (
+          <CircleStop className="size-3" />
+        ) : (
+          <Loader2 className="size-3 animate-spin" />
+        )}
+        审批 · {name}
+        <span>{APPROVAL_LABELS[decision] ?? decision}</span>
+      </summary>
+      <div className="mt-2 space-y-2 rounded border bg-background/50 p-2">
+        {policyName && (
+          <div className="text-xs text-muted-foreground">
+            策略：{policyName} · {matchedRuleIndex != null && matchedRuleIndex >= 0 ? `规则 #${matchedRuleIndex + 1}` : "默认决策"}
+          </div>
+        )}
+        {parsed && Object.keys(parsed).length > 0 && (
+          <Table>
+            <TableBody>
+              {Object.entries(parsed).map(([key, value]) => {
+                const text = formatArgValue(value);
+                const truncated = truncateSingleLine(text, 80);
+                return (
+                  <TableRow key={key}>
+                    <TableCell className="w-24 py-1 text-muted-foreground">{key}</TableCell>
+                    <TableCell className="py-1" title={truncated.truncated ? text : undefined}>
+                      <span className="inline-block max-w-full truncate">{truncated.text}</span>
+                      {truncated.truncated && <span className="ml-1 text-muted-foreground">…</span>}
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
+        )}
+      </div>
+    </details>
+  );
+}
+
 export function BatchBubble({ events }: { events: ChatEventDTO[] }) {
   // 执行器保证 tool_result 与 tool_call 严格同序同数；部分模型端点返回空 toolCallId，无法按 id 匹配，故按序配对
   const toolResults = events.filter((e) => e.type === "tool_result");
@@ -115,6 +182,19 @@ export function BatchBubble({ events }: { events: ChatEventDTO[] }) {
               name={event.toolName ?? "tool"}
               args={event.toolArguments ?? undefined}
               result={result}
+            />
+          );
+        }
+        if (event.type === "approval") {
+          const info = parseApprovalContent(event.content);
+          return (
+            <ApprovalDetails
+              key={i}
+              name={event.toolName ?? "tool"}
+              args={event.toolArguments ?? undefined}
+              decision={info?.decision ?? "pending"}
+              policyName={info?.policyName}
+              matchedRuleIndex={info?.matchedRuleIndex}
             />
           );
         }

@@ -4,6 +4,7 @@ import com.gacfox.meowclaw.entity.Conversation;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -12,6 +13,10 @@ public interface ConversationRepository extends JpaRepository<Conversation, Long
     Page<Conversation> findByAgentIdOrderByUpdatedAtDesc(Long agentId, Pageable pageable);
 
     Page<Conversation> findByAgentIdAndTypeOrderByUpdatedAtDesc(Long agentId, String type, Pageable pageable);
+
+    @Modifying
+    @Query("UPDATE Conversation c SET c.guardrailPolicyId = null WHERE c.guardrailPolicyId = :policyId")
+    int clearGuardrailPolicy(@Param("policyId") Long policyId);
 
     @Query("SELECT c FROM Conversation c "
             + "WHERE (:type IS NULL OR c.type = :type) "

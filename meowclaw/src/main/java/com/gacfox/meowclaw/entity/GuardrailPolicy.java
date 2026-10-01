@@ -16,26 +16,20 @@ import lombok.Setter;
 @NoArgsConstructor
 @AllArgsConstructor
 @Entity
-@Table(name = "mc_conversation")
-public class Conversation {
+@Table(name = "mc_guardrail_policy")
+public class GuardrailPolicy {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "agent_id", nullable = false)
-    private Long agentId;
+    @Column(name = "name", nullable = false, length = 100)
+    private String name;
 
-    @Column(name = "title", length = 500)
-    private String title;
+    @Column(name = "config_json", nullable = false, columnDefinition = "TEXT")
+    private String configJson;
 
-    @Column(name = "type", length = 50)
-    private String type;
-
-    @Column(name = "context_json")
-    private String contextJson;
-
-    @Column(name = "guardrail_policy_id")
-    private Long guardrailPolicyId;
+    @Column(name = "builtin", nullable = false)
+    private Boolean builtin;
 
     @Column(name = "created_at", nullable = false)
     private Long createdAt;

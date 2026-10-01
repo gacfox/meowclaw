@@ -64,7 +64,7 @@ public class ChatPersistenceService {
     }
 
     @Transactional
-    public void saveChatEvent(Long batchId, int eventOrder, String type, String content,
+    public Long saveChatEvent(Long batchId, int eventOrder, String type, String content,
                               String toolName, String toolCallId, String toolArguments) {
         ChatEvent chatEvent = new ChatEvent();
         chatEvent.setBatchId(batchId);
@@ -75,6 +75,13 @@ public class ChatPersistenceService {
         chatEvent.setToolCallId(toolCallId);
         chatEvent.setToolArguments(toolArguments);
         chatEvent.setCreatedAt(System.currentTimeMillis());
+        return chatEventRepository.save(chatEvent).getId();
+    }
+
+    @Transactional
+    public void updateChatEventContent(Long eventId, String content) {
+        ChatEvent chatEvent = chatEventRepository.findById(eventId).orElseThrow();
+        chatEvent.setContent(content);
         chatEventRepository.save(chatEvent);
     }
 

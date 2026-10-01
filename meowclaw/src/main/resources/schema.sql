@@ -49,6 +49,7 @@ CREATE TABLE IF NOT EXISTS mc_conversation (
     title VARCHAR(500) COMMENT '会话标题',
     type VARCHAR(50) DEFAULT 'CHAT' COMMENT '会话类型(CHAT=智能体对话)',
     context_json TEXT COMMENT '会话级上下文状态JSON',
+    guardrail_policy_id BIGINT COMMENT '安全护栏策略ID(空使用默认策略)',
     created_at BIGINT NOT NULL COMMENT '创建时间(时间戳毫秒)',
     updated_at BIGINT NOT NULL COMMENT '更新时间(时间戳毫秒)',
     PRIMARY KEY (id)
@@ -212,6 +213,17 @@ CREATE TABLE IF NOT EXISTS mc_embedding_model (
     updated_at BIGINT NOT NULL COMMENT '更新时间(时间戳毫秒)',
     PRIMARY KEY (id)
 );
+
+CREATE TABLE IF NOT EXISTS mc_guardrail_policy (
+    id BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+    name VARCHAR(100) NOT NULL COMMENT '策略名(唯一)',
+    config_json TEXT NOT NULL COMMENT '策略配置JSON',
+    builtin BOOLEAN NOT NULL DEFAULT FALSE COMMENT '是否内置策略(内置只读)',
+    created_at BIGINT NOT NULL COMMENT '创建时间(时间戳毫秒)',
+    updated_at BIGINT NOT NULL COMMENT '更新时间(时间戳毫秒)',
+    PRIMARY KEY (id)
+);
+CREATE UNIQUE INDEX IF NOT EXISTS uk_mc_guardrail_policy_name ON mc_guardrail_policy(name);
 
 CREATE TABLE IF NOT EXISTS mc_memory_node (
     id BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',

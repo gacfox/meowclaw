@@ -10,6 +10,7 @@ import { LoginPage } from "@/pages/LoginPage";
 import { UserSettingsPage } from "@/pages/UserSettingsPage";
 import { LlmConfigPage } from "@/pages/LlmConfigPage";
 import { EmbeddingModelConfigPage } from "@/pages/EmbeddingModelConfigPage";
+import { GuardrailPolicyPage } from "@/pages/GuardrailPolicyPage";
 import { AgentConfigPage } from "@/pages/AgentConfigPage";
 import { ChatPage } from "@/pages/ChatPage";
 import { ScheduledTaskPage } from "@/pages/ScheduledTaskPage";
@@ -121,6 +122,7 @@ function AppRoutes() {
         <Route path="settings" element={<UserSettingsPage />} />
         <Route path="llm" element={<LlmConfigPage />} />
         <Route path="embedding-model" element={<EmbeddingModelConfigPage />} />
+        <Route path="guardrail-policy" element={<GuardrailPolicyPage />} />
         <Route path="agent" element={<AgentConfigPage />} />
         <Route path="memory" element={<MemoryPage />} />
         <Route path="scheduled-task" element={<ScheduledTaskPage />} />

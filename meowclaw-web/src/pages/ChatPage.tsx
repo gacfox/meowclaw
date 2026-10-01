@@ -1,9 +1,10 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useSearchParams } from "react-router-dom";
-import type { AgentDTO, ConversationDTO, ChatEventBatchDTO, ChatEventDTO, PageResult, LlmDTO } from "@/types";
+import type { AgentDTO, ConversationDTO, ChatEventBatchDTO, ChatEventDTO, PageResult, LlmDTO, GuardrailPolicyDTO } from "@/types";
 import { listAgents } from "@/services/agent";
 import { listLlms } from "@/services/llm";
 import { listConversations, createConversation, getConversation, deleteConversation, renameConversation, listBatches, chatStream, watchStream, listRunningConversations, stopChat, truncateAfterBatch, waitForTitle } from "@/services/conversation";
+import { listGuardrailPolicies, setConversationGuardrailPolicy, decideApproval } from "@/services/guardrail";
 import { useAuthStore } from "@/stores/auth";
 import { Button } from "@/components/ui/button";
 import {
@@ -11,22 +12,43 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Trash2, Loader2, ChevronRight, Copy, Pencil, RefreshCw, ArrowUp, ArrowDown, Check, Clock, TriangleAlert, X, Square } from "lucide-react";
+import { Plus, Trash2, Loader2, ChevronRight, Copy, Pencil, RefreshCw, ArrowUp, ArrowDown, Check, Clock, TriangleAlert, X, Square, Shield, ShieldAlert } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Alert, AlertTitle, AlertDescription, AlertAction } from "@/components/ui/alert";
 import { motion, AnimatePresence } from "framer-motion";
 import { MarkdownRenderer } from "@/components/markdown/MarkdownRenderer";
-import { BatchBubble, FinalAnswerIndicator, ToolCallDetails } from "@/components/chat/ChatEventBubble";
+import { BatchBubble, FinalAnswerIndicator, ToolCallDetails, ApprovalDetails } from "@/components/chat/ChatEventBubble";
+import { parseApprovalContent } from "@/lib/approval";
+import type { ApprovalContent } from "@/lib/approval";
 import { toast } from "sonner";
 
 interface StreamStep {
-  type: "thinking" | "tool_call";
+  type: "thinking" | "tool_call" | "approval";
   content?: string;
   toolCallId?: string;
   name?: string;
   args?: string;
   result?: string;
+  approval?: ApprovalContent | null;
+}
+
+interface PendingApproval {
+  toolCallId: string;
+  toolName: string;
+  toolArguments: string;
+  policyName?: string;
+}
+
+function approvalArgsPreview(toolArguments: string): string {
+  try {
+    const obj = JSON.parse(toolArguments);
+    if (typeof obj.command === "string") return `command: ${obj.command}`;
+    if (typeof obj.path === "string") return `path: ${obj.path}`;
+    return toolArguments;
+  } catch {
+    return toolArguments;
+  }
 }
 
 function StreamBubble({ steps, content, thinking }: { steps: StreamStep[]; content: string; thinking?: boolean }) {
@@ -47,6 +69,15 @@ function StreamBubble({ steps, content, thinking }: { steps: StreamStep[]; conte
             </summary>
             <div className="mt-1 whitespace-pre-wrap">{step.content}</div>
           </details>
+        ) : step.type === "approval" ? (
+          <ApprovalDetails
+            key={i}
+            name={step.name ?? "tool"}
+            args={step.args}
+            decision={step.approval?.decision ?? "pending"}
+            policyName={step.approval?.policyName}
+            matchedRuleIndex={step.approval?.matchedRuleIndex}
+          />
         ) : step.name === "final_answer" ? (
           <FinalAnswerIndicator key={i} />
         ) : (
@@ -99,6 +130,9 @@ export function ChatPage() {
   const [renamingId, setRenamingId] = useState<number | null>(null);
   const [renameDraft, setRenameDraft] = useState("");
   const [stopping, setStopping] = useState(false);
+  const [policies, setPolicies] = useState<GuardrailPolicyDTO[]>([]);
+  const [pendingApproval, setPendingApproval] = useState<PendingApproval | null>(null);
+  const [decidingApproval, setDecidingApproval] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const convoListRef = useRef<HTMLDivElement>(null);
@@ -106,6 +140,7 @@ export function ChatPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const editTextareaRef = useRef<HTMLTextAreaElement>(null);
   const composerTextareaRef = useRef<HTMLTextAreaElement>(null);
+  const approvalPanelRef = useRef<HTMLDivElement>(null);
   const selectedConvoIdRef = useRef<number | null>(null);
   const streamConvoIdRef = useRef<number | null>(null);
 
@@ -134,7 +169,14 @@ export function ChatPage() {
       setSelectedAgentId(validAgentId);
     });
     listLlms().then(setLlms).catch(() => {});
+    listGuardrailPolicies().then(setPolicies).catch(() => {});
   }, []);
+
+  useEffect(() => {
+    if (pendingApproval) {
+      approvalPanelRef.current?.focus();
+    }
+  }, [pendingApproval]);
 
   const refreshRunningConversations = useCallback(async () => {
     try {
@@ -186,6 +228,7 @@ export function ChatPage() {
       setStreamContent("");
       setStreamSteps([]);
       setStreamError(null);
+      setPendingApproval(null);
     }
     listBatches(convoId).then((newBatches) => {
       if (selectedConvoIdRef.current === convoId) {
@@ -212,6 +255,7 @@ export function ChatPage() {
     setStreamContent("");
     setStreamSteps([]);
     setStreamError(null);
+    setPendingApproval(null);
     if (runningBatch) {
       setOptimisticContent(runningBatch.userContent);
       setOptimisticImages((runningBatch.attachments ?? []).map((a) => a.url));
@@ -293,6 +337,7 @@ export function ChatPage() {
     setStreamContent("");
     setStreamSteps([]);
     setStreamError(null);
+    setPendingApproval(null);
     if (!selectedConvoId) {
       setBatches([]);
       return;
@@ -438,6 +483,7 @@ export function ChatPage() {
     setStreamContent("");
     setStreamSteps([]);
     setStreamError(null);
+    setPendingApproval(null);
     setRunningConvoIds((prev) => new Set(prev).add(chatConvoId));
 
     try {
@@ -507,6 +553,28 @@ export function ChatPage() {
     }
   };
 
+  const handlePolicyChange = async (value: string) => {
+    if (selectedConvoId == null) return;
+    try {
+      const updated = await setConversationGuardrailPolicy(selectedConvoId, Number(value));
+      setConversations((prev) => prev.map((c) => (c.id === updated.id ? { ...c, guardrailPolicyId: updated.guardrailPolicyId } : c)));
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "策略切换失败");
+    }
+  };
+
+  const handleApprovalDecision = async (approve: boolean) => {
+    if (selectedConvoId == null || !pendingApproval || decidingApproval) return;
+    setDecidingApproval(true);
+    try {
+      await decideApproval(selectedConvoId, pendingApproval.toolCallId, approve);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "操作失败");
+    } finally {
+      setDecidingApproval(false);
+    }
+  };
+
   const handleStreamEvent = (convoId: number, event: ChatEventDTO) => {
     switch (event.type) {
       case "thinking":
@@ -569,6 +637,36 @@ export function ChatPage() {
         break;
       case "stopped":
         break;
+      case "approval": {
+        const info = parseApprovalContent(event.content);
+        if (!info || info.decision === "pending") {
+          setPendingApproval({
+            toolCallId: event.toolCallId ?? "",
+            toolName: event.toolName ?? "",
+            toolArguments: event.toolArguments ?? "",
+            policyName: info?.policyName,
+          });
+        } else {
+          setPendingApproval((prev) => (prev && prev.toolCallId === event.toolCallId ? null : prev));
+        }
+        setStreamSteps((prev) => {
+          const step: StreamStep = {
+            type: "approval",
+            toolCallId: event.toolCallId ?? undefined,
+            name: event.toolName ?? "",
+            args: event.toolArguments ?? "",
+            approval: info,
+          };
+          const existingIdx = prev.findIndex((s) => s.type === "approval" && s.toolCallId === event.toolCallId);
+          if (existingIdx >= 0) {
+            const updated = [...prev];
+            updated[existingIdx] = step;
+            return updated;
+          }
+          return [...prev, step];
+        });
+        break;
+      }
     }
   };
 
@@ -616,22 +714,38 @@ export function ChatPage() {
           className="hidden"
           onChange={(e) => { handleImageSelect(e.target.files); e.target.value = ""; }}
         />
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <span>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="rounded-full text-muted-foreground"
-                disabled={!canVision}
-                onClick={() => fileInputRef.current?.click()}
-              >
-                <Plus className="size-4" />
-              </Button>
-            </span>
-          </TooltipTrigger>
-          <TooltipContent>{canVision ? "上传图片" : "当前模型不支持图片输入"}</TooltipContent>
-        </Tooltip>
+        <div className="flex items-center gap-1">
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="rounded-full text-muted-foreground"
+                  disabled={!canVision}
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  <Plus className="size-4" />
+                </Button>
+              </span>
+            </TooltipTrigger>
+            <TooltipContent>{canVision ? "上传图片" : "当前模型不支持图片输入"}</TooltipContent>
+          </Tooltip>
+          <Select
+            value={currentConvo?.guardrailPolicyId != null ? String(currentConvo.guardrailPolicyId) : undefined}
+            onValueChange={handlePolicyChange}
+          >
+            <SelectTrigger className="h-7 w-auto gap-1 rounded-full border-none bg-transparent px-2 text-xs text-muted-foreground shadow-none focus:ring-0">
+              <Shield className="size-3.5" />
+              <SelectValue placeholder="护栏策略" />
+            </SelectTrigger>
+            <SelectContent>
+              {policies.map((p) => (
+                <SelectItem key={p.id} value={String(p.id)}>{p.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
         {isCurrentConvoRunning ? (
           <Button variant="destructive" size="icon" className="rounded-full" onClick={handleStop} disabled={stopping} title="停止执行">
             {stopping ? <Loader2 className="size-4 animate-spin" /> : <Square className="size-3.5" fill="currentColor" />}
@@ -955,7 +1069,55 @@ export function ChatPage() {
             </div>
 
             <div className="p-4">
-              <div className="mx-auto max-w-3xl">{composer}</div>
+              <div className="mx-auto max-w-3xl">
+                {pendingApproval && (
+                  <div
+                    ref={approvalPanelRef}
+                    tabIndex={-1}
+                    onKeyDown={(e) => {
+                      if (e.key === "y" || e.key === "Y" || e.key === "Enter") {
+                        e.preventDefault();
+                        handleApprovalDecision(true);
+                      } else if (e.key === "n" || e.key === "N" || e.key === "Escape") {
+                        e.preventDefault();
+                        handleApprovalDecision(false);
+                      }
+                    }}
+                    className="mb-2 rounded-xl border border-amber-500/50 bg-background p-3 shadow-sm outline-none"
+                  >
+                    <div className="flex items-center gap-2 text-sm">
+                      <ShieldAlert className="size-4 text-amber-500" />
+                      <span className="font-medium">审批请求</span>
+                      {pendingApproval.policyName && (
+                        <span className="text-xs text-muted-foreground">{pendingApproval.policyName}</span>
+                      )}
+                    </div>
+                    <div className="mt-2 flex items-center gap-2 text-xs">
+                      <span className="rounded bg-muted px-1.5 py-0.5 font-medium">{pendingApproval.toolName}</span>
+                      <code className="flex-1 truncate text-muted-foreground" title={approvalArgsPreview(pendingApproval.toolArguments)}>
+                        {approvalArgsPreview(pendingApproval.toolArguments)}
+                      </code>
+                    </div>
+                    <div className="mt-3 flex items-center gap-2">
+                      <Button size="sm" className="h-7" onClick={() => handleApprovalDecision(true)} disabled={decidingApproval}>
+                        <Check className="size-3.5" />
+                        批准
+                        <kbd className="ml-1 rounded border bg-primary-foreground/20 px-1 text-[10px]">Y</kbd>
+                      </Button>
+                      <Button size="sm" variant="outline" className="h-7" onClick={() => handleApprovalDecision(false)} disabled={decidingApproval}>
+                        <X className="size-3.5" />
+                        拒绝
+                        <kbd className="ml-1 rounded border bg-muted px-1 text-[10px]">N</kbd>
+                      </Button>
+                      <Button size="sm" variant="ghost" className="ml-auto h-7 text-muted-foreground" onClick={handleStop}>
+                        <Square className="size-3" fill="currentColor" />
+                        中断执行
+                      </Button>
+                    </div>
+                  </div>
+                )}
+                {composer}
+              </div>
             </div>
           </>
           )

@@ -70,6 +70,16 @@ export interface ConversationDTO {
   agentId: number;
   title: string | null;
   type: string | null;
+  guardrailPolicyId: number | null;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface GuardrailPolicyDTO {
+  id: number;
+  name: string;
+  configJson: string;
+  builtin: boolean;
   createdAt: number;
   updatedAt: number;
 }
