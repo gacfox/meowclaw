@@ -6,13 +6,12 @@ import { listLlms } from "@/services/llm";
 import { listConversations, createConversation, getConversation, deleteConversation, renameConversation, listBatches, chatStream, watchStream, listRunningConversations, stopChat, truncateAfterBatch, waitForTitle } from "@/services/conversation";
 import { useAuthStore } from "@/stores/auth";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Send, Trash2, Loader2, ChevronRight, Copy, Pencil, RefreshCw, ArrowUp, ArrowDown, Check, Clock, TriangleAlert, X, ImagePlus, Square } from "lucide-react";
+import { Plus, Trash2, Loader2, ChevronRight, Copy, Pencil, RefreshCw, ArrowUp, ArrowDown, Check, Clock, TriangleAlert, X, Square } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Alert, AlertTitle, AlertDescription, AlertAction } from "@/components/ui/alert";
@@ -105,6 +104,7 @@ export function ChatPage() {
   const abortRef = useRef<AbortController | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const editTextareaRef = useRef<HTMLTextAreaElement>(null);
+  const composerTextareaRef = useRef<HTMLTextAreaElement>(null);
   const selectedConvoIdRef = useRef<number | null>(null);
   const streamConvoIdRef = useRef<number | null>(null);
 
@@ -236,6 +236,17 @@ export function ChatPage() {
     el.style.height = `${target}px`;
     el.style.overflowY = el.scrollHeight > maxHeight ? "auto" : "hidden";
   }, [editDraft, editingBatchId]);
+
+  useEffect(() => {
+    const el = composerTextareaRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    const lineHeight = parseFloat(getComputedStyle(el).lineHeight) || 20;
+    const maxHeight = lineHeight * 10 + 4;
+    const target = Math.min(el.scrollHeight, maxHeight);
+    el.style.height = `${target}px`;
+    el.style.overflowY = el.scrollHeight > maxHeight ? "auto" : "hidden";
+  }, [input]);
 
   useEffect(() => {
     if (!selectedAgentId) return;
@@ -560,6 +571,79 @@ export function ChatPage() {
     }
   };
 
+  const showHero = !loadingBatches && batches.length === 0 && !isCurrentConvoRunning && optimisticContent === null;
+
+  const composer = (
+    <div className="rounded-2xl border border-input bg-background px-3 pb-2 pt-3 shadow-sm transition-shadow focus-within:border-ring focus-within:ring-[3px] focus-within:ring-ring/50">
+      {pendingImages.length > 0 && (
+        <div className="mb-2 flex flex-wrap gap-2">
+          {pendingImages.map((img, i) => (
+            <div key={i} className="relative">
+              <img src={img.dataUrl} alt={img.name} className="size-14 rounded border object-cover" />
+              <button
+                className="absolute -right-1.5 -top-1.5 rounded-full bg-destructive p-0.5 text-destructive-foreground"
+                onClick={() => setPendingImages((prev) => prev.filter((_, idx) => idx !== i))}
+                title="移除"
+              >
+                <X className="size-3" />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+      <textarea
+        ref={composerTextareaRef}
+        value={input}
+        onChange={(e) => setInput(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" && !e.shiftKey && !e.ctrlKey && !e.nativeEvent.isComposing) {
+            e.preventDefault();
+            handleSend();
+          }
+        }}
+        placeholder={isCurrentConvoRunning ? "正在执行中..." : "输入消息..."}
+        rows={1}
+        autoFocus
+        className="w-full resize-none bg-transparent px-1 py-1 text-sm outline-none placeholder:text-muted-foreground"
+      />
+      <div className="mt-1 flex items-center justify-between">
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/png,image/jpeg,image/webp,image/gif"
+          multiple
+          className="hidden"
+          onChange={(e) => { handleImageSelect(e.target.files); e.target.value = ""; }}
+        />
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="rounded-full text-muted-foreground"
+                disabled={!canVision}
+                onClick={() => fileInputRef.current?.click()}
+              >
+                <Plus className="size-4" />
+              </Button>
+            </span>
+          </TooltipTrigger>
+          <TooltipContent>{canVision ? "上传图片" : "当前模型不支持图片输入"}</TooltipContent>
+        </Tooltip>
+        {isCurrentConvoRunning ? (
+          <Button variant="destructive" size="icon" className="rounded-full" onClick={handleStop} disabled={stopping} title="停止执行">
+            {stopping ? <Loader2 className="size-4 animate-spin" /> : <Square className="size-3.5" fill="currentColor" />}
+          </Button>
+        ) : (
+          <Button size="icon" className="rounded-full" onClick={handleSend} disabled={!input.trim() && pendingImages.length === 0} title="发送">
+            <ArrowUp className="size-4" />
+          </Button>
+        )}
+      </div>
+    </div>
+  );
+
   return (
     <div className="flex h-[calc(100vh-3.5rem)] -m-6">
       {/* Left Panel */}
@@ -643,6 +727,15 @@ export function ChatPage() {
       {/* Right Panel - Chat Area */}
       <div className="flex flex-1 flex-col">
         {selectedConvoId ? (
+          showHero ? (
+            <div className="flex flex-1 flex-col items-center justify-center gap-10 p-4">
+              <div className="flex items-center gap-3">
+                <img src="/favicon.svg" alt="喵爪" className="size-10 rounded-full border bg-white p-1 shadow-sm" />
+                <span className="text-2xl font-medium tracking-tight">接下来有什么计划？</span>
+              </div>
+              <div className="w-full max-w-3xl">{composer}</div>
+            </div>
+          ) : (
           <>
             <div className="flex-1 overflow-y-auto p-4">
               {loadingBatches ? (
@@ -860,69 +953,11 @@ export function ChatPage() {
               )}
             </div>
 
-            <div className="border-t p-4">
-              <div className="mx-auto max-w-3xl">
-                {pendingImages.length > 0 && (
-                  <div className="mb-2 flex flex-wrap gap-2">
-                    {pendingImages.map((img, i) => (
-                      <div key={i} className="relative">
-                        <img src={img.dataUrl} alt={img.name} className="size-14 rounded border object-cover" />
-                        <button
-                          className="absolute -right-1.5 -top-1.5 rounded-full bg-destructive p-0.5 text-destructive-foreground"
-                          onClick={() => setPendingImages((prev) => prev.filter((_, idx) => idx !== i))}
-                          title="移除"
-                        >
-                          <X className="size-3" />
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-                <div className="flex gap-2">
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept="image/png,image/jpeg,image/webp,image/gif"
-                    multiple
-                    className="hidden"
-                    onChange={(e) => { handleImageSelect(e.target.files); e.target.value = ""; }}
-                  />
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <span>
-                        <Button
-                          variant="outline"
-                          size="icon"
-                          disabled={!canVision || isCurrentConvoRunning}
-                          onClick={() => fileInputRef.current?.click()}
-                        >
-                          <ImagePlus className="size-4" />
-                        </Button>
-                      </span>
-                    </TooltipTrigger>
-                    <TooltipContent>{canVision ? "上传图片" : "当前模型不支持图片输入"}</TooltipContent>
-                  </Tooltip>
-                  <Input
-                    value={input}
-                    onChange={(e) => setInput(e.target.value)}
-                    onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
-                    placeholder={isCurrentConvoRunning ? "正在执行中..." : "输入消息..."}
-                    disabled={isCurrentConvoRunning}
-                    className="flex-1"
-                  />
-                  {isCurrentConvoRunning ? (
-                    <Button variant="destructive" onClick={handleStop} disabled={stopping} title="停止执行">
-                      {stopping ? <Loader2 className="size-4 animate-spin" /> : <Square className="size-4" fill="currentColor" />}
-                    </Button>
-                  ) : (
-                    <Button onClick={handleSend} disabled={!input.trim() && pendingImages.length === 0}>
-                      <Send className="size-4" />
-                    </Button>
-                  )}
-                </div>
-              </div>
+            <div className="p-4">
+              <div className="mx-auto max-w-3xl">{composer}</div>
             </div>
           </>
+          )
         ) : (
           <div className="flex flex-1 items-center justify-center text-muted-foreground">
             {selectedAgentId ? "点击「新对话」开始聊天" : "请先选择一个智能体"}
