@@ -55,6 +55,7 @@ function StreamBubble({ steps, content, thinking }: { steps: StreamStep[]; conte
             name={step.name ?? "tool"}
             args={step.args}
             result={step.result}
+            pending={step.result === undefined}
           />
         )
       )}

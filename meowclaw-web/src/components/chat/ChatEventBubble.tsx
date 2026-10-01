@@ -1,7 +1,7 @@
 import type { ChatEventDTO } from "@/types";
 import { Table, TableBody, TableCell, TableRow } from "@/components/ui/table";
 import { MarkdownRenderer } from "@/components/markdown/MarkdownRenderer";
-import { Check, ChevronRight, CircleStop, Wrench } from "lucide-react";
+import { Check, ChevronRight, CircleStop, Loader2, Wrench } from "lucide-react";
 
 function parseToolArgs(json: string | null | undefined): Record<string, unknown> | null {
   if (!json) return null;
@@ -27,10 +27,12 @@ export function ToolCallDetails({
   name,
   args,
   result,
+  pending,
 }: {
   name: string;
   args?: string;
   result?: string;
+  pending?: boolean;
 }) {
   const parsed = parseToolArgs(args);
   return (
@@ -39,6 +41,7 @@ export function ToolCallDetails({
         <ChevronRight className="size-3 shrink-0 transition-transform group-open:rotate-90" />
         <Wrench className="size-3" />
         {name}
+        {pending && <Loader2 className="size-3 animate-spin" />}
       </summary>
       <div className="mt-2 space-y-2 rounded border bg-background/50 p-2">
         {parsed && Object.keys(parsed).length > 0 && (
@@ -64,7 +67,7 @@ export function ToolCallDetails({
         )}
         <div>
           <div className="mb-1 text-xs text-muted-foreground">执行结果：</div>
-          <pre className="whitespace-pre-wrap rounded bg-muted p-2 text-xs">{result ?? "(无结果)"}</pre>
+          <pre className="whitespace-pre-wrap rounded bg-muted p-2 text-xs">{result ?? (pending ? "执行中..." : "(无结果)")}</pre>
         </div>
       </div>
     </details>
