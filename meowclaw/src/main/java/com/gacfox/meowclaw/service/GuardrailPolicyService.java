@@ -143,17 +143,19 @@ public class GuardrailPolicyService {
     }
 
     /**
-     * 默认策略ID，用于会话未显式指定策略时对外展示生效策略
+     * 会话未显式指定策略时的生效默认策略ID：定时任务会话无人值守，默认无限制模式，其余会话默认工作区读写模式
      */
     @Transactional(readOnly = true)
-    public Long getDefaultPolicyId() {
-        return guardrailPolicyRepository.findByName(DEFAULT_POLICY_NAME)
-                .orElseThrow(() -> new IllegalStateException("默认安全护栏策略缺失: " + DEFAULT_POLICY_NAME))
+    public Long getEffectiveDefaultPolicyId(String conversationType) {
+        String name = "SCHEDULED".equals(conversationType) ? POLICY_UNLIMITED : DEFAULT_POLICY_NAME;
+        return guardrailPolicyRepository.findByName(name)
+                .orElseThrow(() -> new IllegalStateException("内置安全护栏策略缺失: " + name))
                 .getId();
     }
 
     /**
-     * 解析会话当前生效的策略，未指定或策略已删除时回退默认策略；子智能体会话继承父会话策略
+     * 解析会话当前生效的策略：子智能体会话继承父会话策略；显式指定的策略优先；
+     * 未指定时定时任务会话回退无限制模式（无人值守，审批会导致任务卡死），其余回退默认策略
      */
     @Transactional(readOnly = true)
     public GuardrailPolicy resolvePolicy(Long conversationId) {
@@ -165,8 +167,9 @@ public class GuardrailPolicyService {
         GuardrailPolicy policy = conv.getGuardrailPolicyId() == null ? null
                 : guardrailPolicyRepository.findById(conv.getGuardrailPolicyId()).orElse(null);
         if (policy == null) {
-            policy = guardrailPolicyRepository.findByName(DEFAULT_POLICY_NAME)
-                    .orElseThrow(() -> new IllegalStateException("默认安全护栏策略缺失: " + DEFAULT_POLICY_NAME));
+            String fallbackName = "SCHEDULED".equals(conv.getType()) ? POLICY_UNLIMITED : DEFAULT_POLICY_NAME;
+            policy = guardrailPolicyRepository.findByName(fallbackName)
+                    .orElseThrow(() -> new IllegalStateException("内置安全护栏策略缺失: " + fallbackName));
         }
         return policy;
     }

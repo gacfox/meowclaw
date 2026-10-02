@@ -71,12 +71,12 @@ public class ConversationService {
     }
 
     /**
-     * 实体转DTO，未显式指定安全护栏策略时回填默认策略ID，保证对外暴露的始终是生效策略
+     * 实体转DTO，未显式指定安全护栏策略时回填生效的默认策略ID（定时任务会话默认无限制模式）
      */
     private ConversationDTO toDTO(Conversation conv) {
         ConversationDTO dto = conversationConverter.toDTO(conv);
         if (dto.getGuardrailPolicyId() == null) {
-            dto.setGuardrailPolicyId(guardrailPolicyService.getDefaultPolicyId());
+            dto.setGuardrailPolicyId(guardrailPolicyService.getEffectiveDefaultPolicyId(conv.getType()));
         }
         return dto;
     }
