@@ -50,6 +50,7 @@ MeowClaw为所有智能体配备了以下工具，它们默认全部启用以实
 - `exec`：执行Shell命令，同时支持Windows CMD和Bash环境。
 - `memory_write`：异步写入长期记忆，提交后立即返回不阻塞对话。
 - `memory_recall`：召回长期记忆。
+- `spawn_subagent`：创建子智能体。
 
 #### MCP工具
 
@@ -195,4 +196,4 @@ cd meowclaw/target && java -jar meowclaw-0.0.1-SNAPSHOT.jar
 ## 安全提醒
 
 1. 不建议将MeowClaw暴露到公网，部署在云主机上时，推荐用SSH隧道转发到本地端口访问。
-2. 沙箱限制、`Human-in-the-loop`等功能还在开发中，智能体配置全部内置工具后权限非常高，可能意外导致电脑或云主机失联、文件损坏等情况。
+2. MeowClaw智能体本质上等价于一个操作系统的Shell，当安全护栏策略选择`无限制模式`时，智能体配置全部内置工具后权限非常高，如果操作不当可能意外导致电脑或云主机失联、文件损坏等情况。
