@@ -358,7 +358,7 @@ export function ScheduledTaskPage() {
                   setForm({ ...form, cronExpression: e.target.value });
                   setCronError("");
                 }}
-                placeholder="0 0 * * *（每天零点）"
+                placeholder="0 0 0 * * ?（每天零点）"
               />
               {cronError && <p className="text-xs text-destructive">{cronError}</p>}
               <p className="text-xs text-muted-foreground">
