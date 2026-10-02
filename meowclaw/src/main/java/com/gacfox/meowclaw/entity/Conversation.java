@@ -37,6 +37,12 @@ public class Conversation {
     @Column(name = "guardrail_policy_id")
     private Long guardrailPolicyId;
 
+    @Column(name = "parent_conversation_id")
+    private Long parentConversationId;
+
+    @Column(name = "allowed_tools")
+    private String allowedTools;
+
     @Column(name = "created_at", nullable = false)
     private Long createdAt;
 

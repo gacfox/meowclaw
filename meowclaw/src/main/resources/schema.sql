@@ -47,9 +47,11 @@ CREATE TABLE IF NOT EXISTS mc_conversation (
     id BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
     agent_id BIGINT NOT NULL COMMENT '关联智能体ID',
     title VARCHAR(500) COMMENT '会话标题',
-    type VARCHAR(50) DEFAULT 'CHAT' COMMENT '会话类型(CHAT=智能体对话)',
+    type VARCHAR(50) DEFAULT 'CHAT' COMMENT '会话类型(CHAT=智能体对话,SUBAGENT=子智能体)',
     context_json TEXT COMMENT '会话级上下文状态JSON',
     guardrail_policy_id BIGINT COMMENT '安全护栏策略ID(空使用默认策略)',
+    parent_conversation_id BIGINT COMMENT '父会话ID(仅子智能体会话)',
+    allowed_tools TEXT COMMENT '子智能体工具白名单JSON数组(仅子智能体会话,空则按智能体配置)',
     created_at BIGINT NOT NULL COMMENT '创建时间(时间戳毫秒)',
     updated_at BIGINT NOT NULL COMMENT '更新时间(时间戳毫秒)',
     PRIMARY KEY (id)

@@ -3,6 +3,7 @@ export interface ApprovalContent {
   policyName?: string;
   matchedRuleIndex?: number;
   decidedAt?: number | null;
+  childConversationId?: number;
 }
 
 export function parseApprovalContent(content: string | null | undefined): ApprovalContent | null {

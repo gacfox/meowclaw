@@ -18,7 +18,9 @@ import com.gacfox.meowclaw.interceptor.llm.LlmLoggingInterceptor;
 import com.gacfox.meowclaw.interceptor.llm.TokenUsageAccumulator;
 import com.gacfox.meowclaw.interceptor.llm.LlmCallRecordInterceptor;
 import com.gacfox.meowclaw.interceptor.llm.TokenUsageContext;
-import com.gacfox.meowclaw.guardrail.GuardrailInterceptor;
+import com.gacfox.meowclaw.interceptor.agent.GuardrailInterceptor;
+import com.gacfox.meowclaw.interceptor.agent.SubagentJoinInterceptor;
+import com.gacfox.meowclaw.interceptor.agent.ToolCallIdStashInterceptor;
 import com.gacfox.proarc.agentic.agent.AgentContext;
 import com.gacfox.proarc.agentic.agent.ReActAgentExecutor;
 import com.gacfox.proarc.agentic.agent.ToolInvocation;
@@ -74,6 +76,7 @@ public class ChatService {
     private final ChatAttachmentService chatAttachmentService;
     private final MemoryService memoryService;
     private final GuardrailPolicyService guardrailPolicyService;
+    private final SubagentRegistry subagentRegistry;
 
     @Autowired
     public ChatService(ConversationService conversationService,
@@ -90,7 +93,8 @@ public class ChatService {
                        ContextCompressionService contextCompressionService,
                        ChatAttachmentService chatAttachmentService,
                        MemoryService memoryService,
-                       GuardrailPolicyService guardrailPolicyService) {
+                       GuardrailPolicyService guardrailPolicyService,
+                       SubagentRegistry subagentRegistry) {
         this.conversationService = conversationService;
         this.chatPersistenceService = chatPersistenceService;
         this.agentRepository = agentRepository;
@@ -106,6 +110,7 @@ public class ChatService {
         this.chatAttachmentService = chatAttachmentService;
         this.memoryService = memoryService;
         this.guardrailPolicyService = guardrailPolicyService;
+        this.subagentRegistry = subagentRegistry;
     }
 
     private final Map<Long, ActiveRun> activeRuns = new ConcurrentHashMap<>();
@@ -118,6 +123,7 @@ public class ChatService {
         private final AtomicBoolean stopRequested = new AtomicBoolean();
         private final AtomicInteger eventOrder = new AtomicInteger(0);
         private volatile AgentContext context;
+        private volatile Long batchId;
         private volatile PendingApproval pendingApproval;
     }
 
@@ -126,6 +132,8 @@ public class ChatService {
      */
     private static final class PendingApproval {
         private final Long eventId;
+        private final Long conversationId;
+        private final Long parentConversationId;
         private final String toolCallId;
         private final String toolName;
         private final String toolArguments;
@@ -133,9 +141,11 @@ public class ChatService {
         private final int matchedRuleIndex;
         private final CompletableFuture<GuardrailInterceptor.ApprovalOutcome> future = new CompletableFuture<>();
 
-        private PendingApproval(Long eventId, String toolCallId, String toolName, String toolArguments,
-                                String policyName, int matchedRuleIndex) {
+        private PendingApproval(Long eventId, Long conversationId, Long parentConversationId, String toolCallId,
+                                String toolName, String toolArguments, String policyName, int matchedRuleIndex) {
             this.eventId = eventId;
+            this.conversationId = conversationId;
+            this.parentConversationId = parentConversationId;
             this.toolCallId = toolCallId;
             this.toolName = toolName;
             this.toolArguments = toolArguments;
@@ -188,6 +198,11 @@ public class ChatService {
         if (pending != null && pending.future.complete(GuardrailInterceptor.ApprovalOutcome.INTERRUPTED)) {
             settleApprovalEvent(run, pending, "interrupted");
         }
+        for (SubagentRegistry.ChildHandle child : subagentRegistry.childrenOf(conversationId)) {
+            if (!child.future().isDone()) {
+                stop(child.childConversationId());
+            }
+        }
         return true;
     }
 
@@ -216,15 +231,24 @@ public class ChatService {
      */
     private GuardrailInterceptor.ApprovalOutcome awaitApproval(ActiveRun run, Long batchId, Long conversationId,
                                                                ToolInvocation invocation, String policyName, int matchedRuleIndex) {
-        String content = approvalContent("pending", policyName, matchedRuleIndex, null);
+        Long parentConversationId = conversationService.getParentConversationId(conversationId);
+        Long childConversationId = parentConversationId != null ? conversationId : null;
+        String content = approvalContent("pending", policyName, matchedRuleIndex, null, childConversationId);
         Long eventId = chatPersistenceService.saveChatEvent(batchId, run.eventOrder.getAndIncrement(),
                 "approval", content, invocation.getToolName(), invocation.getToolCallId(), invocation.getArguments());
-        PendingApproval pending = new PendingApproval(eventId, invocation.getToolCallId(),
-                invocation.getToolName(), invocation.getArguments(), policyName, matchedRuleIndex);
+        PendingApproval pending = new PendingApproval(eventId, conversationId, parentConversationId,
+                invocation.getToolCallId(), invocation.getToolName(), invocation.getArguments(), policyName, matchedRuleIndex);
         run.pendingApproval = pending;
-        emitRunEvent(run, ChatEventDTO.builder()
+        ChatEventDTO dto = ChatEventDTO.builder()
                 .id(eventId).type("approval").toolCallId(pending.toolCallId)
-                .toolName(pending.toolName).toolArguments(pending.toolArguments).content(content).build());
+                .toolName(pending.toolName).toolArguments(pending.toolArguments).content(content).build();
+        emitRunEvent(run, dto);
+        if (parentConversationId != null) {
+            ActiveRun parentRun = activeRuns.get(parentConversationId);
+            if (parentRun != null) {
+                emitRunEvent(parentRun, dto);
+            }
+        }
         try {
             return pending.future.get();
         } catch (InterruptedException e) {
@@ -239,30 +263,90 @@ public class ChatService {
     }
 
     /**
-     * 审批落定：更新事件内容并广播最终状态
+     * 审批落定：更新事件内容并广播最终状态；子智能体的审批同步广播到父会话事件流
      */
     private void settleApprovalEvent(ActiveRun run, PendingApproval pending, String decision) {
-        String content = approvalContent(decision, pending.policyName, pending.matchedRuleIndex, System.currentTimeMillis());
+        Long childConversationId = pending.parentConversationId != null ? pending.conversationId : null;
+        String content = approvalContent(decision, pending.policyName, pending.matchedRuleIndex,
+                System.currentTimeMillis(), childConversationId);
         try {
             chatPersistenceService.updateChatEventContent(pending.eventId, content);
         } catch (Exception e) {
             log.warn("审批事件更新失败: eventId={}", pending.eventId, e);
         }
-        emitRunEvent(run, ChatEventDTO.builder()
+        ChatEventDTO dto = ChatEventDTO.builder()
                 .id(pending.eventId).type("approval").toolCallId(pending.toolCallId)
-                .toolName(pending.toolName).toolArguments(pending.toolArguments).content(content).build());
+                .toolName(pending.toolName).toolArguments(pending.toolArguments).content(content).build();
+        emitRunEvent(run, dto);
+        if (pending.parentConversationId != null) {
+            ActiveRun parentRun = activeRuns.get(pending.parentConversationId);
+            if (parentRun != null) {
+                emitRunEvent(parentRun, dto);
+            }
+        }
     }
 
-    private static String approvalContent(String decision, String policyName, int matchedRuleIndex, Long decidedAt) {
+    private static String approvalContent(String decision, String policyName, int matchedRuleIndex, Long decidedAt,
+                                          Long childConversationId) {
         try {
             Map<String, Object> map = new LinkedHashMap<>();
             map.put("decision", decision);
             map.put("policyName", policyName);
             map.put("matchedRuleIndex", matchedRuleIndex);
             map.put("decidedAt", decidedAt);
+            if (childConversationId != null) {
+                map.put("childConversationId", childConversationId);
+            }
             return OBJECT_MAPPER.writeValueAsString(map);
         } catch (Exception e) {
             return "{\"decision\":\"" + decision + "\"}";
+        }
+    }
+
+    /**
+     * 创建子任务事件（running状态）并广播到父会话事件流，返回事件ID
+     */
+    public Long createSubagentEvent(Long parentConversationId, String toolCallId, Long childConversationId, String description) {
+        ActiveRun run = activeRuns.get(parentConversationId);
+        if (run == null || run.batchId == null) {
+            return null;
+        }
+        String content = subagentContent(childConversationId, description, "running");
+        Long eventId = chatPersistenceService.saveChatEvent(run.batchId, run.eventOrder.getAndIncrement(),
+                "subagent", content, null, toolCallId, null);
+        emitRunEvent(run, ChatEventDTO.builder()
+                .id(eventId).type("subagent").toolCallId(toolCallId).content(content).build());
+        return eventId;
+    }
+
+    /**
+     * 子任务落定：更新事件内容并广播最终状态到父会话事件流
+     */
+    public void settleSubagentEvent(Long parentConversationId, Long eventId, String toolCallId, Long childConversationId,
+                                    String description, String status) {
+        ActiveRun run = activeRuns.get(parentConversationId);
+        if (run == null || eventId == null) {
+            return;
+        }
+        String content = subagentContent(childConversationId, description, status);
+        try {
+            chatPersistenceService.updateChatEventContent(eventId, content);
+        } catch (Exception e) {
+            log.warn("子任务事件更新失败: eventId={}", eventId, e);
+        }
+        emitRunEvent(run, ChatEventDTO.builder()
+                .id(eventId).type("subagent").toolCallId(toolCallId).content(content).build());
+    }
+
+    private static String subagentContent(Long childConversationId, String description, String status) {
+        try {
+            Map<String, Object> map = new LinkedHashMap<>();
+            map.put("childConversationId", childConversationId);
+            map.put("description", description);
+            map.put("status", status);
+            return OBJECT_MAPPER.writeValueAsString(map);
+        } catch (Exception e) {
+            return "{\"status\":\"" + status + "\"}";
         }
     }
 
@@ -306,13 +390,20 @@ public class ChatService {
             ChatEventBatch batch = chatPersistenceService.createBatch(
                     conversationId, userContent == null ? "" : userContent, attachmentsJson);
             batchId = batch.getId();
+            run.batchId = batchId;
 
             TokenUsageAccumulator tokenAccum = new TokenUsageAccumulator();
             LlmClient llmClient = buildMainLlmClient(llm, batchId, conv, tokenAccum);
             LlmClient secondaryLlmClient = buildAuxiliaryLlmClient(secondaryLlm, batchId, conv);
 
-            List<String> toolNames = new ArrayList<>(parseJsonArray(agent.getEnabledTools()));
-            toolNames.addAll(parseJsonArray(agent.getEnabledMcpTools()));
+            List<String> toolNames;
+            if (SubagentService.TYPE_SUBAGENT.equals(conv.getType())
+                    && conv.getAllowedTools() != null && !conv.getAllowedTools().isBlank()) {
+                toolNames = new ArrayList<>(parseJsonArray(conv.getAllowedTools()));
+            } else {
+                toolNames = new ArrayList<>(parseJsonArray(agent.getEnabledTools()));
+                toolNames.addAll(parseJsonArray(agent.getEnabledMcpTools()));
+            }
             toolNames.removeIf(name -> {
                 if (toolRegistry.getAgenticTool(name) == null) {
                     log.warn("工具未注册，已从启用列表忽略: {}", name);
@@ -338,6 +429,7 @@ public class ChatService {
             }
             runSink.tryEmitError(e);
             activeRuns.remove(conversationId);
+            subagentRegistry.clear(conversationId);
         }
     }
 
@@ -391,8 +483,9 @@ public class ChatService {
                 .defaultLlmClient(llmClient)
                 .toolRegistry(toolRegistry)
                 .defaultToolNames(toolNames)
-                .interceptors(List.of(agentSystemPromptRefreshInterceptor, agentLoggingInterceptor))
-                .toolCallInterceptors(List.of(guardrailInterceptor))
+                .interceptors(List.of(agentSystemPromptRefreshInterceptor,
+                        new SubagentJoinInterceptor(subagentRegistry), agentLoggingInterceptor))
+                .toolCallInterceptors(List.of(new ToolCallIdStashInterceptor(), guardrailInterceptor))
                 .build();
     }
 
@@ -589,10 +682,12 @@ public class ChatService {
                         e -> {
                             sink.tryEmitError(e);
                             activeRuns.remove(conversationId);
+                            subagentRegistry.clear(conversationId);
                         },
                         () -> {
                             sink.tryEmitComplete();
                             activeRuns.remove(conversationId);
+                            subagentRegistry.clear(conversationId);
                         });
     }
 

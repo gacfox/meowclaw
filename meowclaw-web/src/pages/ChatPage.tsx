@@ -18,9 +18,12 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { Alert, AlertTitle, AlertDescription, AlertAction } from "@/components/ui/alert";
 import { motion, AnimatePresence } from "framer-motion";
 import { MarkdownRenderer } from "@/components/markdown/MarkdownRenderer";
-import { BatchBubble, FinalAnswerIndicator, ToolCallDetails, ApprovalDetails } from "@/components/chat/ChatEventBubble";
+import { BatchBubble, FinalAnswerIndicator, ToolCallDetails, ApprovalDetails, SubagentDetails } from "@/components/chat/ChatEventBubble";
 import { parseApprovalContent } from "@/lib/approval";
 import type { ApprovalContent } from "@/lib/approval";
+import { parseSubagentContent } from "@/lib/subagent";
+import type { SubagentContent } from "@/lib/subagent";
+import { SubagentDrawer } from "@/components/chat/SubagentDrawer";
 import { toast } from "sonner";
 
 interface StreamStep {
@@ -31,6 +34,7 @@ interface StreamStep {
   args?: string;
   result?: string;
   approval?: ApprovalContent | null;
+  subagent?: SubagentContent | null;
 }
 
 interface PendingApproval {
@@ -38,6 +42,7 @@ interface PendingApproval {
   toolName: string;
   toolArguments: string;
   policyName?: string;
+  childConversationId?: number | null;
 }
 
 function approvalArgsPreview(toolArguments: string): string {
@@ -51,7 +56,7 @@ function approvalArgsPreview(toolArguments: string): string {
   }
 }
 
-function StreamBubble({ steps, content, thinking }: { steps: StreamStep[]; content: string; thinking?: boolean }) {
+function StreamBubble({ steps, content, thinking, onOpenSubagent }: { steps: StreamStep[]; content: string; thinking?: boolean; onOpenSubagent?: (childConversationId: number, description?: string) => void }) {
   return (
     <div className="max-w-[80%] space-y-2 rounded-lg bg-muted px-4 py-2 text-sm">
       {thinking && (
@@ -77,6 +82,16 @@ function StreamBubble({ steps, content, thinking }: { steps: StreamStep[]; conte
             decision={step.approval?.decision ?? "pending"}
             policyName={step.approval?.policyName}
             matchedRuleIndex={step.approval?.matchedRuleIndex}
+          />
+        ) : step.name === "spawn_subagent" ? (
+          <SubagentDetails
+            key={i}
+            args={step.args}
+            description={step.subagent?.description}
+            status={step.subagent?.status ?? "running"}
+            onOpen={step.subagent?.childConversationId != null && onOpenSubagent != null
+              ? () => onOpenSubagent(step.subagent!.childConversationId, step.subagent?.description)
+              : undefined}
           />
         ) : step.name === "final_answer" ? (
           <FinalAnswerIndicator key={i} />
@@ -130,6 +145,7 @@ export function ChatPage() {
   const [renamingId, setRenamingId] = useState<number | null>(null);
   const [renameDraft, setRenameDraft] = useState("");
   const [stopping, setStopping] = useState(false);
+  const [subagentView, setSubagentView] = useState<{ id: number; description?: string } | null>(null);
   const [policies, setPolicies] = useState<GuardrailPolicyDTO[]>([]);
   const [pendingApproval, setPendingApproval] = useState<PendingApproval | null>(null);
   const [decidingApproval, setDecidingApproval] = useState(false);
@@ -567,7 +583,7 @@ export function ChatPage() {
     if (selectedConvoId == null || !pendingApproval || decidingApproval) return;
     setDecidingApproval(true);
     try {
-      await decideApproval(selectedConvoId, pendingApproval.toolCallId, approve);
+      await decideApproval(pendingApproval.childConversationId ?? selectedConvoId, pendingApproval.toolCallId, approve);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "操作失败");
     } finally {
@@ -645,6 +661,7 @@ export function ChatPage() {
             toolName: event.toolName ?? "",
             toolArguments: event.toolArguments ?? "",
             policyName: info?.policyName,
+            childConversationId: info?.childConversationId ?? null,
           });
         } else {
           setPendingApproval((prev) => (prev && prev.toolCallId === event.toolCallId ? null : prev));
@@ -664,6 +681,18 @@ export function ChatPage() {
             return updated;
           }
           return [...prev, step];
+        });
+        break;
+      }
+      case "subagent": {
+        const info = parseSubagentContent(event.content);
+        if (!info) break;
+        setStreamSteps((prev) => {
+          const idx = prev.findIndex((s) => s.type === "tool_call" && s.toolCallId === event.toolCallId);
+          if (idx < 0) return prev;
+          const updated = [...prev];
+          updated[idx] = { ...updated[idx], subagent: info };
+          return updated;
         });
         break;
       }
@@ -979,7 +1008,7 @@ export function ChatPage() {
                               <AvatarImage src={currentAgent?.avatarUrl ?? undefined} />
                               <AvatarFallback className="text-xs">{currentAgent?.name?.[0]?.toUpperCase() ?? "A"}</AvatarFallback>
                             </Avatar>
-                            <BatchBubble events={batch.events} />
+                            <BatchBubble events={batch.events} onOpenSubagent={(id, desc) => setSubagentView({ id, description: desc })} />
                           </div>
                           <div className="ml-9 flex items-center gap-1">
                             <Tooltip>
@@ -1058,7 +1087,7 @@ export function ChatPage() {
                         <AvatarImage src={currentAgent?.avatarUrl ?? undefined} />
                         <AvatarFallback className="text-xs">{currentAgent?.name?.[0]?.toUpperCase() ?? "A"}</AvatarFallback>
                       </Avatar>
-                      <StreamBubble steps={streamSteps} content={streamContent} thinking={!streamContent && !streamError && streamSteps.length === 0} />
+                      <StreamBubble steps={streamSteps} content={streamContent} thinking={!streamContent && !streamError && streamSteps.length === 0} onOpenSubagent={(id, desc) => setSubagentView({ id, description: desc })} />
                       {streamError && <div className="text-destructive">{streamError}</div>}
                     </div>
                   )}
@@ -1087,7 +1116,7 @@ export function ChatPage() {
                   >
                     <div className="flex items-center gap-2 text-sm">
                       <ShieldAlert className="size-4 text-amber-500" />
-                      <span className="font-medium">审批请求</span>
+                      <span className="font-medium">{pendingApproval.childConversationId != null ? "子任务审批" : "审批请求"}</span>
                       {pendingApproval.policyName && (
                         <span className="text-xs text-muted-foreground">{pendingApproval.policyName}</span>
                       )}
@@ -1140,6 +1169,15 @@ export function ChatPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {subagentView && (
+        <SubagentDrawer
+          childConversationId={subagentView.id}
+          description={subagentView.description}
+          open={subagentView != null}
+          onClose={() => setSubagentView(null)}
+        />
+      )}
     </div>
   );
 }

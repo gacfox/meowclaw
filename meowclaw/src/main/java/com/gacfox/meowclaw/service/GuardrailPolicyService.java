@@ -5,7 +5,6 @@ import com.gacfox.meowclaw.dto.GuardrailPolicyDTO;
 import com.gacfox.meowclaw.dto.SaveGuardrailPolicyRequest;
 import com.gacfox.meowclaw.entity.Conversation;
 import com.gacfox.meowclaw.entity.GuardrailPolicy;
-import com.gacfox.meowclaw.guardrail.GuardrailPolicyEngine;
 import com.gacfox.meowclaw.repository.ConversationRepository;
 import com.gacfox.meowclaw.repository.GuardrailPolicyRepository;
 import jakarta.annotation.PostConstruct;
@@ -154,12 +153,15 @@ public class GuardrailPolicyService {
     }
 
     /**
-     * 解析会话当前生效的策略，未指定或策略已删除时回退默认策略
+     * 解析会话当前生效的策略，未指定或策略已删除时回退默认策略；子智能体会话继承父会话策略
      */
     @Transactional(readOnly = true)
     public GuardrailPolicy resolvePolicy(Long conversationId) {
         Conversation conv = conversationRepository.findById(conversationId)
                 .orElseThrow(() -> new IllegalArgumentException("会话不存在"));
+        if (conv.getParentConversationId() != null) {
+            conv = conversationRepository.findById(conv.getParentConversationId()).orElse(conv);
+        }
         GuardrailPolicy policy = conv.getGuardrailPolicyId() == null ? null
                 : guardrailPolicyRepository.findById(conv.getGuardrailPolicyId()).orElse(null);
         if (policy == null) {

@@ -2,7 +2,8 @@ import type { ChatEventDTO } from "@/types";
 import { Table, TableBody, TableCell, TableRow } from "@/components/ui/table";
 import { MarkdownRenderer } from "@/components/markdown/MarkdownRenderer";
 import { parseApprovalContent } from "@/lib/approval";
-import { Check, ChevronRight, CircleStop, Loader2, ShieldCheck, ShieldX, Wrench } from "lucide-react";
+import { parseSubagentContent } from "@/lib/subagent";
+import { Bot, Check, ChevronRight, CircleStop, Loader2, ShieldCheck, ShieldX, Wrench, X } from "lucide-react";
 function parseToolArgs(json: string | null | undefined): Record<string, unknown> | null {
   if (!json) return null;
   try {
@@ -150,7 +151,52 @@ export function ApprovalDetails({
   );
 }
 
-export function BatchBubble({ events }: { events: ChatEventDTO[] }) {
+const SUBAGENT_STATUS_LABELS: Record<string, string> = {
+  running: "运行中",
+  completed: "已完成",
+  failed: "失败",
+  stopped: "已停止",
+};
+
+export function SubagentDetails({
+  description,
+  args,
+  status,
+  onOpen,
+}: {
+  description?: string;
+  args?: string;
+  status?: string;
+  onOpen?: () => void;
+}) {
+  const parsed = parseToolArgs(args);
+  const desc = description ?? (typeof parsed?.description === "string" ? parsed.description : "子任务");
+  const effectiveStatus = status ?? "running";
+  return (
+    <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+      <Bot className="size-3.5 shrink-0" />
+      {onOpen ? (
+        <button type="button" onClick={onOpen} className="truncate hover:text-foreground hover:underline" title="查看子任务运行流程">
+          子智能体：{desc}
+        </button>
+      ) : (
+        <span className="truncate">子智能体：{desc}</span>
+      )}
+      {effectiveStatus === "completed" ? (
+        <Check className="size-3 shrink-0 text-green-500" />
+      ) : effectiveStatus === "failed" ? (
+        <X className="size-3 shrink-0 text-destructive" />
+      ) : effectiveStatus === "stopped" ? (
+        <CircleStop className="size-3 shrink-0" />
+      ) : (
+        <Loader2 className="size-3 shrink-0 animate-spin" />
+      )}
+      <span>{SUBAGENT_STATUS_LABELS[effectiveStatus] ?? effectiveStatus}</span>
+    </div>
+  );
+}
+
+export function BatchBubble({ events, onOpenSubagent }: { events: ChatEventDTO[]; onOpenSubagent?: (childConversationId: number, description?: string) => void }) {
   // 执行器保证 tool_result 与 tool_call 严格同序同数；部分模型端点返回空 toolCallId，无法按 id 匹配，故按序配对
   const toolResults = events.filter((e) => e.type === "tool_result");
   let resultCursor = 0;
@@ -176,6 +222,21 @@ export function BatchBubble({ events }: { events: ChatEventDTO[] }) {
           if (event.toolName === "final_answer") {
             return <FinalAnswerIndicator key={i} />;
           }
+          if (event.toolName === "spawn_subagent") {
+            const subEvent = events.find((e) => e.type === "subagent" && e.toolCallId === event.toolCallId);
+            const info = parseSubagentContent(subEvent?.content);
+            return (
+              <SubagentDetails
+                key={i}
+                args={event.toolArguments ?? undefined}
+                description={info?.description}
+                status={info?.status ?? "completed"}
+                onOpen={info?.childConversationId != null && onOpenSubagent != null
+                  ? () => onOpenSubagent(info.childConversationId, info.description)
+                  : undefined}
+              />
+            );
+          }
           return (
             <ToolCallDetails
               key={i}
@@ -184,6 +245,9 @@ export function BatchBubble({ events }: { events: ChatEventDTO[] }) {
               result={result}
             />
           );
+        }
+        if (event.type === "subagent") {
+          return null;
         }
         if (event.type === "approval") {
           const info = parseApprovalContent(event.content);

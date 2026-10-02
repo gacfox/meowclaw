@@ -85,7 +85,7 @@ public class ConversationService {
     public Pagination<ConversationDTO> listByAgent(Long agentId, String type, int page, int size) {
         Page<Conversation> pageResult;
         if (type == null || type.isBlank()) {
-            pageResult = conversationRepository.findByAgentIdOrderByUpdatedAtDesc(agentId, PageRequest.of(page - 1, size));
+            pageResult = conversationRepository.findByAgentIdAndTypeNotOrderByUpdatedAtDesc(agentId, "SUBAGENT", PageRequest.of(page - 1, size));
         } else {
             pageResult = conversationRepository.findByAgentIdAndTypeOrderByUpdatedAtDesc(agentId, type, PageRequest.of(page - 1, size));
         }
@@ -93,6 +93,15 @@ public class ConversationService {
         int total = (int) pageResult.getTotalElements();
         int totalPages = (int) Math.ceil((double) total / size);
         return new Pagination<>(list, total, totalPages, page, size);
+    }
+
+    /**
+     * 获取父会话ID，非子智能体会话返回null
+     */
+    @Transactional(readOnly = true)
+    public Long getParentConversationId(Long id) {
+        Conversation conv = conversationRepository.findById(id).orElse(null);
+        return conv == null ? null : conv.getParentConversationId();
     }
 
     @Transactional(readOnly = true)

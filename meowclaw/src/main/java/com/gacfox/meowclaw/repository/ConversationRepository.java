@@ -12,6 +12,8 @@ import org.springframework.data.repository.query.Param;
 public interface ConversationRepository extends JpaRepository<Conversation, Long> {
     Page<Conversation> findByAgentIdOrderByUpdatedAtDesc(Long agentId, Pageable pageable);
 
+    Page<Conversation> findByAgentIdAndTypeNotOrderByUpdatedAtDesc(Long agentId, String excludedType, Pageable pageable);
+
     Page<Conversation> findByAgentIdAndTypeOrderByUpdatedAtDesc(Long agentId, String type, Pageable pageable);
 
     @Modifying
@@ -24,6 +26,7 @@ public interface ConversationRepository extends JpaRepository<Conversation, Long
             + "AND (:keyword IS NULL OR c.title LIKE :keyword) "
             + "AND (:startTime IS NULL OR c.updatedAt >= :startTime) "
             + "AND (:endTime IS NULL OR c.updatedAt <= :endTime) "
+            + "AND (c.type IS NULL OR c.type <> 'SUBAGENT') "
             + "ORDER BY c.updatedAt DESC")
     Page<Conversation> findHistory(
             @Param("type") String type,
