@@ -456,7 +456,7 @@ export function WorkspacePage() {
 
       {/* 预览 / 编辑 */}
       <Dialog open={!!previewEntry} onOpenChange={(o) => { if (!o) closePreview(); }}>
-        <DialogContent className="max-h-[90vh] sm:max-w-6xl overflow-hidden">
+        <DialogContent className="flex max-h-[90vh] flex-col overflow-hidden sm:max-w-6xl">
           <DialogHeader>
             <DialogTitle className="break-all">{previewEntry?.path}</DialogTitle>
           </DialogHeader>
@@ -469,8 +469,8 @@ export function WorkspacePage() {
               <img src={previewContent.dataUrl ?? undefined} alt={previewEntry?.name} className="max-h-[70vh] rounded" />
             </div>
           ) : previewContent?.kind === "TEXT" ? (
-            <div className="flex flex-col gap-3 overflow-hidden">
-              <div className="overflow-auto" style={{ maxHeight: "65vh" }}>
+            <>
+              <div className="min-h-0 flex-1 overflow-auto">
                 {previewMode === "view" ? (
                   <MarkdownRenderer
                     content={
@@ -503,7 +503,7 @@ export function WorkspacePage() {
                   </>
                 )}
               </DialogFooter>
-            </div>
+            </>
           ) : (
             <div className="py-8 text-center text-muted-foreground">该文件类型不支持在线预览</div>
           )}
