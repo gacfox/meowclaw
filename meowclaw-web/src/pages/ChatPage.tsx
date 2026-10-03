@@ -156,7 +156,6 @@ export function ChatPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const editTextareaRef = useRef<HTMLTextAreaElement>(null);
   const composerTextareaRef = useRef<HTMLTextAreaElement>(null);
-  const approvalPanelRef = useRef<HTMLDivElement>(null);
   const selectedConvoIdRef = useRef<number | null>(null);
   const streamConvoIdRef = useRef<number | null>(null);
 
@@ -187,12 +186,6 @@ export function ChatPage() {
     listLlms().then(setLlms).catch(() => {});
     listGuardrailPolicies().then(setPolicies).catch(() => {});
   }, []);
-
-  useEffect(() => {
-    if (pendingApprovals.length > 0) {
-      approvalPanelRef.current?.focus();
-    }
-  }, [pendingApprovals.length]);
 
   const refreshRunningConversations = useCallback(async () => {
     try {
@@ -592,6 +585,30 @@ export function ChatPage() {
       setDecidingApproval(false);
     }
   };
+
+  const approvalDecisionRef = useRef(handleApprovalDecision);
+  useEffect(() => {
+    approvalDecisionRef.current = handleApprovalDecision;
+  });
+
+  useEffect(() => {
+    if (pendingApprovals.length === 0) return;
+    const handler = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (target && target.closest("input, textarea, select, button, [contenteditable='true'], [role='dialog']")) {
+        return;
+      }
+      if (e.key === "y" || e.key === "Y" || e.key === "Enter") {
+        e.preventDefault();
+        approvalDecisionRef.current(true);
+      } else if (e.key === "n" || e.key === "N" || e.key === "Escape") {
+        e.preventDefault();
+        approvalDecisionRef.current(false);
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [pendingApprovals.length]);
 
   const handleStreamEvent = (convoId: number, event: ChatEventDTO) => {
     switch (event.type) {
@@ -1108,18 +1125,7 @@ export function ChatPage() {
                   const current = pendingApprovals[0];
                   return (
                   <div
-                    ref={approvalPanelRef}
-                    tabIndex={-1}
-                    onKeyDown={(e) => {
-                      if (e.key === "y" || e.key === "Y" || e.key === "Enter") {
-                        e.preventDefault();
-                        handleApprovalDecision(true);
-                      } else if (e.key === "n" || e.key === "N" || e.key === "Escape") {
-                        e.preventDefault();
-                        handleApprovalDecision(false);
-                      }
-                    }}
-                    className="mb-2 rounded-xl border border-amber-500/50 bg-background p-3 shadow-sm outline-none"
+                    className="mb-2 rounded-xl border border-amber-500/50 bg-background p-3 shadow-sm"
                   >
                     <div className="flex items-center gap-2 text-sm">
                       <ShieldAlert className="size-4 text-amber-500" />
