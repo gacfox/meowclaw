@@ -16,8 +16,8 @@ import lombok.Setter;
 @NoArgsConstructor
 @AllArgsConstructor
 @Entity
-@Table(name = "mc_conversation")
-public class Conversation {
+@Table(name = "mc_project")
+public class Project {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
@@ -25,29 +25,8 @@ public class Conversation {
     @Column(name = "agent_id", nullable = false)
     private Long agentId;
 
-    @Column(name = "title", length = 500)
-    private String title;
-
-    @Column(name = "type", length = 50)
-    private String type;
-
-    @Column(name = "context_json")
-    private String contextJson;
-
-    @Column(name = "guardrail_policy_id")
-    private Long guardrailPolicyId;
-
-    @Column(name = "parent_conversation_id")
-    private Long parentConversationId;
-
-    @Column(name = "allowed_tools")
-    private String allowedTools;
-
-    @Column(name = "pinned", nullable = false)
-    private Boolean pinned = false;
-
-    @Column(name = "project_id")
-    private Long projectId;
+    @Column(name = "name", nullable = false, length = 200)
+    private String name;
 
     @Column(name = "created_at", nullable = false)
     private Long createdAt;

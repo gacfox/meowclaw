@@ -1,9 +1,10 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useSearchParams } from "react-router-dom";
-import type { AgentDTO, ConversationDTO, ChatEventBatchDTO, ChatEventDTO, PageResult, LlmDTO, GuardrailPolicyDTO } from "@/types";
+import type { AgentDTO, ConversationDTO, ChatEventBatchDTO, ChatEventDTO, PageResult, LlmDTO, GuardrailPolicyDTO, ProjectDTO } from "@/types";
 import { listAgents } from "@/services/agent";
 import { listLlms } from "@/services/llm";
-import { listConversations, createConversation, getConversation, deleteConversation, renameConversation, listBatches, chatStream, watchStream, listRunningConversations, stopChat, truncateAfterBatch, waitForTitle } from "@/services/conversation";
+import { listConversations, createConversation, getConversation, deleteConversation, renameConversation, listBatches, chatStream, watchStream, listRunningConversations, stopChat, truncateAfterBatch, waitForTitle, listSidebarGroups, pinConversation, moveConversationToProject } from "@/services/conversation";
+import { createProject, renameProject, deleteProject } from "@/services/project";
 import { listGuardrailPolicies, setConversationGuardrailPolicy, decideApproval } from "@/services/guardrail";
 import { useAuthStore } from "@/stores/auth";
 import { Button } from "@/components/ui/button";
@@ -11,8 +12,11 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Trash2, Loader2, ChevronRight, Copy, Pencil, RefreshCw, ArrowUp, ArrowDown, Check, Clock, TriangleAlert, X, Square, Shield, ShieldAlert } from "lucide-react";
+import { Plus, SquarePen, Loader2, ChevronRight, Copy, Pencil, RefreshCw, ArrowUp, ArrowDown, Check, Clock, TriangleAlert, X, Square, Shield, ShieldAlert, MoreHorizontal, FolderPlus } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Alert, AlertTitle, AlertDescription, AlertAction } from "@/components/ui/alert";
@@ -24,6 +28,8 @@ import type { ApprovalContent } from "@/lib/approval";
 import { parseSubagentContent } from "@/lib/subagent";
 import type { SubagentContent } from "@/lib/subagent";
 import { SubagentDrawer } from "@/components/chat/SubagentDrawer";
+import { ConversationItem, ConversationGroupHeader, ProjectRow } from "@/components/chat/ConversationItem";
+import type { ConversationLocation } from "@/components/chat/ConversationItem";
 import { toast } from "sonner";
 
 interface StreamStep {
@@ -149,6 +155,20 @@ export function ChatPage() {
   const [policies, setPolicies] = useState<GuardrailPolicyDTO[]>([]);
   const [pendingApprovals, setPendingApprovals] = useState<PendingApproval[]>([]);
   const [decidingApproval, setDecidingApproval] = useState(false);
+  const [pinnedConvs, setPinnedConvs] = useState<ConversationDTO[]>([]);
+  const [projects, setProjects] = useState<ProjectDTO[]>([]);
+  const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>(() => {
+    try {
+      return JSON.parse(localStorage.getItem("meowclaw_sidebar_collapsed") ?? "{}");
+    } catch {
+      return {};
+    }
+  });
+  const [projectDialogOpen, setProjectDialogOpen] = useState(false);
+  const [projectNameDraft, setProjectNameDraft] = useState("");
+  const [renamingProjectId, setRenamingProjectId] = useState<number | null>(null);
+  const [projectRenameDraft, setProjectRenameDraft] = useState("");
+  const [deleteProjectTarget, setDeleteProjectTarget] = useState<ProjectDTO | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const convoListRef = useRef<HTMLDivElement>(null);
@@ -167,7 +187,9 @@ export function ChatPage() {
     streamConvoIdRef.current = streamConvoId;
   }, [streamConvoId]);
 
-  const currentConvo = conversations.find((c) => c.id === selectedConvoId);
+  const currentConvo = conversations.find((c) => c.id === selectedConvoId)
+    ?? pinnedConvs.find((c) => c.id === selectedConvoId)
+    ?? projects.flatMap((p) => p.conversations ?? []).find((c) => c.id === selectedConvoId);
   const currentAgent = currentConvo ? agents.find((a) => a.id === currentConvo.agentId) : null;
   const canVision = currentAgent
     ? (llms.find((l) => l.id === currentAgent.llmId)?.capabilities ?? "").split(",").map((s) => s.trim()).includes("vision")
@@ -249,9 +271,7 @@ export function ChatPage() {
     waitForTitle(convoId).then((title) => {
       setGeneratingTitleId(null);
       if (title) {
-        setConversations((prev) =>
-          prev.map((c) => (c.id === convoId ? { ...c, title } : c))
-        );
+        patchConversation(convoId, { title });
       }
     });
   };
@@ -305,10 +325,13 @@ export function ChatPage() {
   useEffect(() => {
     if (!selectedAgentId) return;
     setConversations([]);
+    setPinnedConvs([]);
+    setProjects([]);
     setConvoPage(1);
     setHasMoreConvos(true);
     setSelectedConvoId(null);
     setBatches([]);
+    loadGroups(selectedAgentId);
 
     const handleUrlConversation = async () => {
       const convoIdParam = searchParams.get("conversationId");
@@ -376,7 +399,7 @@ export function ChatPage() {
       setLoadingMoreConvos(true);
     }
     try {
-      const result = await listConversations(agentId, page, 20, "CHAT");
+      const result = await listConversations(agentId, page, 20, "CHAT", true);
       if (reset) {
         setConversations(result.list);
       } else {
@@ -394,6 +417,108 @@ export function ChatPage() {
     }
   }, []);
 
+  function loadGroups(agentId: number) {
+    listSidebarGroups(agentId)
+      .then((groups) => {
+        setPinnedConvs(groups.pinned);
+        setProjects(groups.projects);
+      })
+      .catch(() => { /* 忽略分组加载失败 */ });
+  }
+
+  async function reloadSidebar() {
+    if (!selectedAgentId) return;
+    await Promise.all([loadGroups(selectedAgentId), loadConversations(selectedAgentId, 1, true)]);
+  }
+
+  function toggleGroup(key: string) {
+    setCollapsedGroups((prev) => {
+      const next = { ...prev, [key]: !prev[key] };
+      localStorage.setItem("meowclaw_sidebar_collapsed", JSON.stringify(next));
+      return next;
+    });
+  }
+
+  function patchConversation(id: number, patch: Partial<ConversationDTO>) {
+    const apply = (c: ConversationDTO) => (c.id === id ? { ...c, ...patch } : c);
+    setConversations((prev) => prev.map(apply));
+    setPinnedConvs((prev) => prev.map(apply));
+    setProjects((prev) => prev.map((p) => ({ ...p, conversations: p.conversations?.map(apply) ?? null })));
+  }
+
+  function removeConversationEverywhere(id: number) {
+    setConversations((prev) => prev.filter((c) => c.id !== id));
+    setPinnedConvs((prev) => prev.filter((c) => c.id !== id));
+    setProjects((prev) => prev.map((p) => ({ ...p, conversations: p.conversations?.filter((c) => c.id !== id) ?? null })));
+  }
+
+  async function togglePin(convo: ConversationDTO) {
+    try {
+      await pinConversation(convo.id, !convo.pinned);
+      await reloadSidebar();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "操作失败");
+    }
+  }
+
+  async function moveConvoToProject(convoId: number, projectId: number | null) {
+    try {
+      await moveConversationToProject(convoId, projectId);
+      await reloadSidebar();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "移动失败");
+    }
+  }
+
+  async function handleCreateProject() {
+    if (!selectedAgentId || !projectNameDraft.trim()) return;
+    try {
+      await createProject(selectedAgentId, projectNameDraft.trim());
+      setProjectDialogOpen(false);
+      setProjectNameDraft("");
+      loadGroups(selectedAgentId);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "新建项目失败");
+    }
+  }
+
+  async function commitProjectRename() {
+    const id = renamingProjectId;
+    const name = projectRenameDraft.trim();
+    setRenamingProjectId(null);
+    setProjectRenameDraft("");
+    if (id == null || !name) return;
+    try {
+      await renameProject(id, name);
+      loadGroups(selectedAgentId!);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "重命名失败");
+    }
+  }
+
+  async function confirmDeleteProject() {
+    if (!deleteProjectTarget) return;
+    const target = deleteProjectTarget;
+    setDeleteProjectTarget(null);
+    try {
+      await deleteProject(target.id);
+      if (selectedConvoId != null && (target.conversations ?? []).some((c) => c.id === selectedConvoId)) {
+        setSelectedConvoId(null);
+        setBatches([]);
+      }
+      await reloadSidebar();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "删除项目失败");
+    }
+  }
+
+  async function handleNewConvoInProject(projectId: number) {
+    if (!selectedAgentId) return;
+    const convo = await createConversation(selectedAgentId, projectId);
+    loadGroups(selectedAgentId);
+    setSelectedConvoId(convo.id);
+  }
+
   const handleConvoScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
     const el = e.currentTarget;
     const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 20;
@@ -401,6 +526,21 @@ export function ChatPage() {
       loadConversations(selectedAgentId, convoPage + 1, false);
     }
   }, [hasMoreConvos, loadingConvos, loadingMoreConvos, selectedAgentId, convoPage, loadConversations]);
+
+  useEffect(() => {
+    const el = convoListRef.current;
+    if (!el) return;
+    const maybeLoadMore = () => {
+      if (collapsedGroups.other || loadingConvos || loadingMoreConvos || !hasMoreConvos || !selectedAgentId) return;
+      if (el.scrollHeight <= el.clientHeight) {
+        loadConversations(selectedAgentId, convoPage + 1, false);
+      }
+    };
+    maybeLoadMore();
+    const observer = new ResizeObserver(maybeLoadMore);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [conversations, collapsedGroups.other, hasMoreConvos, loadingConvos, loadingMoreConvos, selectedAgentId, convoPage, loadConversations]);
 
   const handleNewConvo = async () => {
     if (!selectedAgentId) return;
@@ -415,7 +555,7 @@ export function ChatPage() {
     const id = deleteTargetId;
     setDeleteTargetId(null);
     await deleteConversation(id);
-    setConversations((prev) => prev.filter((c) => c.id !== id));
+    removeConversationEverywhere(id);
     if (selectedConvoId === id) {
       setSelectedConvoId(null);
       setBatches([]);
@@ -440,7 +580,7 @@ export function ChatPage() {
     if (id == null || !title) return;
     try {
       const updated = await renameConversation(id, title);
-      setConversations((prev) => prev.map((c) => (c.id === updated.id ? updated : c)));
+      patchConversation(updated.id, updated);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "重命名失败");
     }
@@ -723,6 +863,30 @@ export function ChatPage() {
 
   const showHero = !loadingBatches && batches.length === 0 && !isCurrentConvoRunning && optimisticContent === null;
 
+  const renderConvoItem = (convo: ConversationDTO, location: ConversationLocation) => {
+    const busy = runningConvoIds.has(convo.id) || (!convo.title && generatingTitleId === convo.id);
+    return (
+      <ConversationItem
+        key={`${location}-${convo.id}`}
+        convo={convo}
+        location={location}
+        active={selectedConvoId === convo.id}
+        busy={busy}
+        renaming={renamingId === convo.id}
+        renameDraft={renameDraft}
+        projects={projects}
+        onSelect={() => setSelectedConvoId(convo.id)}
+        onRenameStart={() => startRename(convo)}
+        onRenameChange={setRenameDraft}
+        onRenameConfirm={commitRename}
+        onRenameCancel={cancelRename}
+        onTogglePin={() => togglePin(convo)}
+        onMoveToProject={(pid) => moveConvoToProject(convo.id, pid)}
+        onDelete={() => setDeleteTargetId(convo.id)}
+      />
+    );
+  };
+
   const composer = (
     <div className="rounded-2xl border border-input bg-background px-3 pb-2 pt-3 shadow-sm transition-shadow focus-within:border-ring focus-within:ring-[3px] focus-within:ring-ring/50">
       {pendingImages.length > 0 && (
@@ -829,62 +993,85 @@ export function ChatPage() {
 
         <div className="border-b p-3">
           <Button className="w-full" size="sm" onClick={handleNewConvo} disabled={!selectedAgentId}>
-            <Plus className="mr-1 size-4" />
+            <SquarePen className="mr-1 size-4" />
             新对话
           </Button>
         </div>
 
         <div className="flex-1 overflow-y-auto" ref={convoListRef} onScroll={handleConvoScroll}>
-          {conversations.map((convo) => {
-            const convoBusy = runningConvoIds.has(convo.id) || (!convo.title && generatingTitleId === convo.id);
-            const renaming = renamingId === convo.id;
-            return (
-            <div
-              key={convo.id}
-              className={`group flex cursor-pointer items-center gap-2 px-3 py-2 text-sm hover:bg-muted ${selectedConvoId === convo.id ? "bg-muted" : ""}`}
-              onClick={() => { if (!renaming) setSelectedConvoId(convo.id); }}
-            >
-              {renaming ? (
-                <input
-                  autoFocus
-                  value={renameDraft}
-                  onChange={(e) => setRenameDraft(e.target.value)}
-                  onClick={(e) => e.stopPropagation()}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") commitRename();
-                    if (e.key === "Escape") cancelRename();
-                  }}
-                  onBlur={commitRename}
-                  className="flex-1 rounded bg-background px-1.5 py-0.5 text-sm outline-none ring-1 ring-ring"
-                />
-              ) : (
-                <>
-                  <span className="flex-1 truncate">{convo.title ?? "新对话"}</span>
-                  {convoBusy && <Loader2 className="size-3 shrink-0 animate-spin text-muted-foreground" />}
-                  {!convoBusy && (
-                    <Button
-                      variant="ghost"
-                      size="icon-xs"
-                      className="opacity-0 group-hover:opacity-100"
-                      onClick={(e) => { e.stopPropagation(); startRename(convo); }}
-                      title="重命名"
-                    >
-                      <Pencil className="size-3" />
-                    </Button>
-                  )}
-                  <Button
-                    variant="ghost"
-                    size="icon-xs"
-                    className="opacity-0 group-hover:opacity-100"
-                    onClick={(e) => { e.stopPropagation(); setDeleteTargetId(convo.id); }}
-                  >
-                    <Trash2 className="size-3 text-destructive" />
-                  </Button>
-                </>
-              )}
+          {pinnedConvs.length > 0 && (
+            <div>
+              <ConversationGroupHeader
+                label="已钉选"
+                collapsed={!!collapsedGroups.pinned}
+                onToggle={() => toggleGroup("pinned")}
+              />
+              {!collapsedGroups.pinned && pinnedConvs.map((c) => renderConvoItem(c, "pinned"))}
             </div>
-            );
-          })}
+          )}
+
+          {projects.length > 0 && (
+            <div>
+              <ConversationGroupHeader
+                label="项目"
+                collapsed={!!collapsedGroups.projects}
+                onToggle={() => toggleGroup("projects")}
+                actions={
+                  <Button variant="ghost" size="icon-xs" title="新建项目" onClick={() => { setProjectNameDraft(""); setProjectDialogOpen(true); }}>
+                    <Plus className="size-3.5" />
+                  </Button>
+                }
+              />
+              {!collapsedGroups.projects && projects.map((project) => {
+                const projectCollapsed = !!collapsedGroups[`project-${project.id}`];
+                return (
+                  <div key={project.id}>
+                    <ProjectRow
+                      project={project}
+                      collapsed={projectCollapsed}
+                      renaming={renamingProjectId === project.id}
+                      renameDraft={projectRenameDraft}
+                      onToggle={() => toggleGroup(`project-${project.id}`)}
+                      onNewConversation={() => handleNewConvoInProject(project.id)}
+                      onRenameStart={() => { setRenamingProjectId(project.id); setProjectRenameDraft(project.name); }}
+                      onRenameChange={setProjectRenameDraft}
+                      onRenameConfirm={commitProjectRename}
+                      onRenameCancel={() => { setRenamingProjectId(null); setProjectRenameDraft(""); }}
+                      onDelete={() => setDeleteProjectTarget(project)}
+                    />
+                    {!projectCollapsed && (project.conversations ?? []).map((c) => renderConvoItem(c, "project"))}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          <ConversationGroupHeader
+            label="会话"
+            collapsed={!!collapsedGroups.other}
+            onToggle={() => toggleGroup("other")}
+            actions={
+              <>
+                <Button variant="ghost" size="icon-xs" title="新建会话" onClick={handleNewConvo} disabled={!selectedAgentId}>
+                  <SquarePen className="size-3.5" />
+                </Button>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" size="icon-xs">
+                      <MoreHorizontal className="size-3.5" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="start">
+                    <DropdownMenuItem onClick={() => { setProjectNameDraft(""); setProjectDialogOpen(true); }}>
+                      <FolderPlus className="size-3.5" />
+                      新建项目
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </>
+            }
+          />
+          {!collapsedGroups.other && conversations.map((c) => renderConvoItem(c, "other"))}
           {loadingMoreConvos && <div className="py-2 text-center text-xs text-muted-foreground">加载中...</div>}
           {loadingConvos && conversations.length === 0 && <div className="py-2 text-center text-xs text-muted-foreground">加载中...</div>}
         </div>
@@ -1185,6 +1372,40 @@ export function ChatPage() {
           <AlertDialogFooter>
             <AlertDialogCancel>取消</AlertDialogCancel>
             <AlertDialogAction onClick={confirmDelete}>删除</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <Dialog open={projectDialogOpen} onOpenChange={setProjectDialogOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>新建项目</DialogTitle>
+          </DialogHeader>
+          <Input
+            autoFocus
+            value={projectNameDraft}
+            onChange={(e) => setProjectNameDraft(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter") handleCreateProject(); }}
+            placeholder="项目名称"
+          />
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setProjectDialogOpen(false)}>取消</Button>
+            <Button onClick={handleCreateProject} disabled={!projectNameDraft.trim()}>创建</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <AlertDialog open={deleteProjectTarget != null} onOpenChange={(open) => { if (!open) setDeleteProjectTarget(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>删除项目</AlertDialogTitle>
+            <AlertDialogDescription>
+              确定要删除项目「{deleteProjectTarget?.name}」吗？其中的 {(deleteProjectTarget?.conversations ?? []).length} 个会话将被一并删除，无法恢复。
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>取消</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDeleteProject}>删除</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

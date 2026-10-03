@@ -13,6 +13,7 @@ import com.gacfox.meowclaw.service.GuardrailPolicyService;
 import com.gacfox.meowclaw.service.TitleGenerationRegistryService;
 import com.gacfox.meowclaw.dto.ApiResult;
 import com.gacfox.meowclaw.dto.Pagination;
+import com.gacfox.meowclaw.dto.SidebarGroupsDTO;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
@@ -57,14 +58,15 @@ public class ConversationController {
     public ApiResult<Pagination<ConversationDTO>> list(
             @RequestParam Long agentId,
             @RequestParam(required = false) String type,
+            @RequestParam(defaultValue = "false") boolean ungrouped,
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "20") int size) {
-        return ApiResult.success(conversationService.listByAgent(agentId, type, page, size));
+        return ApiResult.success(conversationService.listByAgent(agentId, type, ungrouped, page, size));
     }
 
     @PostMapping
     public ApiResult<ConversationDTO> create(@RequestBody Map<String, Long> body) {
-        return ApiResult.success(conversationService.create(body.get("agentId"), "CHAT"));
+        return ApiResult.success(conversationService.create(body.get("agentId"), "CHAT", body.get("projectId")));
     }
 
     @GetMapping("/{id}")
@@ -136,6 +138,11 @@ public class ConversationController {
         return ApiResult.success(chatService.runningConversationIds());
     }
 
+    @GetMapping("/sidebar-groups")
+    public ApiResult<SidebarGroupsDTO> sidebarGroups(@RequestParam Long agentId) {
+        return ApiResult.success(conversationService.sidebarGroups(agentId));
+    }
+
     @PostMapping("/{id}/stop")
     public ApiResult<?> stop(@PathVariable Long id) {
         return chatService.stop(id) ? ApiResult.success() : ApiResult.failure("会话未在执行中");
@@ -145,6 +152,16 @@ public class ConversationController {
     public ApiResult<ConversationDTO> updateGuardrailPolicy(@PathVariable Long id, @RequestBody Map<String, Long> body) {
         guardrailPolicyService.updateConversationPolicy(id, body.get("policyId"));
         return ApiResult.success(conversationService.getDTO(id));
+    }
+
+    @PutMapping("/{id}/pin")
+    public ApiResult<ConversationDTO> pin(@PathVariable Long id, @RequestBody Map<String, Boolean> body) {
+        return ApiResult.success(conversationService.pin(id, Boolean.TRUE.equals(body.get("pinned"))));
+    }
+
+    @PutMapping("/{id}/project")
+    public ApiResult<ConversationDTO> moveToProject(@PathVariable Long id, @RequestBody Map<String, Long> body) {
+        return ApiResult.success(conversationService.moveToProject(id, body.get("projectId")));
     }
 
     @PostMapping("/{id}/approvals/{toolCallId}")

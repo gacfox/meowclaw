@@ -1,18 +1,40 @@
-import type { ConversationDTO, ChatEventBatchDTO, PageResult, ConversationHistoryDTO } from "@/types";
+import type { ConversationDTO, ChatEventBatchDTO, PageResult, ConversationHistoryDTO, SidebarGroupsDTO } from "@/types";
 import { getToken } from "./request";
 import { request } from "./request";
 
-export async function listConversations(agentId: number, page: number, size: number, type?: string): Promise<PageResult<ConversationDTO>> {
+export async function listConversations(agentId: number, page: number, size: number, type?: string, ungrouped?: boolean): Promise<PageResult<ConversationDTO>> {
   const params = new URLSearchParams({ agentId: String(agentId), page: String(page), size: String(size) });
   if (type) params.set("type", type);
+  if (ungrouped) params.set("ungrouped", "true");
   const res = await request<PageResult<ConversationDTO>>(`/api/conversation?${params}`);
   return res.data;
 }
 
-export async function createConversation(agentId: number): Promise<ConversationDTO> {
+export async function listSidebarGroups(agentId: number): Promise<SidebarGroupsDTO> {
+  const res = await request<SidebarGroupsDTO>(`/api/conversation/sidebar-groups?agentId=${agentId}`);
+  return res.data;
+}
+
+export async function createConversation(agentId: number, projectId?: number): Promise<ConversationDTO> {
   const res = await request<ConversationDTO>("/api/conversation", {
     method: "POST",
-    body: JSON.stringify({ agentId }),
+    body: JSON.stringify(projectId != null ? { agentId, projectId } : { agentId }),
+  });
+  return res.data;
+}
+
+export async function pinConversation(id: number, pinned: boolean): Promise<ConversationDTO> {
+  const res = await request<ConversationDTO>(`/api/conversation/${id}/pin`, {
+    method: "PUT",
+    body: JSON.stringify({ pinned }),
+  });
+  return res.data;
+}
+
+export async function moveConversationToProject(id: number, projectId: number | null): Promise<ConversationDTO> {
+  const res = await request<ConversationDTO>(`/api/conversation/${id}/project`, {
+    method: "PUT",
+    body: JSON.stringify({ projectId }),
   });
   return res.data;
 }

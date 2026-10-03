@@ -5,18 +5,17 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+import java.util.List;
+
 @Getter
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
-public class ConversationDTO {
+public class ProjectDTO {
     private Long id;
     private Long agentId;
-    private String title;
-    private String type;
-    private Long guardrailPolicyId;
-    private Boolean pinned;
-    private Long projectId;
+    private String name;
     private Long createdAt;
     private Long updatedAt;
+    private List<ConversationDTO> conversations;
 }

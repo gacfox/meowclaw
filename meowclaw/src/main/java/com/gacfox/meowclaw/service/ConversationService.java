@@ -4,18 +4,23 @@ import com.gacfox.meowclaw.converter.ChatEventBatchConverter;
 import com.gacfox.meowclaw.converter.ChatEventConverter;
 import com.gacfox.meowclaw.converter.ConversationConverter;
 import com.gacfox.meowclaw.converter.ConversationHistoryConverter;
+import com.gacfox.meowclaw.converter.ProjectConverter;
 import com.gacfox.meowclaw.dto.ChatEventBatchDTO;
 import com.gacfox.meowclaw.dto.ConversationDTO;
 import com.gacfox.meowclaw.dto.ConversationHistoryDTO;
+import com.gacfox.meowclaw.dto.ProjectDTO;
+import com.gacfox.meowclaw.dto.SidebarGroupsDTO;
 import com.gacfox.meowclaw.entity.Agent;
 import com.gacfox.meowclaw.entity.ChatEventBatch;
 import com.gacfox.meowclaw.entity.Conversation;
+import com.gacfox.meowclaw.entity.Project;
 import com.gacfox.meowclaw.repository.AgentRepository;
 import com.gacfox.meowclaw.repository.ChatEventBatchRepository;
 import com.gacfox.meowclaw.repository.ChatEventRepository;
 import com.gacfox.meowclaw.repository.ConversationRepository;
 import com.gacfox.meowclaw.repository.ContextRecapRepository;
 import com.gacfox.meowclaw.repository.MessageRepository;
+import com.gacfox.meowclaw.repository.ProjectRepository;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -44,6 +49,8 @@ public class ConversationService {
     private final ChatEventBatchConverter chatEventBatchConverter;
     private final ChatEventConverter chatEventConverter;
     private final GuardrailPolicyService guardrailPolicyService;
+    private final ProjectRepository projectRepository;
+    private final ProjectConverter projectConverter;
 
     @Autowired
     public ConversationService(ConversationRepository conversationRepository,
@@ -56,7 +63,9 @@ public class ConversationService {
                                ConversationHistoryConverter conversationHistoryConverter,
                                ChatEventBatchConverter chatEventBatchConverter,
                                ChatEventConverter chatEventConverter,
-                               GuardrailPolicyService guardrailPolicyService) {
+                               GuardrailPolicyService guardrailPolicyService,
+                               ProjectRepository projectRepository,
+                               ProjectConverter projectConverter) {
         this.conversationRepository = conversationRepository;
         this.messageRepository = messageRepository;
         this.chatEventBatchRepository = chatEventBatchRepository;
@@ -68,6 +77,8 @@ public class ConversationService {
         this.chatEventBatchConverter = chatEventBatchConverter;
         this.chatEventConverter = chatEventConverter;
         this.guardrailPolicyService = guardrailPolicyService;
+        this.projectRepository = projectRepository;
+        this.projectConverter = projectConverter;
     }
 
     /**
@@ -83,8 +94,16 @@ public class ConversationService {
 
     @Transactional(readOnly = true)
     public Pagination<ConversationDTO> listByAgent(Long agentId, String type, int page, int size) {
+        return listByAgent(agentId, type, false, page, size);
+    }
+
+    @Transactional(readOnly = true)
+    public Pagination<ConversationDTO> listByAgent(Long agentId, String type, boolean ungrouped, int page, int size) {
         Page<Conversation> pageResult;
-        if (type == null || type.isBlank()) {
+        if (ungrouped) {
+            pageResult = conversationRepository.findByAgentIdAndPinnedFalseAndProjectIdIsNullAndTypeNotOrderByUpdatedAtDesc(
+                    agentId, "SUBAGENT", PageRequest.of(page - 1, size));
+        } else if (type == null || type.isBlank()) {
             pageResult = conversationRepository.findByAgentIdAndTypeNotOrderByUpdatedAtDesc(agentId, "SUBAGENT", PageRequest.of(page - 1, size));
         } else {
             pageResult = conversationRepository.findByAgentIdAndTypeOrderByUpdatedAtDesc(agentId, type, PageRequest.of(page - 1, size));
@@ -133,13 +152,61 @@ public class ConversationService {
 
     @Transactional
     public ConversationDTO create(Long agentId, String type) {
+        return create(agentId, type, null);
+    }
+
+    @Transactional
+    public ConversationDTO create(Long agentId, String type, Long projectId) {
         Conversation conv = new Conversation();
         conv.setAgentId(agentId);
         conv.setType(type);
+        conv.setProjectId(projectId);
         long now = System.currentTimeMillis();
         conv.setCreatedAt(now);
         conv.setUpdatedAt(now);
         return toDTO(conversationRepository.save(conv));
+    }
+
+    @Transactional
+    public ConversationDTO pin(Long id, boolean pinned) {
+        Conversation conv = conversationRepository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("会话不存在"));
+        conv.setPinned(pinned);
+        return toDTO(conversationRepository.save(conv));
+    }
+
+    @Transactional
+    public ConversationDTO moveToProject(Long id, Long projectId) {
+        Conversation conv = conversationRepository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("会话不存在"));
+        if (projectId != null) {
+            Project project = projectRepository.findById(projectId)
+                    .orElseThrow(() -> new IllegalArgumentException("项目不存在"));
+            if (!project.getAgentId().equals(conv.getAgentId())) {
+                throw new IllegalArgumentException("项目与会话不属于同一智能体");
+            }
+        }
+        conv.setProjectId(projectId);
+        return toDTO(conversationRepository.save(conv));
+    }
+
+    /**
+     * 会话侧栏分组数据：钉选会话与项目（含项目内会话），均为全量小集合
+     */
+    @Transactional(readOnly = true)
+    public SidebarGroupsDTO sidebarGroups(Long agentId) {
+        List<ConversationDTO> pinned = conversationRepository
+                .findByAgentIdAndPinnedTrueAndTypeNotOrderByUpdatedAtDesc(agentId, "SUBAGENT")
+                .stream().map(this::toDTO).toList();
+        List<ProjectDTO> projects = projectRepository.findByAgentIdOrderByCreatedAtAsc(agentId).stream()
+                .map(p -> {
+                    ProjectDTO dto = projectConverter.toDTO(p);
+                    dto.setConversations(conversationRepository
+                            .findByProjectIdAndTypeNotOrderByUpdatedAtDesc(p.getId(), "SUBAGENT")
+                            .stream().map(this::toDTO).toList());
+                    return dto;
+                }).toList();
+        return new SidebarGroupsDTO(pinned, projects);
     }
 
     @Transactional

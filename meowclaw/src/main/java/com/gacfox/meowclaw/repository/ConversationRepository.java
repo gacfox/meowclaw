@@ -9,12 +9,23 @@ import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.util.List;
+
 public interface ConversationRepository extends JpaRepository<Conversation, Long> {
     Page<Conversation> findByAgentIdOrderByUpdatedAtDesc(Long agentId, Pageable pageable);
 
     Page<Conversation> findByAgentIdAndTypeNotOrderByUpdatedAtDesc(Long agentId, String excludedType, Pageable pageable);
 
     Page<Conversation> findByAgentIdAndTypeOrderByUpdatedAtDesc(Long agentId, String type, Pageable pageable);
+
+    List<Conversation> findByAgentIdAndPinnedTrueAndTypeNotOrderByUpdatedAtDesc(Long agentId, String excludedType);
+
+    List<Conversation> findByProjectIdAndTypeNotOrderByUpdatedAtDesc(Long projectId, String excludedType);
+
+    List<Conversation> findByProjectId(Long projectId);
+
+    Page<Conversation> findByAgentIdAndPinnedFalseAndProjectIdIsNullAndTypeNotOrderByUpdatedAtDesc(
+            Long agentId, String excludedType, Pageable pageable);
 
     @Modifying
     @Query("UPDATE Conversation c SET c.guardrailPolicyId = null WHERE c.guardrailPolicyId = :policyId")

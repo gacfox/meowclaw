@@ -71,8 +71,24 @@ export interface ConversationDTO {
   title: string | null;
   type: string | null;
   guardrailPolicyId: number | null;
+  pinned: boolean;
+  projectId: number | null;
   createdAt: number;
   updatedAt: number;
+}
+
+export interface ProjectDTO {
+  id: number;
+  agentId: number;
+  name: string;
+  createdAt: number;
+  updatedAt: number;
+  conversations: ConversationDTO[] | null;
+}
+
+export interface SidebarGroupsDTO {
+  pinned: ConversationDTO[];
+  projects: ProjectDTO[];
 }
 
 export interface GuardrailPolicyDTO {

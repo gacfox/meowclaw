@@ -52,6 +52,8 @@ CREATE TABLE IF NOT EXISTS mc_conversation (
     guardrail_policy_id BIGINT COMMENT '安全护栏策略ID(空使用默认策略)',
     parent_conversation_id BIGINT COMMENT '父会话ID(仅子智能体会话)',
     allowed_tools TEXT COMMENT '子智能体工具白名单JSON数组(仅子智能体会话,空则按智能体配置)',
+    pinned BOOLEAN NOT NULL DEFAULT FALSE COMMENT '是否钉选',
+    project_id BIGINT COMMENT '所属项目ID(空表示未分组)',
     created_at BIGINT NOT NULL COMMENT '创建时间(时间戳毫秒)',
     updated_at BIGINT NOT NULL COMMENT '更新时间(时间戳毫秒)',
     PRIMARY KEY (id)
@@ -226,6 +228,16 @@ CREATE TABLE IF NOT EXISTS mc_guardrail_policy (
     PRIMARY KEY (id)
 );
 CREATE UNIQUE INDEX IF NOT EXISTS uk_mc_guardrail_policy_name ON mc_guardrail_policy(name);
+
+CREATE TABLE IF NOT EXISTS mc_project (
+    id BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+    agent_id BIGINT NOT NULL COMMENT '所属智能体ID',
+    name VARCHAR(200) NOT NULL COMMENT '项目名称(同一智能体内唯一)',
+    created_at BIGINT NOT NULL COMMENT '创建时间(时间戳毫秒)',
+    updated_at BIGINT NOT NULL COMMENT '更新时间(时间戳毫秒)',
+    PRIMARY KEY (id)
+);
+CREATE UNIQUE INDEX IF NOT EXISTS uk_mc_project_agent_name ON mc_project(agent_id, name);
 
 CREATE TABLE IF NOT EXISTS mc_memory_node (
     id BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
