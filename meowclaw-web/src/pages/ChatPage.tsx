@@ -147,7 +147,7 @@ export function ChatPage() {
   const [stopping, setStopping] = useState(false);
   const [subagentView, setSubagentView] = useState<{ id: number; description?: string } | null>(null);
   const [policies, setPolicies] = useState<GuardrailPolicyDTO[]>([]);
-  const [pendingApproval, setPendingApproval] = useState<PendingApproval | null>(null);
+  const [pendingApprovals, setPendingApprovals] = useState<PendingApproval[]>([]);
   const [decidingApproval, setDecidingApproval] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -189,10 +189,10 @@ export function ChatPage() {
   }, []);
 
   useEffect(() => {
-    if (pendingApproval) {
+    if (pendingApprovals.length > 0) {
       approvalPanelRef.current?.focus();
     }
-  }, [pendingApproval]);
+  }, [pendingApprovals.length]);
 
   const refreshRunningConversations = useCallback(async () => {
     try {
@@ -244,7 +244,7 @@ export function ChatPage() {
       setStreamContent("");
       setStreamSteps([]);
       setStreamError(null);
-      setPendingApproval(null);
+      setPendingApprovals([]);
     }
     listBatches(convoId).then((newBatches) => {
       if (selectedConvoIdRef.current === convoId) {
@@ -271,7 +271,7 @@ export function ChatPage() {
     setStreamContent("");
     setStreamSteps([]);
     setStreamError(null);
-    setPendingApproval(null);
+    setPendingApprovals([]);
     if (runningBatch) {
       setOptimisticContent(runningBatch.userContent);
       setOptimisticImages((runningBatch.attachments ?? []).map((a) => a.url));
@@ -353,7 +353,7 @@ export function ChatPage() {
     setStreamContent("");
     setStreamSteps([]);
     setStreamError(null);
-    setPendingApproval(null);
+    setPendingApprovals([]);
     if (!selectedConvoId) {
       setBatches([]);
       return;
@@ -499,7 +499,7 @@ export function ChatPage() {
     setStreamContent("");
     setStreamSteps([]);
     setStreamError(null);
-    setPendingApproval(null);
+    setPendingApprovals([]);
     setRunningConvoIds((prev) => new Set(prev).add(chatConvoId));
 
     try {
@@ -580,10 +580,12 @@ export function ChatPage() {
   };
 
   const handleApprovalDecision = async (approve: boolean) => {
-    if (selectedConvoId == null || !pendingApproval || decidingApproval) return;
+    const current = pendingApprovals[0];
+    if (selectedConvoId == null || !current || decidingApproval) return;
     setDecidingApproval(true);
     try {
-      await decideApproval(pendingApproval.childConversationId ?? selectedConvoId, pendingApproval.toolCallId, approve);
+      await decideApproval(current.childConversationId ?? selectedConvoId, current.toolCallId, approve);
+      setPendingApprovals((prev) => prev.filter((a) => a.toolCallId !== current.toolCallId));
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "操作失败");
     } finally {
@@ -656,15 +658,18 @@ export function ChatPage() {
       case "approval": {
         const info = parseApprovalContent(event.content);
         if (!info || info.decision === "pending") {
-          setPendingApproval({
-            toolCallId: event.toolCallId ?? "",
-            toolName: event.toolName ?? "",
-            toolArguments: event.toolArguments ?? "",
-            policyName: info?.policyName,
-            childConversationId: info?.childConversationId ?? null,
+          setPendingApprovals((prev) => {
+            if (event.toolCallId == null || prev.some((a) => a.toolCallId === event.toolCallId)) return prev;
+            return [...prev, {
+              toolCallId: event.toolCallId,
+              toolName: event.toolName ?? "",
+              toolArguments: event.toolArguments ?? "",
+              policyName: info?.policyName,
+              childConversationId: info?.childConversationId ?? null,
+            }];
           });
         } else {
-          setPendingApproval((prev) => (prev && prev.toolCallId === event.toolCallId ? null : prev));
+          setPendingApprovals((prev) => prev.filter((a) => a.toolCallId !== event.toolCallId));
         }
         setStreamSteps((prev) => {
           const step: StreamStep = {
@@ -1099,7 +1104,9 @@ export function ChatPage() {
 
             <div className="p-4">
               <div className="mx-auto max-w-3xl">
-                {pendingApproval && (
+                {pendingApprovals.length > 0 && (() => {
+                  const current = pendingApprovals[0];
+                  return (
                   <div
                     ref={approvalPanelRef}
                     tabIndex={-1}
@@ -1116,15 +1123,20 @@ export function ChatPage() {
                   >
                     <div className="flex items-center gap-2 text-sm">
                       <ShieldAlert className="size-4 text-amber-500" />
-                      <span className="font-medium">{pendingApproval.childConversationId != null ? "子任务审批" : "审批请求"}</span>
-                      {pendingApproval.policyName && (
-                        <span className="text-xs text-muted-foreground">{pendingApproval.policyName}</span>
+                      <span className="font-medium">{current.childConversationId != null ? "子任务审批" : "审批请求"}</span>
+                      {current.policyName && (
+                        <span className="text-xs text-muted-foreground">{current.policyName}</span>
+                      )}
+                      {pendingApprovals.length > 1 && (
+                        <span className="ml-auto rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">
+                          1/{pendingApprovals.length}
+                        </span>
                       )}
                     </div>
                     <div className="mt-2 flex items-center gap-2 text-xs">
-                      <span className="rounded bg-muted px-1.5 py-0.5 font-medium">{pendingApproval.toolName}</span>
-                      <code className="flex-1 truncate text-muted-foreground" title={approvalArgsPreview(pendingApproval.toolArguments)}>
-                        {approvalArgsPreview(pendingApproval.toolArguments)}
+                      <span className="rounded bg-muted px-1.5 py-0.5 font-medium">{current.toolName}</span>
+                      <code className="flex-1 truncate text-muted-foreground" title={approvalArgsPreview(current.toolArguments)}>
+                        {approvalArgsPreview(current.toolArguments)}
                       </code>
                     </div>
                     <div className="mt-3 flex items-center gap-2">
@@ -1144,7 +1156,8 @@ export function ChatPage() {
                       </Button>
                     </div>
                   </div>
-                )}
+                  );
+                })()}
                 {composer}
               </div>
             </div>
