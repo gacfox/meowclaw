@@ -17,6 +17,7 @@ import com.gacfox.meowclaw.interceptor.agent.AgentSystemPromptRefreshInterceptor
 import com.gacfox.meowclaw.interceptor.llm.LlmLoggingInterceptor;
 import com.gacfox.meowclaw.interceptor.llm.TokenUsageAccumulator;
 import com.gacfox.meowclaw.interceptor.llm.LlmCallRecordInterceptor;
+import com.gacfox.meowclaw.interceptor.llm.MultimodalToolResultInterceptor;
 import com.gacfox.meowclaw.interceptor.llm.TokenUsageContext;
 import com.gacfox.meowclaw.interceptor.agent.GuardrailInterceptor;
 import com.gacfox.meowclaw.interceptor.agent.SubagentJoinInterceptor;
@@ -458,6 +459,7 @@ public class ChatService {
                 .httpClient(httpClient)
                 .interceptors(List.of(llmLoggingInterceptor,
                         new LlmCallRecordInterceptor(tokenAccum, llmCallLogService, tokenUsageContext),
+                        new MultimodalToolResultInterceptor(),
                         new RetryInterceptor()))
                 .build();
     }
@@ -511,6 +513,7 @@ public class ChatService {
         variables.put("cwd", currentCwd);
         variables.put("agentId", agent.getId());
         variables.put("conversationId", conv.getId());
+        variables.put("visionSupported", hasVisionCapability(llm));
 
         if (Boolean.TRUE.equals(agent.getAggressiveMemoryRecall())) {
             try {

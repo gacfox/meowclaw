@@ -13,7 +13,7 @@ import java.util.List;
 
 @Component
 public class ReadFileTool {
-    @AgenticTool(name = "read", description = "读取文件内容，支持指定行数范围")
+    @AgenticTool(name = "read", description = "读取文件内容，支持指定行数范围；图片文件（png/jpeg/webp/gif）在视觉模型下以图片形式读取")
     public String read(@AgenticToolParam(name = "param", description = "读取参数") ReadFileParam param,
                        AgentContext ctx) {
         try {
@@ -23,6 +23,17 @@ public class ReadFileTool {
             }
             if (Files.isDirectory(filePath)) {
                 return "Error: path is a directory: " + filePath;
+            }
+            String imageMime = ImageToolResult.detectImageMime(filePath);
+            if (imageMime != null) {
+                if (!Boolean.TRUE.equals(ctx.getVariables().get("visionSupported"))) {
+                    return "Error: 目标文件是图片，但当前模型未配置视觉(vision)能力，无法读取: " + filePath;
+                }
+                long bytes = Files.size(filePath);
+                if (bytes > ImageToolResult.MAX_IMAGE_BYTES) {
+                    return "Error: 图片超过10MB大小限制: " + filePath;
+                }
+                return ImageToolResult.build(filePath, imageMime, bytes);
             }
             int offset = param.getOffset() != null ? param.getOffset() : 0;
             int limit = param.getLimit() != null ? param.getLimit() : 2000;

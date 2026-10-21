@@ -3,7 +3,7 @@ import { Table, TableBody, TableCell, TableRow } from "@/components/ui/table";
 import { MarkdownRenderer } from "@/components/markdown/MarkdownRenderer";
 import { parseApprovalContent } from "@/lib/approval";
 import { parseSubagentContent } from "@/lib/subagent";
-import { Bot, Check, ChevronRight, CircleStop, Loader2, ShieldCheck, ShieldX, Wrench, X } from "lucide-react";
+import { Bot, Check, ChevronRight, CircleStop, Image as ImageIcon, Loader2, ShieldCheck, ShieldX, Wrench, X } from "lucide-react";
 function parseToolArgs(json: string | null | undefined): Record<string, unknown> | null {
   if (!json) return null;
   try {
@@ -24,6 +24,24 @@ function truncateSingleLine(text: string, maxLen: number): { text: string; trunc
   return { text: text.slice(0, maxLen), truncated: true };
 }
 
+function formatBytes(bytes: number): string {
+  if (bytes >= 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(1)}MB`;
+  if (bytes >= 1024) return `${(bytes / 1024).toFixed(1)}KB`;
+  return `${bytes}B`;
+}
+
+function parseImageMarker(result: string | undefined): { mimeType: string; bytes: number } | null {
+  if (!result || !result.startsWith("<<<image>>>")) return null;
+  try {
+    const firstLine = result.slice("<<<image>>>".length).split("\n", 1)[0];
+    const obj = JSON.parse(firstLine);
+    if (obj && typeof obj.mimeType === "string") return { mimeType: obj.mimeType, bytes: Number(obj.bytes) || 0 };
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 export function ToolCallDetails({
   name,
   args,
@@ -36,6 +54,7 @@ export function ToolCallDetails({
   pending?: boolean;
 }) {
   const parsed = parseToolArgs(args);
+  const imageMarker = parseImageMarker(result);
   return (
     <details className="group text-xs">
       <summary className="flex cursor-pointer items-center gap-1 text-muted-foreground list-none [&::-webkit-details-marker]:hidden">
@@ -68,7 +87,14 @@ export function ToolCallDetails({
         )}
         <div>
           <div className="mb-1 text-xs text-muted-foreground">执行结果：</div>
-          <pre className="whitespace-pre-wrap rounded bg-muted p-2 text-xs">{result ?? (pending ? "执行中..." : "(无结果)")}</pre>
+          {imageMarker ? (
+            <div className="flex items-center gap-1.5 rounded bg-muted p-2 text-xs">
+              <ImageIcon className="size-3.5 shrink-0 text-muted-foreground" />
+              图片已读取并发送给模型 · {imageMarker.mimeType} · {formatBytes(imageMarker.bytes)}
+            </div>
+          ) : (
+            <pre className="whitespace-pre-wrap rounded bg-muted p-2 text-xs">{result ?? (pending ? "执行中..." : "(无结果)")}</pre>
+          )}
         </div>
       </div>
     </details>
