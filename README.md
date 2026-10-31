@@ -173,15 +173,17 @@ cd proarc-agentic && mvn clean install
 然后构建和运行MeowClaw项目。
 
 ```bash
-# 1. 构建前端
+# 1. 构建前端（生成 meowclaw-web/dist）
 cd meowclaw-web && npm install && npm run build
 
-# 2. 构建后端
+# 2. 构建后端（自动将前端 dist 复制进 jar 的 static 目录）
 cd meowclaw && mvn clean package
 
-# 3. 启动服务
+# 3. 启动服务，前后端共用 http://127.0.0.1:8080
 cd meowclaw/target && java -jar meowclaw-0.0.1-SNAPSHOT.jar
 ```
+
+后端会将前端静态资源一并打入 jar，并对前端 history 路由（如 `/memory`、`/trace`）自动回退到 `index.html`，因此部署时只需运行单个 jar，无需单独部署前端或配置 Nginx 转发。`/api/**`、`/upload/**` 及静态文件路径不参与路由回退。
 
 ## 配置说明
 
