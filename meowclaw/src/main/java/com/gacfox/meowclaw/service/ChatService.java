@@ -20,6 +20,7 @@ import com.gacfox.meowclaw.interceptor.llm.LlmCallRecordInterceptor;
 import com.gacfox.meowclaw.interceptor.llm.MultimodalToolResultInterceptor;
 import com.gacfox.meowclaw.interceptor.llm.TokenUsageContext;
 import com.gacfox.meowclaw.interceptor.agent.GuardrailInterceptor;
+import com.gacfox.meowclaw.interceptor.agent.LoopIterationReminderInterceptor;
 import com.gacfox.meowclaw.interceptor.agent.SubagentJoinInterceptor;
 import com.gacfox.meowclaw.interceptor.agent.ToolCallIdStashInterceptor;
 import com.gacfox.proarc.agentic.agent.AgentContext;
@@ -486,8 +487,10 @@ public class ChatService {
                 .toolRegistry(toolRegistry)
                 .defaultToolNames(toolNames)
                 .interceptors(List.of(agentSystemPromptRefreshInterceptor,
-                        new SubagentJoinInterceptor(subagentRegistry), agentLoggingInterceptor))
+                        new SubagentJoinInterceptor(subagentRegistry),
+                        new LoopIterationReminderInterceptor(), agentLoggingInterceptor))
                 .toolCallInterceptors(List.of(new ToolCallIdStashInterceptor(), guardrailInterceptor))
+                .maxIterations(Integer.MAX_VALUE)
                 .build();
     }
 
