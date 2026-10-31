@@ -1,5 +1,5 @@
 import "katex/dist/katex.min.css";
-import { useRef, useState } from "react";
+import { memo, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
@@ -59,7 +59,7 @@ function Pre({ children }: React.ComponentProps<"pre">) {
   );
 }
 
-export function MarkdownRenderer({ content, className }: { content: string; className?: string }) {
+export const MarkdownRenderer = memo(function MarkdownRenderer({ content, className }: { content: string; className?: string }) {
   return (
     <div className={`prose prose-sm dark:prose-invert max-w-none ${className ?? ""}`}>
       <ReactMarkdown
@@ -74,4 +74,4 @@ export function MarkdownRenderer({ content, className }: { content: string; clas
       </ReactMarkdown>
     </div>
   );
-}
+});

@@ -1,3 +1,4 @@
+import { memo } from "react";
 import type { ChatEventDTO } from "@/types";
 import { Table, TableBody, TableCell, TableRow } from "@/components/ui/table";
 import { MarkdownRenderer } from "@/components/markdown/MarkdownRenderer";
@@ -222,7 +223,7 @@ export function SubagentDetails({
   );
 }
 
-export function BatchBubble({ events, onOpenSubagent }: { events: ChatEventDTO[]; onOpenSubagent?: (childConversationId: number, description?: string) => void }) {
+export const BatchBubble = memo(function BatchBubble({ events, onOpenSubagent }: { events: ChatEventDTO[]; onOpenSubagent?: (childConversationId: number, description?: string) => void }) {
   // 执行器保证 tool_result 与 tool_call 严格同序同数；部分模型端点返回空 toolCallId，无法按 id 匹配，故按序配对
   const toolResults = events.filter((e) => e.type === "tool_result");
   let resultCursor = 0;
@@ -304,4 +305,4 @@ export function BatchBubble({ events, onOpenSubagent }: { events: ChatEventDTO[]
       {finalAnswer?.content && <MarkdownRenderer content={finalAnswer.content} />}
     </div>
   );
-}
+});

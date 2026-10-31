@@ -28,6 +28,7 @@ import type { ApprovalContent } from "@/lib/approval";
 import { parseSubagentContent } from "@/lib/subagent";
 import type { SubagentContent } from "@/lib/subagent";
 import { SubagentDrawer } from "@/components/chat/SubagentDrawer";
+import { useThrottledValue } from "@/lib/useThrottledValue";
 import { ConversationItem, ConversationGroupHeader, ProjectRow } from "@/components/chat/ConversationItem";
 import type { ConversationLocation } from "@/components/chat/ConversationItem";
 import { toast } from "sonner";
@@ -140,6 +141,7 @@ export function ChatPage() {
   const [streamContent, setStreamContent] = useState("");
   const [streamSteps, setStreamSteps] = useState<StreamStep[]>([]);
   const [streamError, setStreamError] = useState<string | null>(null);
+  const [showJumpToLatest, setShowJumpToLatest] = useState(false);
   const [streamConvoId, setStreamConvoId] = useState<number | null>(null);
   const [runningConvoIds, setRunningConvoIds] = useState<Set<number>>(new Set());
   const [contextStatusMap, setContextStatusMap] = useState<Record<number, "NORMAL" | "LOW" | "VERY_LOW">>({});
@@ -171,6 +173,11 @@ export function ChatPage() {
   const [deleteProjectTarget, setDeleteProjectTarget] = useState<ProjectDTO | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
+  const followOutputRef = useRef(true);
+  const pendingFinalDeltaRef = useRef("");
+  const pendingThinkingDeltaRef = useRef("");
+  const deltaFlushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const convoListRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -229,6 +236,66 @@ export function ChatPage() {
     return () => clearInterval(timer);
   }, [runningConvoIds.size > 0, refreshRunningConversations]);
 
+  function clearPendingStreamDeltas() {
+    if (deltaFlushTimerRef.current != null) {
+      clearTimeout(deltaFlushTimerRef.current);
+      deltaFlushTimerRef.current = null;
+    }
+    pendingFinalDeltaRef.current = "";
+    pendingThinkingDeltaRef.current = "";
+  }
+
+  function flushStreamDeltas() {
+    if (deltaFlushTimerRef.current != null) {
+      clearTimeout(deltaFlushTimerRef.current);
+    }
+    deltaFlushTimerRef.current = null;
+    const finalDelta = pendingFinalDeltaRef.current;
+    const thinkingDelta = pendingThinkingDeltaRef.current;
+    pendingFinalDeltaRef.current = "";
+    pendingThinkingDeltaRef.current = "";
+    if (finalDelta) {
+      setStreamContent((prev) => prev + finalDelta);
+    }
+    if (thinkingDelta) {
+      setStreamSteps((prev) => {
+        const last = prev[prev.length - 1];
+        if (last && last.type === "thinking") {
+          const updated = [...prev];
+          updated[updated.length - 1] = { ...last, content: (last.content ?? "") + thinkingDelta };
+          return updated;
+        }
+        return [...prev, { type: "thinking", content: thinkingDelta }];
+      });
+    }
+  }
+
+  function scheduleDeltaFlush() {
+    if (deltaFlushTimerRef.current == null) {
+      deltaFlushTimerRef.current = setTimeout(flushStreamDeltas, 50);
+    }
+  }
+
+  function handleMessagesScroll(e: React.UIEvent<HTMLDivElement>) {
+    const el = e.currentTarget;
+    const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight <= 80;
+    followOutputRef.current = nearBottom;
+    setShowJumpToLatest((prev) => (prev === !nearBottom ? prev : !nearBottom));
+  }
+
+  function jumpToLatest() {
+    followOutputRef.current = true;
+    setShowJumpToLatest(false);
+    messagesContainerRef.current?.scrollTo({
+      top: messagesContainerRef.current.scrollHeight,
+      behavior: "auto",
+    });
+  }
+
+  const openSubagent = useCallback((id: number, description?: string) => {
+    setSubagentView({ id, description });
+  }, []);
+
   const consumeEventStream = async (convoId: number, stream: ReadableStream<Uint8Array>) => {
     const reader = stream.getReader();
     const decoder = new TextDecoder();
@@ -252,6 +319,7 @@ export function ChatPage() {
   };
 
   const finishStream = (convoId: number) => {
+    clearPendingStreamDeltas();
     if (streamConvoIdRef.current === convoId) {
       setStreamConvoId(null);
       setOptimisticContent(null);
@@ -278,6 +346,9 @@ export function ChatPage() {
 
   const attachWatch = async (convoId: number, runningBatch?: ChatEventBatchDTO) => {
     abortRef.current?.abort();
+    clearPendingStreamDeltas();
+    followOutputRef.current = true;
+    setShowJumpToLatest(false);
     const controller = new AbortController();
     abortRef.current = controller;
     setStreamConvoId(convoId);
@@ -363,6 +434,9 @@ export function ChatPage() {
 
   useEffect(() => {
     abortRef.current?.abort();
+    clearPendingStreamDeltas();
+    followOutputRef.current = true;
+    setShowJumpToLatest(false);
     setStreamConvoId(null);
     setOptimisticContent(null);
     setOptimisticImages([]);
@@ -389,8 +463,14 @@ export function ChatPage() {
   }, [selectedConvoId]);
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    if (!followOutputRef.current) return;
+    const el = messagesContainerRef.current;
+    if (el) {
+      el.scrollTop = el.scrollHeight;
+    }
   }, [batches, streamContent, streamSteps]);
+
+  useEffect(() => () => clearPendingStreamDeltas(), []);
 
   const loadConversations = useCallback(async (agentId: number, page: number, reset: boolean): Promise<PageResult<ConversationDTO>> => {
     if (reset) {
@@ -626,6 +706,9 @@ export function ChatPage() {
   const triggerChat = async (content: string, images: string[] = []) => {
     if (!selectedConvoId || streamConvoId === selectedConvoId || runningConvoIds.has(selectedConvoId)) return;
     const chatConvoId = selectedConvoId;
+    clearPendingStreamDeltas();
+    followOutputRef.current = true;
+    setShowJumpToLatest(false);
     setStreamConvoId(chatConvoId);
     setOptimisticContent(content);
     setOptimisticImages(images);
@@ -753,21 +836,16 @@ export function ChatPage() {
   const handleStreamEvent = (convoId: number, event: ChatEventDTO) => {
     switch (event.type) {
       case "thinking":
+        flushStreamDeltas();
         if (event.content) setStreamSteps((prev) => [...prev, { type: "thinking", content: event.content! }]);
         break;
       case "thinking_delta":
-        setStreamSteps((prev) => {
-          const last = prev[prev.length - 1];
-          if (last && last.type === "thinking") {
-            const updated = [...prev];
-            updated[updated.length - 1] = { ...last, content: (last.content ?? "") + (event.content ?? "") };
-            return updated;
-          }
-          return [...prev, { type: "thinking", content: event.content ?? "" }];
-        });
+        pendingThinkingDeltaRef.current += event.content ?? "";
+        scheduleDeltaFlush();
         break;
       case "final_answer_delta":
-        setStreamContent((prev) => prev + (event.content ?? ""));
+        pendingFinalDeltaRef.current += event.content ?? "";
+        scheduleDeltaFlush();
         break;
       case "tool_call":
         setStreamSteps((prev) => [...prev, {
@@ -790,6 +868,7 @@ export function ChatPage() {
         });
         break;
       case "final_answer":
+        flushStreamDeltas();
         setStreamContent((prev) => prev + (event.content ?? ""));
         break;
       case "error":
@@ -861,6 +940,7 @@ export function ChatPage() {
     }
   };
 
+  const throttledStreamContent = useThrottledValue(streamContent, 200);
   const showHero = !loadingBatches && batches.length === 0 && !isCurrentConvoRunning && optimisticContent === null;
 
   const renderConvoItem = (convo: ConversationDTO, location: ConversationLocation) => {
@@ -1090,7 +1170,8 @@ export function ChatPage() {
             </div>
           ) : (
           <>
-            <div className="flex-1 overflow-y-auto p-4">
+            <div className="relative flex-1 min-h-0">
+              <div ref={messagesContainerRef} onScroll={handleMessagesScroll} className="h-full overflow-y-auto p-4">
               {loadingBatches ? (
                 <div className="flex h-full items-center justify-center text-muted-foreground">加载中...</div>
               ) : (
@@ -1217,7 +1298,7 @@ export function ChatPage() {
                               <AvatarImage src={currentAgent?.avatarUrl ?? undefined} />
                               <AvatarFallback className="text-xs">{currentAgent?.name?.[0]?.toUpperCase() ?? "A"}</AvatarFallback>
                             </Avatar>
-                            <BatchBubble events={batch.events} onOpenSubagent={(id, desc) => setSubagentView({ id, description: desc })} />
+                            <BatchBubble events={batch.events} onOpenSubagent={openSubagent} />
                           </div>
                           <div className="ml-9 flex items-center gap-1">
                             <Tooltip>
@@ -1296,13 +1377,25 @@ export function ChatPage() {
                         <AvatarImage src={currentAgent?.avatarUrl ?? undefined} />
                         <AvatarFallback className="text-xs">{currentAgent?.name?.[0]?.toUpperCase() ?? "A"}</AvatarFallback>
                       </Avatar>
-                      <StreamBubble steps={streamSteps} content={streamContent} thinking={!streamContent && !streamError && streamSteps.length === 0} onOpenSubagent={(id, desc) => setSubagentView({ id, description: desc })} />
+                      <StreamBubble steps={streamSteps} content={throttledStreamContent} thinking={!streamContent && !streamError && streamSteps.length === 0} onOpenSubagent={openSubagent} />
                       {streamError && <div className="text-destructive">{streamError}</div>}
                     </div>
                   )}
 
                   <div ref={messagesEndRef} />
                 </div>
+              )}
+              </div>
+              {showJumpToLatest && (
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  className="absolute bottom-4 left-1/2 z-20 -translate-x-1/2 rounded-full shadow-md"
+                  onClick={jumpToLatest}
+                >
+                  <ArrowDown className="size-3.5" />
+                  回到最新
+                </Button>
               )}
             </div>
 

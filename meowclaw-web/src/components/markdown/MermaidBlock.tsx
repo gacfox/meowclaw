@@ -18,23 +18,28 @@ export function MermaidBlock({ chart }: { chart: string }) {
 
   useEffect(() => {
     let cancelled = false;
-    setSvg(null);
-    setError(null);
-    (async () => {
-      try {
-        const mermaid = await loadMermaid();
-        mermaid.initialize({
-          startOnLoad: false,
-          securityLevel: "loose",
-          theme: resolvedTheme === "dark" ? "dark" : "default",
-        });
-        const result = await mermaid.render(id, chart);
-        if (!cancelled) setSvg(result.svg);
-      } catch (e) {
-        if (!cancelled) setError(e instanceof Error ? e.message : String(e));
-      }
-    })();
-    return () => { cancelled = true; };
+    const timer = setTimeout(() => {
+      setSvg(null);
+      setError(null);
+      (async () => {
+        try {
+          const mermaid = await loadMermaid();
+          mermaid.initialize({
+            startOnLoad: false,
+            securityLevel: "loose",
+            theme: resolvedTheme === "dark" ? "dark" : "default",
+          });
+          const result = await mermaid.render(id, chart);
+          if (!cancelled) setSvg(result.svg);
+        } catch (e) {
+          if (!cancelled) setError(e instanceof Error ? e.message : String(e));
+        }
+      })();
+    }, 300);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
   }, [chart, id, resolvedTheme]);
 
   if (error) {
