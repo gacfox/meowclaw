@@ -180,6 +180,7 @@ export function ChatPage() {
   const deltaFlushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const convoListRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
+  const creatingConvoRef = useRef(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const editTextareaRef = useRef<HTMLTextAreaElement>(null);
   const composerTextareaRef = useRef<HTMLTextAreaElement>(null);
@@ -592,11 +593,33 @@ export function ChatPage() {
     }
   }
 
+  async function createNewConversation(projectId?: number) {
+    if (!selectedAgentId || creatingConvoRef.current) return;
+    const isIdleBlank = selectedConvoId != null && !loadingBatches && batches.length === 0
+      && !isCurrentConvoRunning && optimisticContent === null && optimisticImages.length === 0
+      && !input.trim() && pendingImages.length === 0;
+    if (isIdleBlank && (projectId == null || currentConvo?.projectId === projectId)) {
+      return;
+    }
+    creatingConvoRef.current = true;
+    try {
+      const convo = await createConversation(selectedAgentId, projectId);
+      if (projectId == null) {
+        setConversations((prev) => [convo, ...prev]);
+        convoListRef.current?.scrollTo({ top: 0 });
+      } else {
+        loadGroups(selectedAgentId);
+      }
+      setSelectedConvoId(convo.id);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "新建会话失败");
+    } finally {
+      creatingConvoRef.current = false;
+    }
+  }
+
   async function handleNewConvoInProject(projectId: number) {
-    if (!selectedAgentId) return;
-    const convo = await createConversation(selectedAgentId, projectId);
-    loadGroups(selectedAgentId);
-    setSelectedConvoId(convo.id);
+    await createNewConversation(projectId);
   }
 
   const handleConvoScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
@@ -623,11 +646,7 @@ export function ChatPage() {
   }, [conversations, collapsedGroups.other, hasMoreConvos, loadingConvos, loadingMoreConvos, selectedAgentId, convoPage, loadConversations]);
 
   const handleNewConvo = async () => {
-    if (!selectedAgentId) return;
-    const convo = await createConversation(selectedAgentId);
-    setConversations((prev) => [convo, ...prev]);
-    setSelectedConvoId(convo.id);
-    convoListRef.current?.scrollTo({ top: 0 });
+    await createNewConversation();
   };
 
   const confirmDelete = async () => {
