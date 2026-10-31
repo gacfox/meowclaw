@@ -752,7 +752,7 @@ export function ChatPage() {
 
   const MAX_PENDING_IMAGES = 5;
 
-  const handleImageSelect = async (files: FileList | null) => {
+  const handleImageSelect = async (files: FileList | File[] | null) => {
     if (!files || files.length === 0) return;
     const remaining = MAX_PENDING_IMAGES - pendingImages.length;
     if (remaining <= 0) {
@@ -1008,6 +1008,18 @@ export function ChatPage() {
         ref={composerTextareaRef}
         value={input}
         onChange={(e) => setInput(e.target.value)}
+        onPaste={(e) => {
+          const images = Array.from(e.clipboardData.files).filter((file) =>
+            ["image/png", "image/jpeg", "image/webp", "image/gif"].includes(file.type)
+          );
+          if (images.length === 0) return;
+          e.preventDefault();
+          if (!canVision) {
+            toast.error("当前模型不支持图片输入");
+            return;
+          }
+          handleImageSelect(images);
+        }}
         onKeyDown={(e) => {
           if (e.key === "Enter" && !e.shiftKey && !e.ctrlKey && !e.nativeEvent.isComposing) {
             e.preventDefault();
