@@ -11,6 +11,7 @@ import {
   listScheduledTaskExecutions,
 } from "@/services/scheduled-task";
 import { listBatches } from "@/services/conversation";
+import { BatchBubble } from "@/components/chat/ChatEventBubble";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -61,6 +62,14 @@ const emptyForm: TaskFormData = {
   cronExpression: "",
   createNewSession: false,
 };
+
+function selectExecutionBatch(batches: ChatEventBatchDTO[], executedAt: number): ChatEventBatchDTO | undefined {
+  const userBatches = batches.filter((batch) => batch.type === "USER");
+  return userBatches.find((batch) => batch.createdAt >= executedAt)
+    ?? [...userBatches].sort((a, b) =>
+      Math.abs(a.createdAt - executedAt) - Math.abs(b.createdAt - executedAt)
+    )[0];
+}
 
 const statusLabel: Record<string, { label: string; variant: "default" | "secondary" | "destructive" | "outline" }> = {
   SUCCESS: { label: "成功", variant: "default" },
@@ -225,7 +234,7 @@ export function ScheduledTaskPage() {
         const batches = await listBatches(exec.conversationId);
         setBatchData((prev) => ({ ...prev, [exec.id]: batches }));
       } catch {
-        // ignore
+        setBatchData((prev) => ({ ...prev, [exec.id]: [] }));
       }
     }
   };
@@ -410,7 +419,7 @@ export function ScheduledTaskPage() {
 
       {/* Execution Log Dialog */}
       <Dialog open={execDialogOpen} onOpenChange={setExecDialogOpen}>
-        <DialogContent className="max-h-[85vh] max-w-3xl overflow-y-auto">
+        <DialogContent className="flex max-h-[85vh] w-[calc(100vw-2rem)] flex-col overflow-hidden sm:max-w-6xl">
           <DialogHeader>
             <DialogTitle>执行日志 — {execTask?.name}</DialogTitle>
           </DialogHeader>
@@ -419,7 +428,7 @@ export function ScheduledTaskPage() {
           ) : executions.length === 0 ? (
             <div className="py-4 text-center text-muted-foreground">暂无执行记录</div>
           ) : (
-            <div className="flex flex-col gap-2">
+            <div className="min-h-0 flex-1 space-y-2 overflow-y-auto pr-1">
               {executions.map((exec) => {
                 const st = statusLabel[exec.status];
                 const batches = batchData[exec.id];
@@ -435,33 +444,37 @@ export function ScheduledTaskPage() {
                       <span className="text-muted-foreground">{formatTimestamp(exec.executedAt)}</span>
                       <span className="text-xs text-muted-foreground">会话 #{exec.conversationId}</span>
                     </button>
-                    {expanded && batches && (
-                      <div className="border-t px-4 py-2">
-                        {batches.length === 0 ? (
-                          <p className="text-xs text-muted-foreground">暂无会话内容</p>
-                        ) : (
-                          batches.map((batch) => (
-                            <div key={batch.id} className="mb-3 last:mb-0">
-                              <div className="mb-1 text-xs font-medium text-muted-foreground">
-                                用户: {batch.userContent}
+                    {expanded && !batches && (
+                      <div className="border-t px-4 py-3 text-xs text-muted-foreground">加载中...</div>
+                    )}
+                    {expanded && batches && (() => {
+                      const batch = selectExecutionBatch(batches, exec.executedAt);
+                      return (
+                        <div className="space-y-3 border-t px-4 py-3">
+                          {!batch ? (
+                            <p className="text-xs text-muted-foreground">会话内容不存在或已删除</p>
+                          ) : (
+                            <>
+                              <div className="max-w-[90%] rounded-lg bg-primary px-3 py-2 text-sm text-primary-foreground">
+                                <div className="whitespace-pre-wrap">{batch.userContent}</div>
                               </div>
-                              {batch.events
-                                .filter((e) => e.type === "FINAL_ANSWER" && e.content)
-                                .map((e, i) => (
-                                  <div key={i} className="whitespace-pre-wrap text-sm">
-                                    {e.content}
-                                  </div>
-                                ))}
+                              {batch.events.length > 0 ? (
+                                <BatchBubble events={batch.events} />
+                              ) : (
+                                <p className="text-xs text-muted-foreground">
+                                  {batch.status === "RUNNING" ? "智能体执行中，暂无输出" : "暂无AI输出"}
+                                </p>
+                              )}
                               {batch.inputTokens != null && batch.outputTokens != null && (
-                                <div className="mt-1 text-xs text-muted-foreground">
+                                <div className="text-xs text-muted-foreground">
                                   ↑{batch.inputTokens} ↓{batch.outputTokens}
                                 </div>
                               )}
-                            </div>
-                          ))
-                        )}
-                      </div>
-                    )}
+                            </>
+                          )}
+                        </div>
+                      );
+                    })()}
                   </div>
                 );
               })}
