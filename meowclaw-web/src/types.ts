@@ -23,6 +23,7 @@ export interface LlmDTO {
   contextLength: number | null;
   temperature: number | null;
   capabilities: string | null;
+  reasoningEffortOptions: string | null;
   createdAt: number;
   updatedAt: number;
 }

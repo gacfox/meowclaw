@@ -46,6 +46,9 @@ public class Llm {
     @Column(name = "capabilities", length = 255)
     private String capabilities;
 
+    @Column(name = "reasoning_effort_options", columnDefinition = "TEXT")
+    private String reasoningEffortOptions;
+
     @Column(name = "created_at", nullable = false)
     private Long createdAt;
 

@@ -142,6 +142,8 @@ MeowClaw支持父智能体通过内置工具`spawn_subagent`派发一次性子�
 
 MeowClaw支持OpenAI兼容协议的`/v1/chat/completions`大语言模型接口，大多数大语言模型Provider（例如Ollama等）都提供类似的端点。
 
+模型配置支持按有序JSON数组设置思考强度（`reasoning_effort`）可选项，可使用内置值`none/minimal/low/medium/high/xhigh/max`，也可添加Provider支持的自定义字符串。配置为空时不传递该参数且对话页不显示选择器；配置后，对话输入框可切换本次发送的思考强度，默认优先选择`medium`，否则选择最高内置强度，全为自定义值时使用列表最后一项。子智能体与定时任务使用对应模型的默认强度。
+
 ### 向量嵌入模型集成
 
 MeowClaw支持OpenAI兼容协议的`/v1/embeddings`向量嵌入模型接口，最大支持1024维向量。

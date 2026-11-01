@@ -3,7 +3,10 @@ import type { LlmDTO } from "@/types";
 import { listLlms, createLlm, updateLlm, deleteLlm as apiDeleteLlm } from "@/services/llm";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { BUILTIN_REASONING_EFFORTS, normalizeReasoningEffortOptions } from "@/lib/reasoningEffort";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -43,9 +46,10 @@ interface LlmFormData {
   contextLength: string;
   temperature: string;
   capabilities: Capability[];
+  reasoningEffortOptions: string;
 }
 
-const emptyForm: LlmFormData = { name: "", endpointUrl: "", sk: "", model: "", maxTokens: "", contextLength: "", temperature: "", capabilities: [] };
+const emptyForm: LlmFormData = { name: "", endpointUrl: "", sk: "", model: "", maxTokens: "", contextLength: "", temperature: "", capabilities: [], reasoningEffortOptions: "" };
 
 function parseCapabilities(raw: string | null): Capability[] {
   if (!raw) return [];
@@ -95,6 +99,7 @@ export function LlmConfigPage() {
   const [editing, setEditing] = useState<LlmDTO | null>(null);
   const [form, setForm] = useState<LlmFormData>(emptyForm);
   const [saving, setSaving] = useState(false);
+  const [effortToAdd, setEffortToAdd] = useState<string>("medium");
 
   const openCreate = () => {
     setEditing(null);
@@ -113,6 +118,7 @@ export function LlmConfigPage() {
       contextLength: llm.contextLength?.toString() ?? "",
       temperature: llm.temperature != null ? (llm.temperature / 100).toString() : "",
       capabilities: parseCapabilities(llm.capabilities),
+      reasoningEffortOptions: llm.reasoningEffortOptions ?? "",
     });
     setDialogOpen(true);
   };
@@ -124,6 +130,20 @@ export function LlmConfigPage() {
         ? prev.capabilities.filter((c) => c !== cap)
         : [...prev.capabilities, cap],
     }));
+  };
+
+  const addReasoningEffort = () => {
+    try {
+      const options = form.reasoningEffortOptions.trim()
+        ? normalizeReasoningEffortOptions(form.reasoningEffortOptions)
+        : [];
+      if (!options.includes(effortToAdd)) {
+        options.push(effortToAdd);
+      }
+      setForm({ ...form, reasoningEffortOptions: JSON.stringify(options) });
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "思考强度可选项格式错误");
+    }
   };
 
   const handleSave = async () => {
@@ -138,6 +158,9 @@ export function LlmConfigPage() {
         contextLength: form.contextLength ? parseInt(form.contextLength) : undefined,
         temperature: form.temperature ? Math.round(parseFloat(form.temperature) * 100) : undefined,
         capabilities: form.capabilities.length > 0 ? capabilitiesToString(form.capabilities) : undefined,
+        reasoningEffortOptions: form.reasoningEffortOptions.trim()
+          ? JSON.stringify(normalizeReasoningEffortOptions(form.reasoningEffortOptions))
+          : "",
       };
       if (editing) {
         await updateLlm(editing.id, data);
@@ -198,6 +221,7 @@ export function LlmConfigPage() {
         contextLength: copyingLlm.contextLength ?? undefined,
         temperature: copyingLlm.temperature ?? undefined,
         capabilities: copyingLlm.capabilities ?? undefined,
+        reasoningEffortOptions: copyingLlm.reasoningEffortOptions ?? undefined,
       });
       await fetchLlms();
       setCopyDialogOpen(false);
@@ -345,6 +369,29 @@ export function LlmConfigPage() {
                   </Button>
                 ))}
               </div>
+            </div>
+            <div className="flex flex-col gap-2">
+              <Label>思考强度可选项</Label>
+              <div className="flex gap-2">
+                <Select value={effortToAdd} onValueChange={setEffortToAdd}>
+                  <SelectTrigger className="w-40">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {BUILTIN_REASONING_EFFORTS.map((effort) => (
+                      <SelectItem key={effort} value={effort}>{effort}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Button type="button" variant="outline" onClick={addReasoningEffort}>添加</Button>
+              </div>
+              <Textarea
+                rows={2}
+                value={form.reasoningEffortOptions}
+                onChange={(e) => setForm({ ...form, reasoningEffortOptions: e.target.value })}
+                placeholder='["low","medium","high"]，空则不启用；按强度从低到高排列'
+                className="font-mono text-xs"
+              />
             </div>
           </div>
           <DialogFooter>

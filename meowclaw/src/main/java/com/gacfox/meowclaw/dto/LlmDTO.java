@@ -19,6 +19,7 @@ public class LlmDTO {
     private Integer contextLength;
     private Integer temperature;
     private String capabilities;
+    private String reasoningEffortOptions;
     private Long createdAt;
     private Long updatedAt;
 }

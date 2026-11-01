@@ -1,5 +1,7 @@
 package com.gacfox.meowclaw.service;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.gacfox.meowclaw.converter.LlmConverter;
 import com.gacfox.meowclaw.dto.CreateLlmRequest;
 import com.gacfox.meowclaw.dto.LlmDTO;
@@ -10,10 +12,14 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 
 @Service
 public class LlmService {
+    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
+
     private final LlmRepository llmRepository;
     private final LlmConverter llmConverter;
 
@@ -39,6 +45,7 @@ public class LlmService {
         llm.setContextLength(req.getContextLength());
         llm.setTemperature(req.getTemperature());
         llm.setCapabilities(req.getCapabilities());
+        llm.setReasoningEffortOptions(normalizeReasoningEffortOptions(req.getReasoningEffortOptions()));
         long now = System.currentTimeMillis();
         llm.setCreatedAt(now);
         llm.setUpdatedAt(now);
@@ -57,6 +64,9 @@ public class LlmService {
         if (req.getContextLength() != null) llm.setContextLength(req.getContextLength());
         if (req.getTemperature() != null) llm.setTemperature(req.getTemperature());
         if (req.getCapabilities() != null) llm.setCapabilities(req.getCapabilities());
+        if (req.getReasoningEffortOptions() != null) {
+            llm.setReasoningEffortOptions(normalizeReasoningEffortOptions(req.getReasoningEffortOptions()));
+        }
         llm.setUpdatedAt(System.currentTimeMillis());
         return llmConverter.toDTO(llmRepository.save(llm));
     }
@@ -66,5 +76,32 @@ public class LlmService {
         Llm llm = llmRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("配置不存在"));
         llmRepository.delete(llm);
+    }
+
+    /**
+     * 校验并规范化思考强度可选项：必须为非空字符串组成的JSON数组，去空去重且保持原顺序
+     */
+    static String normalizeReasoningEffortOptions(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return null;
+        }
+        try {
+            JsonNode node = OBJECT_MAPPER.readTree(raw);
+            if (node == null || !node.isArray()) {
+                throw new IllegalArgumentException("思考强度可选项必须是JSON字符串数组");
+            }
+            Set<String> options = new LinkedHashSet<>();
+            for (JsonNode item : node) {
+                if (!item.isTextual() || item.asText().isBlank()) {
+                    throw new IllegalArgumentException("思考强度可选项必须全部是非空字符串");
+                }
+                options.add(item.asText().trim());
+            }
+            return options.isEmpty() ? null : OBJECT_MAPPER.writeValueAsString(options);
+        } catch (IllegalArgumentException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new IllegalArgumentException("思考强度可选项不是合法JSON数组");
+        }
     }
 }

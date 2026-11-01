@@ -21,6 +21,7 @@ CREATE TABLE IF NOT EXISTS mc_llm (
     context_length INT COMMENT '模型上下文长度',
     temperature INT COMMENT '温度参数(×100存储)',
     capabilities VARCHAR(255) COMMENT '能力标签',
+    reasoning_effort_options TEXT COMMENT '思考强度可选项JSON数组(空则不传递该参数)',
     created_at BIGINT NOT NULL COMMENT '创建时间',
     updated_at BIGINT NOT NULL COMMENT '更新时间',
     PRIMARY KEY (id)

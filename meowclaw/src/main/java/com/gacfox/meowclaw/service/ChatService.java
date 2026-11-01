@@ -157,12 +157,16 @@ public class ChatService {
     }
 
     public Flux<ChatEventDTO> chat(Long conversationId, String userContent, List<String> images) {
+        return chat(conversationId, userContent, images, null);
+    }
+
+    public Flux<ChatEventDTO> chat(Long conversationId, String userContent, List<String> images, String reasoningEffort) {
         ActiveRun run = new ActiveRun();
         if (activeRuns.putIfAbsent(conversationId, run) != null) {
             return Flux.just(ChatEventDTO.builder()
                     .type("error").content("当前会话正在执行中，请稍后再试").build());
         }
-        Schedulers.boundedElastic().schedule(() -> startChat(conversationId, userContent, images, run));
+        Schedulers.boundedElastic().schedule(() -> startChat(conversationId, userContent, images, run, reasoningEffort));
         return run.sink.asFlux();
     }
 
@@ -365,7 +369,7 @@ public class ChatService {
     }
 
     private void startChat(Long conversationId, String userContent, List<String> images,
-                           ActiveRun run) {
+                           ActiveRun run, String reasoningEffort) {
         Sinks.Many<ChatEventDTO> runSink = run.sink;
         Long batchId = null;
         try {
@@ -415,7 +419,7 @@ public class ChatService {
             });
             ReActAgentExecutor executor = buildExecutor(llmClient, toolNames, run, batchId, conversationId);
 
-            AgentContext context = buildAgentContext(agent, conv, llm, userContent, images, toolNames, llmClient);
+            AgentContext context = buildAgentContext(agent, conv, llm, userContent, images, toolNames, llmClient, reasoningEffort);
             run.context = context;
             if (run.stopRequested.get()) {
                 context.requestStop();
@@ -495,7 +499,8 @@ public class ChatService {
     }
 
     private AgentContext buildAgentContext(Agent agent, Conversation conv, Llm llm, String userContent,
-                                           List<String> images, List<String> toolNames, LlmClient llmClient) {
+                                           List<String> images, List<String> toolNames, LlmClient llmClient,
+                                           String reasoningEffort) {
         String workspaceFolder = agent.getWorkspaceFolder();
         Map<String, Object> variables = new HashMap<>();
         if (workspaceFolder != null && !workspaceFolder.isBlank()) {
@@ -562,6 +567,7 @@ public class ChatService {
                 .toolNames(toolNames)
                 .temperature(temperature)
                 .maxTokens(llm.getMaxTokens())
+                .reasoningEffort(resolveReasoningEffort(llm, reasoningEffort))
                 .streaming(true)
                 .variables(variables)
                 .build();
@@ -744,7 +750,34 @@ public class ChatService {
         titleGenerationRegistryService.complete(conversationId, finalTitle);
     }
 
-    private List<String> parseJsonArray(String json) {
+    /**
+     * 解析本次执行的思考强度：优先使用合法的页面选中值，否则依次回退medium、最高内置值、最后一项自定义值；
+     * 可选项为空时返回null，保持旧版请求行为
+     */
+    static String resolveReasoningEffort(Llm llm, String selected) {
+        List<String> options = parseJsonArray(llm.getReasoningEffortOptions()).stream()
+                .filter(value -> value != null && !value.isBlank())
+                .map(String::trim)
+                .distinct()
+                .toList();
+        if (options.isEmpty()) {
+            return null;
+        }
+        if (selected != null && options.contains(selected.trim())) {
+            return selected.trim();
+        }
+        if (options.contains("medium")) {
+            return "medium";
+        }
+        for (String builtin : List.of("max", "xhigh", "high", "medium", "low", "minimal", "none")) {
+            if (options.contains(builtin)) {
+                return builtin;
+            }
+        }
+        return options.get(options.size() - 1);
+    }
+
+    private static List<String> parseJsonArray(String json) {
         if (json == null || json.isBlank()) return Collections.emptyList();
         try {
             return OBJECT_MAPPER.readValue(json, new TypeReference<>() {

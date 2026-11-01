@@ -16,7 +16,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, SquarePen, Loader2, ChevronRight, Copy, Pencil, RefreshCw, ArrowUp, ArrowDown, Check, Clock, TriangleAlert, X, Square, Shield, ShieldAlert, MoreHorizontal, FolderPlus } from "lucide-react";
+import { Plus, SquarePen, Loader2, ChevronRight, Copy, Pencil, RefreshCw, ArrowUp, ArrowDown, Check, Clock, TriangleAlert, X, Square, Shield, ShieldAlert, MoreHorizontal, FolderPlus, Brain } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Alert, AlertTitle, AlertDescription, AlertAction } from "@/components/ui/alert";
@@ -29,6 +29,7 @@ import { parseSubagentContent } from "@/lib/subagent";
 import type { SubagentContent } from "@/lib/subagent";
 import { SubagentDrawer } from "@/components/chat/SubagentDrawer";
 import { useThrottledValue } from "@/lib/useThrottledValue";
+import { defaultReasoningEffort, parseReasoningEffortOptions } from "@/lib/reasoningEffort";
 import { ConversationItem, ConversationGroupHeader, ProjectRow } from "@/components/chat/ConversationItem";
 import type { ConversationLocation } from "@/components/chat/ConversationItem";
 import { toast } from "sonner";
@@ -138,6 +139,7 @@ export function ChatPage() {
   const [optimisticImages, setOptimisticImages] = useState<string[]>([]);
   const [pendingImages, setPendingImages] = useState<{ dataUrl: string; name: string }[]>([]);
   const [llms, setLlms] = useState<LlmDTO[]>([]);
+  const [reasoningEffortMap, setReasoningEffortMap] = useState<Record<number, string>>({});
   const [streamContent, setStreamContent] = useState("");
   const [streamSteps, setStreamSteps] = useState<StreamStep[]>([]);
   const [streamError, setStreamError] = useState<string | null>(null);
@@ -199,9 +201,13 @@ export function ChatPage() {
     ?? pinnedConvs.find((c) => c.id === selectedConvoId)
     ?? projects.flatMap((p) => p.conversations ?? []).find((c) => c.id === selectedConvoId);
   const currentAgent = currentConvo ? agents.find((a) => a.id === currentConvo.agentId) : null;
-  const canVision = currentAgent
-    ? (llms.find((l) => l.id === currentAgent.llmId)?.capabilities ?? "").split(",").map((s) => s.trim()).includes("vision")
-    : false;
+  const currentLlm = currentAgent ? llms.find((l) => l.id === currentAgent.llmId) : undefined;
+  const canVision = (currentLlm?.capabilities ?? "").split(",").map((s) => s.trim()).includes("vision");
+  const effortOptions = parseReasoningEffortOptions(currentLlm?.reasoningEffortOptions);
+  const selectedEffort = selectedConvoId != null ? reasoningEffortMap[selectedConvoId] : undefined;
+  const reasoningEffort = selectedEffort && effortOptions.includes(selectedEffort)
+    ? selectedEffort
+    : defaultReasoningEffort(effortOptions);
   const isCurrentConvoRunning = selectedConvoId != null
     && (streamConvoId === selectedConvoId || runningConvoIds.has(selectedConvoId));
 
@@ -740,7 +746,7 @@ export function ChatPage() {
     try {
       const controller = new AbortController();
       abortRef.current = controller;
-      const stream = await chatStream(chatConvoId, content, images, controller.signal);
+      const stream = await chatStream(chatConvoId, content, images, controller.signal, reasoningEffort ?? undefined);
       await consumeEventStream(chatConvoId, stream);
     } catch (e: unknown) {
       if (e instanceof DOMException && e.name === "AbortError") return;
@@ -802,6 +808,11 @@ export function ChatPage() {
     } finally {
       setStopping(false);
     }
+  };
+
+  const handleReasoningEffortChange = (value: string) => {
+    if (selectedConvoId == null) return;
+    setReasoningEffortMap((prev) => ({ ...prev, [selectedConvoId]: value }));
   };
 
   const handlePolicyChange = async (value: string) => {
@@ -1057,6 +1068,19 @@ export function ChatPage() {
             </TooltipTrigger>
             <TooltipContent>{canVision ? "上传图片" : "当前模型不支持图片输入"}</TooltipContent>
           </Tooltip>
+          {reasoningEffort && (
+            <Select value={reasoningEffort} onValueChange={handleReasoningEffortChange}>
+              <SelectTrigger className="h-7 w-auto gap-1 rounded-full border-none bg-transparent px-2 text-xs text-muted-foreground shadow-none focus:ring-0" title="思考强度">
+                <Brain className="size-3.5" />
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {effortOptions.map((effort) => (
+                  <SelectItem key={effort} value={effort}>{effort}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
           <Select
             value={currentConvo?.guardrailPolicyId != null ? String(currentConvo.guardrailPolicyId) : undefined}
             onValueChange={handlePolicyChange}

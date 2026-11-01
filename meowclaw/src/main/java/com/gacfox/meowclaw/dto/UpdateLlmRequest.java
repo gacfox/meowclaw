@@ -31,4 +31,6 @@ public class UpdateLlmRequest {
 
     @Size(max = 255, message = "能力标签长度不能超过255")
     private String capabilities;
+
+    private String reasoningEffortOptions;
 }

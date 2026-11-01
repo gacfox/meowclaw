@@ -125,7 +125,7 @@ public class ConversationController {
 
     @PostMapping(value = "/{id}/chat", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public Flux<ChatEventDTO> chat(@PathVariable Long id, @RequestBody SendMessageRequest req) {
-        return chatService.chat(id, req.getContent(), req.getImages());
+        return chatService.chat(id, req.getContent(), req.getImages(), req.getReasoningEffort());
     }
 
     @GetMapping(value = "/{id}/watch", produces = MediaType.TEXT_EVENT_STREAM_VALUE)

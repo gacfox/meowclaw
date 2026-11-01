@@ -14,4 +14,5 @@ import java.util.List;
 public class SendMessageRequest {
     private String content;
     private List<String> images;
+    private String reasoningEffort;
 }

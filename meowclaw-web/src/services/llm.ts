@@ -15,6 +15,7 @@ export async function createLlm(data: {
   contextLength?: number;
   temperature?: number;
   capabilities?: string;
+  reasoningEffortOptions?: string;
 }): Promise<LlmDTO> {
   const res = await request<LlmDTO>("/api/llm", {
     method: "POST",
@@ -31,6 +32,7 @@ export async function updateLlm(id: number, data: {
   maxTokens?: number;
   temperature?: number;
   capabilities?: string;
+  reasoningEffortOptions?: string;
 }): Promise<LlmDTO> {
   const res = await request<LlmDTO>(`/api/llm/${id}`, {
     method: "PUT",
