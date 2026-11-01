@@ -74,6 +74,8 @@ export interface ConversationDTO {
   guardrailPolicyId: number | null;
   pinned: boolean;
   projectId: number | null;
+  contextPromptTokens: number | null;
+  contextLength: number | null;
   createdAt: number;
   updatedAt: number;
 }
@@ -120,6 +122,8 @@ export interface ChatEventDTO {
   toolName: string | null;
   toolCallId: string | null;
   toolArguments: string | null;
+  contextPromptTokens?: number | null;
+  contextLength?: number | null;
 }
 
 export interface ChatAttachmentDTO {

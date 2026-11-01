@@ -28,6 +28,7 @@ import type { ApprovalContent } from "@/lib/approval";
 import { parseSubagentContent } from "@/lib/subagent";
 import type { SubagentContent } from "@/lib/subagent";
 import { SubagentDrawer } from "@/components/chat/SubagentDrawer";
+import { ContextUsageGauge } from "@/components/chat/ContextUsageGauge";
 import { useThrottledValue } from "@/lib/useThrottledValue";
 import { defaultReasoningEffort, parseReasoningEffortOptions } from "@/lib/reasoningEffort";
 import { readAgentPreferences, writeAgentPreferences } from "@/lib/agentPreferences";
@@ -149,6 +150,7 @@ export function ChatPage() {
   const [streamConvoId, setStreamConvoId] = useState<number | null>(null);
   const [runningConvoIds, setRunningConvoIds] = useState<Set<number>>(new Set());
   const [contextStatusMap, setContextStatusMap] = useState<Record<number, "NORMAL" | "LOW" | "VERY_LOW">>({});
+  const [contextUsageMap, setContextUsageMap] = useState<Record<number, { promptTokens: number; contextLength: number | null }>>({});
   const [dismissedStatusMap, setDismissedStatusMap] = useState<Record<number, boolean>>({});
   const [deleteTargetId, setDeleteTargetId] = useState<number | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
@@ -943,6 +945,15 @@ export function ChatPage() {
         setStreamError(event.content ?? "未知错误");
         break;
       case "context_status":
+        if (event.contextPromptTokens != null) {
+          setContextUsageMap((prev) => ({
+            ...prev,
+            [convoId]: {
+              promptTokens: event.contextPromptTokens!,
+              contextLength: event.contextLength ?? null,
+            },
+          }));
+        }
         if (event.content === "NORMAL" || event.content === "LOW" || event.content === "VERY_LOW") {
           const status = event.content;
           setContextStatusMap((prev) => ({
@@ -952,6 +963,17 @@ export function ChatPage() {
           setDismissedStatusMap((prev) => ({
             ...prev,
             [convoId]: false,
+          }));
+        }
+        break;
+      case "context_usage":
+        if (event.contextPromptTokens != null) {
+          setContextUsageMap((prev) => ({
+            ...prev,
+            [convoId]: {
+              promptTokens: event.contextPromptTokens!,
+              contextLength: event.contextLength ?? null,
+            },
           }));
         }
         break;
@@ -1010,6 +1032,9 @@ export function ChatPage() {
 
   const throttledStreamContent = useThrottledValue(streamContent, 200);
   const showHero = !loadingBatches && batches.length === 0 && !isCurrentConvoRunning && optimisticContent === null;
+  const liveContextUsage = selectedConvoId != null ? contextUsageMap[selectedConvoId] : undefined;
+  const contextPromptTokens = liveContextUsage?.promptTokens ?? currentConvo?.contextPromptTokens ?? 0;
+  const usageContextLength = liveContextUsage?.contextLength ?? currentConvo?.contextLength ?? currentLlm?.contextLength ?? 0;
 
   const renderConvoItem = (convo: ConversationDTO, location: ConversationLocation) => {
     const busy = runningConvoIds.has(convo.id) || (!convo.title && generatingTitleId === convo.id);
@@ -1133,6 +1158,9 @@ export function ChatPage() {
               ))}
             </SelectContent>
           </Select>
+          {!showHero && contextPromptTokens > 0 && usageContextLength > 0 && (
+            <ContextUsageGauge promptTokens={contextPromptTokens} contextLength={usageContextLength} />
+          )}
         </div>
         {isCurrentConvoRunning ? (
           <Button variant="destructive" size="icon" className="rounded-full" onClick={handleStop} disabled={stopping} title="停止执行">

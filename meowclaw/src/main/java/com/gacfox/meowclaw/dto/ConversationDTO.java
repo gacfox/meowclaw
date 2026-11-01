@@ -17,6 +17,8 @@ public class ConversationDTO {
     private Long guardrailPolicyId;
     private Boolean pinned;
     private Long projectId;
+    private Long contextPromptTokens;
+    private Integer contextLength;
     private Long createdAt;
     private Long updatedAt;
 }

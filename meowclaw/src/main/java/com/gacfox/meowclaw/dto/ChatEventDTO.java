@@ -20,4 +20,6 @@ public class ChatEventDTO {
     private String toolName;
     private String toolCallId;
     private String toolArguments;
+    private Long contextPromptTokens;
+    private Integer contextLength;
 }

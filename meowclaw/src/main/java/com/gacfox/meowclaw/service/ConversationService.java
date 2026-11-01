@@ -89,6 +89,18 @@ public class ConversationService {
         if (dto.getGuardrailPolicyId() == null) {
             dto.setGuardrailPolicyId(guardrailPolicyService.getEffectiveDefaultPolicyId(conv.getType()));
         }
+        if (conv.getContextJson() != null && !conv.getContextJson().isBlank()) {
+            try {
+                JsonNode health = OBJECT_MAPPER.readTree(conv.getContextJson()).path("context");
+                if (health.has("promptTokens")) {
+                    dto.setContextPromptTokens(health.path("promptTokens").asLong());
+                }
+                if (health.has("contextLength")) {
+                    dto.setContextLength(health.path("contextLength").asInt());
+                }
+            } catch (Exception ignored) {
+            }
+        }
         return dto;
     }
 

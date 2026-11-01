@@ -399,6 +399,11 @@ public class ChatService {
             run.batchId = batchId;
 
             TokenUsageAccumulator tokenAccum = new TokenUsageAccumulator();
+            tokenAccum.setPromptTokensListener(tokens -> emitRunEvent(run, ChatEventDTO.builder()
+                    .type("context_usage")
+                    .contextPromptTokens(tokens)
+                    .contextLength(llm.getContextLength())
+                    .build()));
             LlmClient llmClient = buildMainLlmClient(llm, batchId, conv, tokenAccum);
             LlmClient secondaryLlmClient = buildAuxiliaryLlmClient(secondaryLlm, batchId, conv);
 
@@ -666,7 +671,11 @@ public class ChatService {
                         }
                     }
                     conversationService.updateContextHealth(conversationId, promptTokens, contextLength, contextStatus);
-                    sink.tryEmitNext(ChatEventDTO.builder().type("context_status").content(contextStatus).build());
+                    sink.tryEmitNext(ChatEventDTO.builder().type("context_status")
+                            .content(contextStatus)
+                            .contextPromptTokens(promptTokens)
+                            .contextLength(contextLength)
+                            .build());
                     try {
                         contextCompressionService.afterBatch(conversationId, batchId, secondaryLlm);
                     } catch (Exception recapError) {
