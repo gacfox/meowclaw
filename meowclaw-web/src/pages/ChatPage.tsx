@@ -30,6 +30,8 @@ import type { SubagentContent } from "@/lib/subagent";
 import { SubagentDrawer } from "@/components/chat/SubagentDrawer";
 import { useThrottledValue } from "@/lib/useThrottledValue";
 import { defaultReasoningEffort, parseReasoningEffortOptions } from "@/lib/reasoningEffort";
+import { readAgentPreferences, writeAgentPreferences } from "@/lib/agentPreferences";
+import type { AgentPreferences } from "@/lib/agentPreferences";
 import { ConversationItem, ConversationGroupHeader, ProjectRow } from "@/components/chat/ConversationItem";
 import type { ConversationLocation } from "@/components/chat/ConversationItem";
 import { toast } from "sonner";
@@ -139,7 +141,7 @@ export function ChatPage() {
   const [optimisticImages, setOptimisticImages] = useState<string[]>([]);
   const [pendingImages, setPendingImages] = useState<{ dataUrl: string; name: string }[]>([]);
   const [llms, setLlms] = useState<LlmDTO[]>([]);
-  const [reasoningEffortMap, setReasoningEffortMap] = useState<Record<number, string>>({});
+  const [agentPreferencesMap, setAgentPreferencesMap] = useState<Record<number, AgentPreferences>>({});
   const [streamContent, setStreamContent] = useState("");
   const [streamSteps, setStreamSteps] = useState<StreamStep[]>([]);
   const [streamError, setStreamError] = useState<string | null>(null);
@@ -204,10 +206,17 @@ export function ChatPage() {
   const currentLlm = currentAgent ? llms.find((l) => l.id === currentAgent.llmId) : undefined;
   const canVision = (currentLlm?.capabilities ?? "").split(",").map((s) => s.trim()).includes("vision");
   const effortOptions = parseReasoningEffortOptions(currentLlm?.reasoningEffortOptions);
-  const selectedEffort = selectedConvoId != null ? reasoningEffortMap[selectedConvoId] : undefined;
+  const currentPreferences = selectedAgentId != null
+    ? agentPreferencesMap[selectedAgentId] ?? readAgentPreferences(selectedAgentId)
+    : {};
+  const selectedEffort = currentPreferences.reasoningEffort;
   const reasoningEffort = selectedEffort && effortOptions.includes(selectedEffort)
     ? selectedEffort
     : defaultReasoningEffort(effortOptions);
+  const preferredPolicyId = currentConvo?.type !== "SCHEDULED" ? currentPreferences.guardrailPolicyId : undefined;
+  const currentGuardrailPolicyId = preferredPolicyId != null && policies.some((p) => p.id === preferredPolicyId)
+    ? preferredPolicyId
+    : currentConvo?.guardrailPolicyId ?? undefined;
   const isCurrentConvoRunning = selectedConvoId != null
     && (streamConvoId === selectedConvoId || runningConvoIds.has(selectedConvoId));
 
@@ -609,7 +618,11 @@ export function ChatPage() {
     }
     creatingConvoRef.current = true;
     try {
-      const convo = await createConversation(selectedAgentId, projectId);
+      let convo = await createConversation(selectedAgentId, projectId);
+      const policyId = currentPreferences.guardrailPolicyId;
+      if (policyId != null && policies.some((p) => p.id === policyId) && convo.guardrailPolicyId !== policyId) {
+        convo = await setConversationGuardrailPolicy(convo.id, policyId);
+      }
       if (projectId == null) {
         setConversations((prev) => [convo, ...prev]);
         convoListRef.current?.scrollTo({ top: 0 });
@@ -810,20 +823,45 @@ export function ChatPage() {
     }
   };
 
+  function updateAgentPreference(patch: Partial<AgentPreferences>) {
+    if (selectedAgentId == null) return;
+    const next = writeAgentPreferences(selectedAgentId, patch);
+    setAgentPreferencesMap((prev) => ({ ...prev, [selectedAgentId]: next }));
+  }
+
   const handleReasoningEffortChange = (value: string) => {
-    if (selectedConvoId == null) return;
-    setReasoningEffortMap((prev) => ({ ...prev, [selectedConvoId]: value }));
+    updateAgentPreference({ reasoningEffort: value });
   };
 
   const handlePolicyChange = async (value: string) => {
     if (selectedConvoId == null) return;
+    const policyId = Number(value);
     try {
-      const updated = await setConversationGuardrailPolicy(selectedConvoId, Number(value));
-      setConversations((prev) => prev.map((c) => (c.id === updated.id ? { ...c, guardrailPolicyId: updated.guardrailPolicyId } : c)));
+      const updated = await setConversationGuardrailPolicy(selectedConvoId, policyId);
+      patchConversation(updated.id, updated);
+      if (currentConvo?.type !== "SCHEDULED") {
+        updateAgentPreference({ guardrailPolicyId: policyId });
+      }
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "策略切换失败");
     }
   };
+
+  useEffect(() => {
+    const policyId = currentPreferences.guardrailPolicyId;
+    if (selectedConvoId == null || currentConvo?.id !== selectedConvoId || currentConvo.type === "SCHEDULED") return;
+    if (policyId == null || !policies.some((p) => p.id === policyId) || currentConvo.guardrailPolicyId === policyId) return;
+    let cancelled = false;
+    setConversationGuardrailPolicy(selectedConvoId, policyId)
+      .then((updated) => {
+        if (!cancelled) patchConversation(updated.id, updated);
+      })
+      .catch((e) => {
+        if (!cancelled) toast.error(e instanceof Error ? e.message : "护栏偏好同步失败");
+      });
+    return () => { cancelled = true; };
+  }, [selectedConvoId, currentConvo?.id, currentConvo?.type, currentConvo?.guardrailPolicyId,
+    currentPreferences.guardrailPolicyId, policies]);
 
   const handleApprovalDecision = async (approve: boolean) => {
     const current = pendingApprovals[0];
@@ -1082,7 +1120,7 @@ export function ChatPage() {
             </Select>
           )}
           <Select
-            value={currentConvo?.guardrailPolicyId != null ? String(currentConvo.guardrailPolicyId) : undefined}
+            value={currentGuardrailPolicyId != null ? String(currentGuardrailPolicyId) : undefined}
             onValueChange={handlePolicyChange}
           >
             <SelectTrigger className="h-7 w-auto gap-1 rounded-full border-none bg-transparent px-2 text-xs text-muted-foreground shadow-none focus:ring-0">
