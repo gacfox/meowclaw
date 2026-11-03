@@ -192,6 +192,7 @@ export function ChatPage() {
   const composerTextareaRef = useRef<HTMLTextAreaElement>(null);
   const selectedConvoIdRef = useRef<number | null>(null);
   const streamConvoIdRef = useRef<number | null>(null);
+  const runningConvoIdsRef = useRef<Set<number>>(new Set());
 
   useEffect(() => {
     selectedConvoIdRef.current = selectedConvoId;
@@ -200,6 +201,10 @@ export function ChatPage() {
   useEffect(() => {
     streamConvoIdRef.current = streamConvoId;
   }, [streamConvoId]);
+
+  useEffect(() => {
+    runningConvoIdsRef.current = runningConvoIds;
+  }, [runningConvoIds]);
 
   const currentConvo = conversations.find((c) => c.id === selectedConvoId)
     ?? pinnedConvs.find((c) => c.id === selectedConvoId)
@@ -240,7 +245,18 @@ export function ChatPage() {
       const merged = new Set(ids);
       const attached = streamConvoIdRef.current;
       if (attached != null) merged.add(attached);
+      const finishedIds = [...runningConvoIdsRef.current].filter((id) => !merged.has(id));
+      runningConvoIdsRef.current = merged;
       setRunningConvoIds(merged);
+      for (const convoId of finishedIds) {
+        setGeneratingTitleId(convoId);
+        waitForTitle(convoId).then((title) => {
+          setGeneratingTitleId((prev) => (prev === convoId ? null : prev));
+          if (title) {
+            patchConversation(convoId, { title });
+          }
+        });
+      }
     } catch { /* 忽略轮询失败 */ }
   }, []);
 
