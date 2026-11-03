@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as echarts from "echarts";
 import type { EChartsOption } from "echarts";
 import { toast } from "sonner";
+import { useTheme } from "next-themes";
 import { listAgents } from "@/services/agent";
 import { createMemory, deleteMemory, getMemoryGraph, listMemories, listMemoryEntities, recallPreview, updateMemory } from "@/services/memory";
 import type { AgentDTO, MemoryEntityWithCount, MemoryGraph, MemoryNodeDTO, PageResult } from "@/types";
@@ -35,12 +36,10 @@ const TYPE_OPTIONS = [
   { value: "rule", label: "规则" },
 ];
 
-const TYPE_COLORS: Record<string, string> = {
-  fact: "#3b82f6",
-  preference: "#22c55e",
-  rule: "#f59e0b",
-};
-const ENTITY_COLOR = "#a855f7";
+const GRAPH_COLORS = {
+  light: { fact: "#4f83cc", preference: "#1f7a4d", rule: "#c28c3c", entity: "#b34d8b" },
+  dark: { fact: "#5594d0", preference: "#35a773", rule: "#b88930", entity: "#c05a97" },
+} as const;
 
 function typeBadgeVariant(type: string): "default" | "secondary" | "outline" {
   if (type === "preference") return "secondary";
@@ -94,6 +93,7 @@ function MemoryGraphView({ graph, onMemoryClick }: { graph: MemoryGraph; onMemor
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<echarts.ECharts | null>(null);
   const onMemoryClickRef = useRef(onMemoryClick);
+  const { resolvedTheme } = useTheme();
   onMemoryClickRef.current = onMemoryClick;
 
   useEffect(() => {
@@ -118,19 +118,21 @@ function MemoryGraphView({ graph, onMemoryClick }: { graph: MemoryGraph; onMemor
   useEffect(() => {
     const chart = chartRef.current;
     if (!chart) return;
+    const colors = GRAPH_COLORS[resolvedTheme === "dark" ? "dark" : "light"];
     const nodes = [
       ...graph.memories.map((m) => ({
         id: `m-${m.id}`,
         name: truncateLabel(m.content, 12),
         memoryId: m.id,
         category: typeLabel(m.type),
+        symbol: "circle",
         symbolSize: 26,
       })),
       ...graph.entities.map((e) => ({
         id: `e-${e.id}`,
         name: truncateLabel(e.name, 12),
         category: "实体",
-        symbol: "diamond",
+        symbol: "circle",
         symbolSize: 20,
       })),
     ];
@@ -150,6 +152,7 @@ function MemoryGraphView({ graph, onMemoryClick }: { graph: MemoryGraph; onMemor
       legend: {
         data: ["事实", "偏好", "规则", "实体"],
         bottom: 0,
+        icon: "circle",
         textStyle: { fontSize: 12 },
       },
       series: [{
@@ -159,20 +162,24 @@ function MemoryGraphView({ graph, onMemoryClick }: { graph: MemoryGraph; onMemor
         draggable: true,
         force: { repulsion: 220, edgeLength: 100 },
         label: { show: true, fontSize: 10 },
+        itemStyle: {
+          borderColor: resolvedTheme === "dark" ? "#0f172a" : "#1e293b",
+          borderWidth: 2,
+        },
         categories: [
-          { name: "事实", itemStyle: { color: TYPE_COLORS.fact } },
-          { name: "偏好", itemStyle: { color: TYPE_COLORS.preference } },
-          { name: "规则", itemStyle: { color: TYPE_COLORS.rule } },
-          { name: "实体", itemStyle: { color: ENTITY_COLOR } },
+          { name: "事实", itemStyle: { color: colors.fact } },
+          { name: "偏好", itemStyle: { color: colors.preference } },
+          { name: "规则", itemStyle: { color: colors.rule } },
+          { name: "实体", itemStyle: { color: colors.entity } },
         ],
         data: nodes,
         links,
         lineStyle: { color: "source", opacity: 0.4, curveness: 0.1 },
-        emphasis: { focus: "adjacency" },
+        emphasis: { focus: "adjacency", itemStyle: { borderWidth: 3 } },
       }] as EChartsOption["series"],
     };
     chart.setOption(option, true);
-  }, [graph]);
+  }, [graph, resolvedTheme]);
 
   return (
     <div className="relative">
