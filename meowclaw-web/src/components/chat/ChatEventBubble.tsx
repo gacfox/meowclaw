@@ -64,7 +64,7 @@ export function ToolCallDetails({
         {name}
         {pending && <Loader2 className="size-3 animate-spin" />}
       </summary>
-      <div className="mt-2 space-y-2 rounded border bg-background/50 p-2">
+      <div className="mt-2 max-w-full space-y-2 overflow-x-auto rounded border bg-background/50 p-2">
         {parsed && Object.keys(parsed).length > 0 && (
           <Table>
             <TableBody>
@@ -148,7 +148,7 @@ export function ApprovalDetails({
         审批 · {name}
         <span>{APPROVAL_LABELS[decision] ?? decision}</span>
       </summary>
-      <div className="mt-2 space-y-2 rounded border bg-background/50 p-2">
+      <div className="mt-2 max-w-full space-y-2 overflow-x-auto rounded border bg-background/50 p-2">
         {policyName && (
           <div className="text-xs text-muted-foreground">
             策略：{policyName} · {matchedRuleIndex != null && matchedRuleIndex >= 0 ? `规则 #${matchedRuleIndex + 1}` : "默认决策"}
@@ -230,7 +230,7 @@ export const BatchBubble = memo(function BatchBubble({ events, onOpenSubagent }:
   const finalAnswer = events.find((e) => e.type === "final_answer");
 
   return (
-    <div className="max-w-[80%] space-y-2 rounded-lg bg-muted px-4 py-2 text-sm">
+    <div className="max-w-[95%] space-y-2 rounded-lg bg-muted px-3 py-2 text-sm sm:max-w-[80%] sm:px-4">
       {events.map((event, i) => {
         if (event.type === "thinking") {
           return (

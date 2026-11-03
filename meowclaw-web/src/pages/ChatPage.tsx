@@ -16,7 +16,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, SquarePen, Loader2, ChevronRight, Copy, Pencil, RefreshCw, ArrowUp, ArrowDown, Check, Clock, TriangleAlert, X, Square, Shield, ShieldAlert, MoreHorizontal, FolderPlus, Brain } from "lucide-react";
+import { Plus, SquarePen, Loader2, ChevronRight, Copy, Pencil, RefreshCw, ArrowUp, ArrowDown, Check, Clock, TriangleAlert, X, Square, Shield, ShieldAlert, MoreHorizontal, FolderPlus, Brain, MessagesSquare } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Alert, AlertTitle, AlertDescription, AlertAction } from "@/components/ui/alert";
@@ -69,7 +69,7 @@ function approvalArgsPreview(toolArguments: string): string {
 
 function StreamBubble({ steps, content, thinking, onOpenSubagent }: { steps: StreamStep[]; content: string; thinking?: boolean; onOpenSubagent?: (childConversationId: number, description?: string) => void }) {
   return (
-    <div className="max-w-[80%] space-y-2 rounded-lg bg-muted px-4 py-2 text-sm">
+    <div className="max-w-[95%] space-y-2 rounded-lg bg-muted px-3 py-2 text-sm sm:max-w-[80%] sm:px-4">
       {thinking && (
         <div className="flex items-center gap-2 text-muted-foreground">
           <Loader2 className="size-3 animate-spin" />
@@ -147,6 +147,7 @@ export function ChatPage() {
   const [streamSteps, setStreamSteps] = useState<StreamStep[]>([]);
   const [streamError, setStreamError] = useState<string | null>(null);
   const [showJumpToLatest, setShowJumpToLatest] = useState(false);
+  const [mobileConvoOpen, setMobileConvoOpen] = useState(false);
   const [streamConvoId, setStreamConvoId] = useState<number | null>(null);
   const [runningConvoIds, setRunningConvoIds] = useState<Set<number>>(new Set());
   const [contextStatusMap, setContextStatusMap] = useState<Record<number, "NORMAL" | "LOW" | "VERY_LOW">>({});
@@ -648,6 +649,7 @@ export function ChatPage() {
         loadGroups(selectedAgentId);
       }
       setSelectedConvoId(convo.id);
+      setMobileConvoOpen(false);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "新建会话失败");
     } finally {
@@ -1064,7 +1066,10 @@ export function ChatPage() {
         renaming={renamingId === convo.id}
         renameDraft={renameDraft}
         projects={projects}
-        onSelect={() => setSelectedConvoId(convo.id)}
+        onSelect={() => {
+          setSelectedConvoId(convo.id);
+          setMobileConvoOpen(false);
+        }}
         onRenameStart={() => startRename(convo)}
         onRenameChange={setRenameDraft}
         onRenameConfirm={commitRename}
@@ -1121,7 +1126,7 @@ export function ChatPage() {
         autoFocus
         className="w-full resize-none bg-transparent px-1 py-1 text-sm outline-none placeholder:text-muted-foreground"
       />
-      <div className="mt-1 flex items-center justify-between">
+      <div className="mt-1 flex items-center justify-between gap-2">
         <input
           ref={fileInputRef}
           type="file"
@@ -1130,7 +1135,7 @@ export function ChatPage() {
           className="hidden"
           onChange={(e) => { handleImageSelect(e.target.files); e.target.value = ""; }}
         />
-        <div className="flex items-center gap-1">
+        <div className="flex min-w-0 flex-wrap items-center gap-1">
           <Tooltip>
             <TooltipTrigger asChild>
               <span>
@@ -1149,7 +1154,7 @@ export function ChatPage() {
           </Tooltip>
           {reasoningEffort && (
             <Select value={reasoningEffort} onValueChange={handleReasoningEffortChange}>
-              <SelectTrigger className="h-7 w-auto gap-1 rounded-full border-none bg-transparent px-2 text-xs text-muted-foreground shadow-none focus:ring-0" title="思考强度">
+              <SelectTrigger className="h-7 w-auto max-w-32 gap-1 rounded-full border-none bg-transparent px-2 text-xs text-muted-foreground shadow-none focus:ring-0 sm:max-w-none" title="思考强度">
                 <Brain className="size-3.5" />
                 <SelectValue />
               </SelectTrigger>
@@ -1164,7 +1169,7 @@ export function ChatPage() {
             value={currentGuardrailPolicyId != null ? String(currentGuardrailPolicyId) : undefined}
             onValueChange={handlePolicyChange}
           >
-            <SelectTrigger className="h-7 w-auto gap-1 rounded-full border-none bg-transparent px-2 text-xs text-muted-foreground shadow-none focus:ring-0">
+            <SelectTrigger className="h-7 w-auto max-w-32 gap-1 rounded-full border-none bg-transparent px-2 text-xs text-muted-foreground shadow-none focus:ring-0 sm:max-w-none">
               <Shield className="size-3.5" />
               <SelectValue placeholder="护栏策略" />
             </SelectTrigger>
@@ -1192,11 +1197,15 @@ export function ChatPage() {
   );
 
   return (
-    <div className="flex h-[calc(100vh-3.5rem)] -m-6">
+    <div className="-m-3 flex h-[calc(100dvh-3.5rem)] sm:-m-4 lg:-m-6">
+      {mobileConvoOpen && (
+        <div className="fixed inset-0 z-40 bg-black/40 md:hidden" onClick={() => setMobileConvoOpen(false)} />
+      )}
       {/* Left Panel */}
-      <div className="flex w-72 shrink-0 flex-col border-r bg-muted/30">
-        <div className="border-b p-3">
-          <Select value={selectedAgentId != null ? String(selectedAgentId) : ""} onValueChange={(v) => setSelectedAgentId(Number(v))}>
+      <div className={`${mobileConvoOpen ? "fixed inset-y-0 left-0 z-50 flex shadow-xl" : "hidden"} w-72 max-w-[88vw] shrink-0 flex-col border-r bg-background md:relative md:flex md:bg-muted/30 md:shadow-none`}>
+        <div className="flex items-center gap-2 border-b p-3">
+          <div className="flex-1">
+            <Select value={selectedAgentId != null ? String(selectedAgentId) : ""} onValueChange={(v) => setSelectedAgentId(Number(v))}>
             <SelectTrigger className="w-full">
               <SelectValue placeholder="选择智能体" />
             </SelectTrigger>
@@ -1206,6 +1215,10 @@ export function ChatPage() {
               ))}
             </SelectContent>
           </Select>
+          </div>
+          <Button variant="ghost" size="icon" className="md:hidden" onClick={() => setMobileConvoOpen(false)} title="关闭会话列表">
+            <X className="size-4" />
+          </Button>
         </div>
 
         <div className="border-b p-3">
@@ -1295,7 +1308,16 @@ export function ChatPage() {
       </div>
 
       {/* Right Panel - Chat Area */}
-      <div className="flex flex-1 flex-col">
+      <div className="flex min-w-0 flex-1 flex-col">
+        <div className="flex h-11 items-center gap-2 border-b bg-muted/30 px-2 md:hidden">
+          <Button variant="ghost" size="icon" onClick={() => setMobileConvoOpen(true)} title="会话列表">
+            <MessagesSquare className="size-4" />
+          </Button>
+          <span className="min-w-0 flex-1 truncate text-sm">{currentConvo?.title ?? (selectedConvoId ? "新对话" : "选择会话")}</span>
+          <Button variant="ghost" size="icon" onClick={handleNewConvo} disabled={!selectedAgentId} title="新对话">
+            <SquarePen className="size-4" />
+          </Button>
+        </div>
         {selectedConvoId ? (
           showHero ? (
             <div className="flex flex-1 flex-col items-center justify-center gap-10 p-4">
@@ -1308,7 +1330,7 @@ export function ChatPage() {
           ) : (
           <>
             <div className="relative flex-1 min-h-0">
-              <div ref={messagesContainerRef} onScroll={handleMessagesScroll} className="h-full overflow-y-auto p-4">
+              <div ref={messagesContainerRef} onScroll={handleMessagesScroll} className="h-full overflow-y-auto p-2 sm:p-4">
               {loadingBatches ? (
                 <div className="flex h-full items-center justify-center text-muted-foreground">加载中...</div>
               ) : (
@@ -1366,7 +1388,7 @@ export function ChatPage() {
                       {/* User bubble */}
                       <div className="flex flex-col items-end">
                         <div className={`flex items-start justify-end gap-2 ${editingBatchId === batch.id ? "w-full" : ""}`}>
-                          <div className={`flex ${editingBatchId === batch.id ? "w-[80%]" : "max-w-[80%]"} flex-col`}>
+                          <div className={`flex ${editingBatchId === batch.id ? "w-full sm:w-[80%]" : "max-w-[95%] sm:max-w-[80%]"} flex-col`}>
                             {editingBatchId === batch.id ? (
                               <div className="rounded-lg bg-primary px-4 py-2 text-sm text-primary-foreground">
                                 <textarea
@@ -1490,7 +1512,7 @@ export function ChatPage() {
                   {/* Optimistic user bubble during streaming */}
                   {(optimisticContent !== null || optimisticImages.length > 0) && streamConvoId === selectedConvoId && (
                     <div className="flex items-start justify-end gap-2">
-                      <div className="max-w-[80%] rounded-lg bg-primary px-4 py-2 text-sm text-primary-foreground">
+                      <div className="max-w-[95%] rounded-lg bg-primary px-3 py-2 text-sm text-primary-foreground sm:max-w-[80%] sm:px-4">
                         {optimisticImages.length > 0 && (
                           <div className="mb-2 flex flex-wrap gap-2">
                             {optimisticImages.map((dataUrl, i) => (
@@ -1536,7 +1558,7 @@ export function ChatPage() {
               )}
             </div>
 
-            <div className="p-4">
+            <div className="p-2 sm:p-4">
               <div className="mx-auto max-w-3xl">
                 {pendingApprovals.length > 0 && (() => {
                   const current = pendingApprovals[0];
@@ -1562,16 +1584,16 @@ export function ChatPage() {
                         {approvalArgsPreview(current.toolArguments)}
                       </code>
                     </div>
-                    <div className="mt-3 flex items-center gap-2">
+                    <div className="mt-3 flex flex-wrap items-center gap-2">
                       <Button size="sm" className="h-7" onClick={() => handleApprovalDecision(true)} disabled={decidingApproval}>
                         <Check className="size-3.5" />
                         批准
-                        <kbd className="ml-1 rounded border bg-primary-foreground/20 px-1 text-[10px]">Y</kbd>
+                        <kbd className="ml-1 hidden rounded border bg-primary-foreground/20 px-1 text-[10px] sm:inline">Y</kbd>
                       </Button>
                       <Button size="sm" variant="outline" className="h-7" onClick={() => handleApprovalDecision(false)} disabled={decidingApproval}>
                         <X className="size-3.5" />
                         拒绝
-                        <kbd className="ml-1 rounded border bg-muted px-1 text-[10px]">N</kbd>
+                        <kbd className="ml-1 hidden rounded border bg-muted px-1 text-[10px] sm:inline">N</kbd>
                       </Button>
                       <Button size="sm" variant="ghost" className="ml-auto h-7 text-muted-foreground" onClick={handleStop}>
                         <Square className="size-3" fill="currentColor" />

@@ -65,19 +65,19 @@ export function AppHeader() {
   return (
     <header className="flex h-14 shrink-0 items-center gap-2 border-b px-4">
       <SidebarTrigger className="-ml-1" />
-      <Breadcrumb className="flex-1">
+      <Breadcrumb className={`flex-1 ${location.pathname === "/" ? "hidden md:block" : ""}`}>
         <BreadcrumbList>
           <BreadcrumbItem>
             <BreadcrumbPage>{breadcrumbLabel}</BreadcrumbPage>
           </BreadcrumbItem>
         </BreadcrumbList>
       </Breadcrumb>
-      <div className="flex items-center gap-1">
+      <div className="ml-auto flex items-center gap-1">
         <ServiceStatusIndicator />
         <Button variant="ghost" size="icon-sm" onClick={cycleTheme}>
           {themeIcon}
         </Button>
-        <Button variant="ghost" size="icon-sm" asChild>
+        <Button variant="ghost" size="icon-sm" asChild className="hidden sm:inline-flex">
           <a
             href="https://github.com/gacfox/meowclaw"
             target="_blank"

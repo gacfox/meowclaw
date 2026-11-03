@@ -151,9 +151,9 @@ export function GuardrailPolicyPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <h1 className="text-2xl font-semibold">安全护栏策略</h1>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <Button onClick={startNew}>
             <Plus className="mr-1 size-4" />
             新建策略
@@ -164,9 +164,9 @@ export function GuardrailPolicyPage() {
         </div>
       </div>
 
-      <div className="flex gap-4">
-        <Card className="w-64 shrink-0 self-start">
-          <CardContent className="space-y-1 p-3">
+      <div className="flex flex-col gap-4 lg:flex-row">
+        <Card className="w-full shrink-0 self-start lg:w-64">
+          <CardContent className="max-h-56 space-y-1 overflow-y-auto p-3 lg:max-h-none">
             {loading ? (
               <div className="py-4 text-center text-sm text-muted-foreground">加载中...</div>
             ) : (
@@ -185,19 +185,19 @@ export function GuardrailPolicyPage() {
           </CardContent>
         </Card>
 
-        <Card className="flex-1">
+        <Card className="min-w-0 flex-1">
           {selectedId == null ? (
             <div className="flex h-full items-center justify-center py-16 text-sm text-muted-foreground">
               选择左侧策略查看，或点击「新建策略」创建自定义策略
             </div>
           ) : (
-            <CardContent className="flex flex-col gap-3 p-4">
-              <div className="flex items-center justify-between">
-                <div className="flex flex-1 items-center gap-2">
+            <CardContent className="flex flex-col gap-3 p-3 sm:p-4">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex w-full items-center gap-2">
                   <Label className="shrink-0">策略名</Label>
-                  <Input value={name} onChange={(e) => setName(e.target.value)} disabled={readOnly} className="max-w-64" />
+                  <Input value={name} onChange={(e) => setName(e.target.value)} disabled={readOnly} className="w-full max-w-none sm:max-w-64" />
                 </div>
-                <div className="flex gap-2">
+                <div className="flex flex-wrap gap-2">
                   {readOnly && (
                     <Button variant="outline" onClick={copyAsCustom}>
                       <Copy className="mr-1 size-4" />

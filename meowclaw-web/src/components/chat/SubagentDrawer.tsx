@@ -47,7 +47,7 @@ export function SubagentDrawer({
 
   return (
     <Sheet open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
-      <SheetContent side="right" className="w-[520px] sm:max-w-[520px] overflow-y-auto">
+      <SheetContent side="right" className="w-full max-w-full overflow-y-auto sm:w-[520px] sm:max-w-[520px]">
         <SheetHeader>
           <SheetTitle className="flex items-center gap-2 text-sm">
             <Bot className="size-4" />

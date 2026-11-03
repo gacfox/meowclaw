@@ -30,7 +30,7 @@ export function MainLayout() {
       <AppSidebar />
       <SidebarInset>
         <AppHeader />
-        <div className="flex-1 p-6">
+        <div className="flex-1 p-3 sm:p-4 lg:p-6">
           <Outlet />
         </div>
       </SidebarInset>

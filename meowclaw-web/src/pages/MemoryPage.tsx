@@ -183,7 +183,7 @@ function MemoryGraphView({ graph, onMemoryClick }: { graph: MemoryGraph; onMemor
 
   return (
     <div className="relative">
-      <div ref={containerRef} className="h-[600px] w-full rounded-lg border" />
+      <div ref={containerRef} className="h-[55dvh] min-h-80 w-full rounded-lg border md:h-[600px]" />
       {graph.memories.length === 0 && (
         <div className="absolute inset-0 flex items-center justify-center text-muted-foreground">暂无记忆数据</div>
       )}
@@ -399,9 +399,9 @@ export function MemoryPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <h1 className="text-2xl font-semibold">记忆</h1>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <Tabs value={view} onValueChange={(v) => setView(v as "list" | "graph")}>
             <TabsList>
               <TabsTrigger value="list">列表</TabsTrigger>
@@ -419,11 +419,11 @@ export function MemoryPage() {
         </div>
       </div>
 
-      <div className="flex flex-wrap items-end gap-3 rounded-lg border bg-card p-4">
-        <div className="flex min-w-[160px] flex-col gap-1.5">
+      <div className="flex flex-wrap items-end gap-3 rounded-lg border bg-card p-3 sm:p-4">
+        <div className="flex w-full min-w-0 flex-col gap-1.5 sm:w-auto sm:min-w-[160px]">
           <Label className="text-xs text-muted-foreground">智能体</Label>
           <Select value={agentId} onValueChange={setAgentId}>
-            <SelectTrigger className="w-[160px]">
+            <SelectTrigger className="w-full sm:w-[160px]">
               <SelectValue placeholder="选择智能体" />
             </SelectTrigger>
             <SelectContent>
@@ -436,10 +436,10 @@ export function MemoryPage() {
 
         {view === "list" && (
           <>
-            <div className="flex min-w-[120px] flex-col gap-1.5">
+            <div className="flex w-full min-w-0 flex-col gap-1.5 sm:w-auto sm:min-w-[120px]">
               <Label className="text-xs text-muted-foreground">类型</Label>
               <Select value={type} onValueChange={setType}>
-                <SelectTrigger className="w-[120px]">
+                <SelectTrigger className="w-full sm:w-[120px]">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -450,7 +450,7 @@ export function MemoryPage() {
               </Select>
             </div>
 
-            <div className="flex min-w-[200px] flex-1 flex-col gap-1.5">
+            <div className="flex w-full min-w-0 flex-1 flex-col gap-1.5">
               <Label className="text-xs text-muted-foreground">关键字</Label>
               <div className="relative">
                 <Search className="absolute left-2.5 top-2.5 size-4 text-muted-foreground" />
@@ -479,9 +479,9 @@ export function MemoryPage() {
       </div>
 
       {view === "list" ? (
-        <div className="flex items-start gap-4">
-          <Card className="w-56 shrink-0 self-start">
-            <CardContent className="max-h-[640px] overflow-y-auto p-2">
+        <div className="flex flex-col items-stretch gap-4 lg:flex-row lg:items-start">
+          <Card className="w-full shrink-0 self-stretch lg:w-56 lg:self-start">
+            <CardContent className="max-h-48 overflow-y-auto p-2 lg:max-h-[640px]">
               <button
                 className={`flex w-full items-center justify-between rounded px-2 py-1.5 text-sm hover:bg-accent ${selectedEntityId === null ? "bg-accent font-medium" : ""}`}
                 onClick={() => setSelectedEntityId(null)}
@@ -505,7 +505,7 @@ export function MemoryPage() {
             </CardContent>
           </Card>
 
-          <div className="flex flex-1 flex-col gap-4">
+          <div className="flex min-w-0 flex-1 flex-col gap-4">
             <div className="text-sm text-muted-foreground">共 {data.total} 条</div>
             {loading && data.list.length === 0 ? (
               <div className="py-16 text-center text-muted-foreground">加载中...</div>

@@ -50,7 +50,8 @@ export function ContextUsageGauge({
           transform="rotate(-90 10 10)"
         />
       </svg>
-      <span>{description}</span>
+      <span className="hidden sm:inline">{description}</span>
+      <span className="sm:hidden">{percentage}%</span>
     </div>
   );
 }
