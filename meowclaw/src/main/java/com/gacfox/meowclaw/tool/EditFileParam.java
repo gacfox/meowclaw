@@ -15,18 +15,18 @@ import lombok.Setter;
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class EditFileParam {
     @JsonProperty("path")
-    @AgenticToolParam(name = "path", description = "要编辑的文件路径")
+    @AgenticToolParam(name = "path", description = "要编辑的文件路径（相对 cwd 或绝对路径）")
     private String path;
 
     @JsonProperty("old_text")
-    @AgenticToolParam(name = "old_text", description = "要替换的原始文本")
+    @AgenticToolParam(name = "old_text", description = "要替换的原始文本；必须与文件内容逐字符一致，不要带 read 返回的行号前缀")
     private String oldText;
 
     @JsonProperty("new_text")
-    @AgenticToolParam(name = "new_text", description = "替换后的新文本")
+    @AgenticToolParam(name = "new_text", description = "替换后的文本；空字符串表示删除匹配内容")
     private String newText;
 
     @JsonProperty("replace_all")
-    @AgenticToolParam(name = "replace_all", description = "是否替换所有匹配项，默认false", required = false)
+    @AgenticToolParam(name = "replace_all", description = "是否替换所有匹配项，默认false；false时old_text必须唯一命中", required = false)
     private Boolean replaceAll;
 }
