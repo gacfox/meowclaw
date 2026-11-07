@@ -13,5 +13,5 @@ public interface ContextRecapRepository extends JpaRepository<ContextRecap, Long
     void deleteByConversationId(Long conversationId);
 
     void deleteByConversationIdAndFromBatchIdInOrConversationIdAndToBatchIdIn(Long conversationId, List<Long> fromBatchIds,
-                                                                                Long conversationId2, List<Long> toBatchIds);
+                                                                              Long conversationId2, List<Long> toBatchIds);
 }

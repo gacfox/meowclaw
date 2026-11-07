@@ -1,5 +1,6 @@
 package com.gacfox.meowclaw.dto;
 
+import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -11,9 +12,13 @@ import java.io.Serializable;
 @Setter
 @AllArgsConstructor
 @NoArgsConstructor
+@Schema(description = "通用接口响应")
 public class ApiResult<T> implements Serializable {
+    @Schema(description = "响应状态码")
     private String code;
+    @Schema(description = "响应消息")
     private String message;
+    @Schema(description = "响应数据")
     private T data;
 
     public static ApiResult<?> success() {

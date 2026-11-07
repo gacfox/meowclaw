@@ -1,11 +1,7 @@
 package com.gacfox.meowclaw.service;
 
 import com.gacfox.meowclaw.converter.UserConverter;
-import com.gacfox.meowclaw.dto.ChangePasswordRequest;
-import com.gacfox.meowclaw.dto.InitRequest;
-import com.gacfox.meowclaw.dto.LoginRequest;
-import com.gacfox.meowclaw.dto.UpdateProfileRequest;
-import com.gacfox.meowclaw.dto.UserDTO;
+import com.gacfox.meowclaw.dto.*;
 import com.gacfox.meowclaw.entity.User;
 import com.gacfox.meowclaw.repository.UserRepository;
 import org.springframework.beans.factory.annotation.Autowired;

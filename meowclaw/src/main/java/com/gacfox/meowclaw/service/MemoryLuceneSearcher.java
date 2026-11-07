@@ -6,15 +6,7 @@ import org.apache.lucene.index.IndexReader;
 import org.apache.lucene.index.Term;
 import org.apache.lucene.queryparser.classic.ParseException;
 import org.apache.lucene.queryparser.classic.QueryParser;
-import org.apache.lucene.search.BooleanClause;
-import org.apache.lucene.search.BooleanQuery;
-import org.apache.lucene.search.IndexSearcher;
-import org.apache.lucene.search.KnnFloatVectorQuery;
-import org.apache.lucene.search.Query;
-import org.apache.lucene.search.ScoreDoc;
-import org.apache.lucene.search.SearcherManager;
-import org.apache.lucene.search.TermQuery;
-import org.apache.lucene.search.TopDocs;
+import org.apache.lucene.search.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
@@ -48,7 +40,7 @@ public class MemoryLuceneSearcher {
      * 通过关系索引召回相关的 memory_node_id，去重后最多返回 maxNodeIds 个。
      */
     public List<Long> searchRelationNodeIds(Long agentId, String queryText, float[] queryVector,
-                                             int relationTopK, int maxNodeIds) {
+                                            int relationTopK, int maxNodeIds) {
         List<Long> relationHits = searchIndex(indexManager.getIndex(agentId).relationSearcherManager(),
                 "description", "description_vector", "memory_node_id", agentId, queryText, queryVector, relationTopK, null);
         Set<Long> nodeIds = new LinkedHashSet<>();
@@ -64,7 +56,7 @@ public class MemoryLuceneSearcher {
      * 通过关系索引召回相关的 entity_id，去重后最多返回 maxEntityIds 个。
      */
     public List<Long> searchRelationEntityIds(Long agentId, String queryText, float[] queryVector,
-                                                int relationTopK, int maxEntityIds) {
+                                              int relationTopK, int maxEntityIds) {
         List<Long> relationHits = searchIndex(indexManager.getIndex(agentId).relationSearcherManager(),
                 "description", "description_vector", "entity_id", agentId, queryText, queryVector, relationTopK, null);
         Set<Long> entityIds = new LinkedHashSet<>();
@@ -80,7 +72,7 @@ public class MemoryLuceneSearcher {
      * 在指定节点 ID 集合内检索节点索引。
      */
     public List<Long> searchNodesInSet(Long agentId, String queryText, float[] queryVector,
-                                        Set<Long> nodeIds, int topK) {
+                                       Set<Long> nodeIds, int topK) {
         if (nodeIds == null || nodeIds.isEmpty()) {
             return List.of();
         }
@@ -94,8 +86,8 @@ public class MemoryLuceneSearcher {
     }
 
     private List<Long> searchIndex(SearcherManager searcherManager, String textField, String vectorField,
-                                    String resultField, Long agentId, String queryText, float[] queryVector,
-                                    int topK, Query extraFilter) {
+                                   String resultField, Long agentId, String queryText, float[] queryVector,
+                                   int topK, Query extraFilter) {
         try {
             searcherManager.maybeRefresh();
             IndexSearcher searcher = searcherManager.acquire();

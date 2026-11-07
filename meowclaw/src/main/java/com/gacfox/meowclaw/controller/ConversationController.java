@@ -1,31 +1,18 @@
 package com.gacfox.meowclaw.controller;
 
-import com.gacfox.meowclaw.dto.ChatEventBatchDTO;
-import com.gacfox.meowclaw.dto.ChatEventDTO;
-import com.gacfox.meowclaw.dto.ConversationDTO;
-import com.gacfox.meowclaw.dto.ConversationHistoryDTO;
-import com.gacfox.meowclaw.dto.RenameConversationRequest;
-import com.gacfox.meowclaw.dto.SendMessageRequest;
+import com.gacfox.meowclaw.dto.*;
 import com.gacfox.meowclaw.entity.Conversation;
 import com.gacfox.meowclaw.service.ChatService;
 import com.gacfox.meowclaw.service.ConversationService;
 import com.gacfox.meowclaw.service.GuardrailPolicyService;
 import com.gacfox.meowclaw.service.TitleGenerationRegistryService;
-import com.gacfox.meowclaw.dto.ApiResult;
-import com.gacfox.meowclaw.dto.Pagination;
-import com.gacfox.meowclaw.dto.SidebarGroupsDTO;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
-import org.springframework.web.bind.annotation.DeleteMapping;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.PutMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 import org.springframework.web.context.request.async.DeferredResult;
 import reactor.core.publisher.Flux;
 
@@ -36,6 +23,7 @@ import java.util.concurrent.CompletableFuture;
 /**
  * 会话管理
  */
+@Tag(name = "会话")
 @RestController
 @RequestMapping("/api/conversation")
 public class ConversationController {
@@ -57,126 +45,147 @@ public class ConversationController {
         this.guardrailPolicyService = guardrailPolicyService;
     }
 
+    @Operation(summary = "查询会话列表")
     @GetMapping
     public ApiResult<Pagination<ConversationDTO>> list(
-            @RequestParam Long agentId,
-            @RequestParam(required = false) String type,
-            @RequestParam(defaultValue = "false") boolean ungrouped,
-            @RequestParam(defaultValue = "1") int page,
-            @RequestParam(defaultValue = "20") int size) {
+            @Parameter(description = "智能体 ID") @RequestParam Long agentId,
+            @Parameter(description = "会话类型") @RequestParam(required = false) String type,
+            @Parameter(description = "是否只查询未分组会话") @RequestParam(defaultValue = "false") boolean ungrouped,
+            @Parameter(description = "页码，从 1 开始") @RequestParam(defaultValue = "1") int page,
+            @Parameter(description = "每页条数") @RequestParam(defaultValue = "20") int size) {
         return ApiResult.success(conversationService.listByAgent(agentId, type, ungrouped, page, size));
     }
 
+    @Operation(summary = "创建会话")
     @PostMapping
     public ApiResult<ConversationDTO> create(@RequestBody Map<String, Long> body) {
         return ApiResult.success(conversationService.create(body.get("agentId"), "CHAT", body.get("projectId")));
     }
 
+    @Operation(summary = "查询会话详情")
     @GetMapping("/{id}")
-    public ApiResult<ConversationDTO> get(@PathVariable Long id) {
+    public ApiResult<ConversationDTO> get(@Parameter(description = "会话 ID") @PathVariable Long id) {
         return ApiResult.success(conversationService.getDTO(id));
     }
 
+    @Operation(summary = "修改会话标题")
     @PutMapping("/{id}/title")
-    public ApiResult<ConversationDTO> rename(@PathVariable Long id, @RequestBody @Valid RenameConversationRequest req) {
+    public ApiResult<ConversationDTO> rename(@Parameter(description = "会话 ID") @PathVariable Long id, @RequestBody @Valid RenameConversationRequest req) {
         return ApiResult.success(conversationService.updateTitle(id, req.getTitle()));
     }
 
+    @Operation(summary = "删除会话")
     @DeleteMapping("/{id}")
-    public ApiResult<?> delete(@PathVariable Long id) {
+    public ApiResult<?> delete(@Parameter(description = "会话 ID") @PathVariable Long id) {
         conversationService.delete(id);
         return ApiResult.success();
     }
 
+    @Operation(summary = "查询历史会话")
     @GetMapping("/history")
     public ApiResult<Pagination<ConversationHistoryDTO>> listHistory(
-            @RequestParam(required = false) String type,
-            @RequestParam(required = false) Long agentId,
-            @RequestParam(required = false) String keyword,
-            @RequestParam(required = false) Long startTime,
-            @RequestParam(required = false) Long endTime,
-            @RequestParam(defaultValue = "1") int page,
-            @RequestParam(defaultValue = "20") int size) {
+            @Parameter(description = "会话类型") @RequestParam(required = false) String type,
+            @Parameter(description = "智能体 ID") @RequestParam(required = false) Long agentId,
+            @Parameter(description = "标题或内容搜索关键词") @RequestParam(required = false) String keyword,
+            @Parameter(description = "开始时间戳（毫秒）") @RequestParam(required = false) Long startTime,
+            @Parameter(description = "结束时间戳（毫秒）") @RequestParam(required = false) Long endTime,
+            @Parameter(description = "页码，从 1 开始") @RequestParam(defaultValue = "1") int page,
+            @Parameter(description = "每页条数") @RequestParam(defaultValue = "20") int size) {
         return ApiResult.success(conversationService.listHistory(type, agentId, keyword, startTime, endTime, page, size));
     }
 
+    @Operation(summary = "批量删除会话")
     @DeleteMapping("/batch")
     public ApiResult<?> deleteBatch(@RequestBody List<Long> ids) {
         conversationService.deleteBatch(ids);
         return ApiResult.success();
     }
 
+    @Operation(summary = "删除全部会话")
     @DeleteMapping("/all")
     public ApiResult<?> deleteAll() {
         conversationService.deleteAll();
         return ApiResult.success();
     }
 
+    @Operation(summary = "查询会话消息批次")
     @GetMapping("/{id}/batch")
-    public ApiResult<List<ChatEventBatchDTO>> listBatches(@PathVariable Long id) {
+    public ApiResult<List<ChatEventBatchDTO>> listBatches(@Parameter(description = "会话 ID") @PathVariable Long id) {
         return ApiResult.success(conversationService.listBatches(id));
     }
 
+    @Operation(summary = "截断会话消息")
     @DeleteMapping("/{id}/batch/{batchId}/truncate")
     public ApiResult<?> truncateAfterBatch(
-            @PathVariable Long id,
-            @PathVariable Long batchId,
-            @RequestParam(defaultValue = "false") boolean includeSelf) {
+            @Parameter(description = "会话 ID") @PathVariable Long id,
+            @Parameter(description = "消息批次 ID") @PathVariable Long batchId,
+            @Parameter(description = "是否同时删除指定批次") @RequestParam(defaultValue = "false") boolean includeSelf) {
         conversationService.truncateAfterBatch(id, batchId, includeSelf);
         return ApiResult.success();
     }
 
+    @Operation(summary = "发送消息并流式返回响应")
     @PostMapping(value = "/{id}/chat", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
-    public Flux<ChatEventDTO> chat(@PathVariable Long id, @RequestBody SendMessageRequest req) {
+    public Flux<ChatEventDTO> chat(@Parameter(description = "会话 ID") @PathVariable Long id, @RequestBody SendMessageRequest req) {
         return chatService.chat(id, req.getContent(), req.getImages(), req.getReasoningEffort());
     }
 
+    @Operation(summary = "订阅会话执行事件")
     @GetMapping(value = "/{id}/watch", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
-    public Flux<ChatEventDTO> watch(@PathVariable Long id) {
+    public Flux<ChatEventDTO> watch(@Parameter(description = "会话 ID") @PathVariable Long id) {
         return chatService.watch(id);
     }
 
+    @Operation(summary = "查询运行中的会话 ID")
     @GetMapping("/running-ids")
     public ApiResult<List<Long>> runningIds() {
         return ApiResult.success(chatService.runningConversationIds());
     }
 
+    @Operation(summary = "查询侧边栏会话分组")
     @GetMapping("/sidebar-groups")
-    public ApiResult<SidebarGroupsDTO> sidebarGroups(@RequestParam Long agentId) {
+    public ApiResult<SidebarGroupsDTO> sidebarGroups(@Parameter(description = "智能体 ID") @RequestParam Long agentId) {
         return ApiResult.success(conversationService.sidebarGroups(agentId));
     }
 
+    @Operation(summary = "停止会话执行")
     @PostMapping("/{id}/stop")
-    public ApiResult<?> stop(@PathVariable Long id) {
+    public ApiResult<?> stop(@Parameter(description = "会话 ID") @PathVariable Long id) {
         return chatService.stop(id) ? ApiResult.success() : ApiResult.failure("会话未在执行中");
     }
 
+    @Operation(summary = "更新会话安全策略")
     @PutMapping("/{id}/guardrail-policy")
-    public ApiResult<ConversationDTO> updateGuardrailPolicy(@PathVariable Long id, @RequestBody Map<String, Long> body) {
+    public ApiResult<ConversationDTO> updateGuardrailPolicy(@Parameter(description = "会话 ID") @PathVariable Long id, @RequestBody Map<String, Long> body) {
         guardrailPolicyService.updateConversationPolicy(id, body.get("policyId"));
         return ApiResult.success(conversationService.getDTO(id));
     }
 
+    @Operation(summary = "设置会话置顶状态")
     @PutMapping("/{id}/pin")
-    public ApiResult<ConversationDTO> pin(@PathVariable Long id, @RequestBody Map<String, Boolean> body) {
+    public ApiResult<ConversationDTO> pin(@Parameter(description = "会话 ID") @PathVariable Long id, @RequestBody Map<String, Boolean> body) {
         return ApiResult.success(conversationService.pin(id, Boolean.TRUE.equals(body.get("pinned"))));
     }
 
+    @Operation(summary = "移动会话到项目")
     @PutMapping("/{id}/project")
-    public ApiResult<ConversationDTO> moveToProject(@PathVariable Long id, @RequestBody Map<String, Long> body) {
+    public ApiResult<ConversationDTO> moveToProject(@Parameter(description = "会话 ID") @PathVariable Long id, @RequestBody Map<String, Long> body) {
         return ApiResult.success(conversationService.moveToProject(id, body.get("projectId")));
     }
 
+    @Operation(summary = "审批工具调用")
     @PostMapping("/{id}/approvals/{toolCallId}")
-    public ApiResult<?> decideApproval(@PathVariable Long id, @PathVariable String toolCallId,
+    public ApiResult<?> decideApproval(@Parameter(description = "会话 ID") @PathVariable Long id,
+                                       @Parameter(description = "工具调用 ID") @PathVariable String toolCallId,
                                        @RequestBody Map<String, String> body) {
         boolean approved = "approve".equals(body.get("decision"));
         return chatService.decideApproval(id, toolCallId, approved)
                 ? ApiResult.success() : ApiResult.failure("审批不存在或已处理");
     }
 
+    @Operation(summary = "等待会话标题生成")
     @GetMapping("/{id}/title-wait")
-    public DeferredResult<ApiResult<Map<String, String>>> waitTitle(@PathVariable Long id) {
+    public DeferredResult<ApiResult<Map<String, String>>> waitTitle(@Parameter(description = "会话 ID") @PathVariable Long id) {
         DeferredResult<ApiResult<Map<String, String>>> result = new DeferredResult<>(TITLE_WAIT_TIMEOUT_MS);
         result.onTimeout(() -> result.setResult(ApiResult.success(Map.of("title", ""))));
 

@@ -3,13 +3,7 @@ package com.gacfox.meowclaw.service;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.gacfox.meowclaw.converter.McpServiceConverter;
-import com.gacfox.meowclaw.dto.CreateMcpServiceRequest;
-import com.gacfox.meowclaw.dto.McpServiceDTO;
-import com.gacfox.meowclaw.dto.McpServiceTestRequest;
-import com.gacfox.meowclaw.dto.McpTestResultDTO;
-import com.gacfox.meowclaw.dto.McpToolDTO;
-import com.gacfox.meowclaw.dto.McpToolInfo;
-import com.gacfox.meowclaw.dto.UpdateMcpServiceRequest;
+import com.gacfox.meowclaw.dto.*;
 import com.gacfox.meowclaw.entity.Agent;
 import com.gacfox.meowclaw.entity.McpServiceConfig;
 import com.gacfox.meowclaw.repository.AgentRepository;
@@ -33,13 +27,9 @@ import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.Duration;
 import java.net.URI;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
+import java.time.Duration;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -287,7 +277,8 @@ public class McpService {
             List<String> enabledMcpTools = Collections.emptyList();
             if (toolsJson != null && !toolsJson.isBlank()) {
                 try {
-                    enabledMcpTools = OBJECT_MAPPER.readValue(toolsJson, new TypeReference<>() {});
+                    enabledMcpTools = OBJECT_MAPPER.readValue(toolsJson, new TypeReference<>() {
+                    });
                 } catch (Exception ignored) {
                 }
             }
@@ -303,7 +294,8 @@ public class McpService {
         }
     }
 
-    private record Connection(McpSyncClient client, List<McpToolInfo> tools) {}
+    private record Connection(McpSyncClient client, List<McpToolInfo> tools) {
+    }
 
     private static final class McpConnectionException extends RuntimeException {
         McpConnectionException(String message, Throwable cause) {
@@ -343,7 +335,8 @@ public class McpService {
     private McpClientTransport buildTransport(String protocol, String configJson) {
         Map<String, Object> config;
         try {
-            config = OBJECT_MAPPER.readValue(configJson, new TypeReference<>() {});
+            config = OBJECT_MAPPER.readValue(configJson, new TypeReference<>() {
+            });
         } catch (Exception e) {
             throw new IllegalArgumentException("协议配置JSON解析失败: " + e.getMessage(), e);
         }
@@ -489,7 +482,8 @@ public class McpService {
         return (arguments, ctx) -> {
             Map<String, Object> args = arguments == null || arguments.isBlank()
                     ? Map.of()
-                    : OBJECT_MAPPER.readValue(arguments, new TypeReference<>() {});
+                    : OBJECT_MAPPER.readValue(arguments, new TypeReference<>() {
+            });
             McpSchema.CallToolRequest request = new McpSchema.CallToolRequest.Builder()
                     .name(originalToolName)
                     .arguments(args)
@@ -546,7 +540,8 @@ public class McpService {
             return Collections.emptyList();
         }
         try {
-            return OBJECT_MAPPER.readValue(toolsCache, new TypeReference<>() {});
+            return OBJECT_MAPPER.readValue(toolsCache, new TypeReference<>() {
+            });
         } catch (Exception e) {
             log.warn("Failed to parse toolsCache for MCP service", e);
             return Collections.emptyList();

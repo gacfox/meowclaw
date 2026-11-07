@@ -1,30 +1,15 @@
 package com.gacfox.meowclaw.service;
 
-import com.gacfox.meowclaw.converter.ChatEventBatchConverter;
-import com.gacfox.meowclaw.converter.ChatEventConverter;
-import com.gacfox.meowclaw.converter.ConversationConverter;
-import com.gacfox.meowclaw.converter.ConversationHistoryConverter;
-import com.gacfox.meowclaw.converter.ProjectConverter;
-import com.gacfox.meowclaw.dto.ChatEventBatchDTO;
-import com.gacfox.meowclaw.dto.ConversationDTO;
-import com.gacfox.meowclaw.dto.ConversationHistoryDTO;
-import com.gacfox.meowclaw.dto.ProjectDTO;
-import com.gacfox.meowclaw.dto.SidebarGroupsDTO;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.gacfox.meowclaw.converter.*;
+import com.gacfox.meowclaw.dto.*;
 import com.gacfox.meowclaw.entity.Agent;
 import com.gacfox.meowclaw.entity.ChatEventBatch;
 import com.gacfox.meowclaw.entity.Conversation;
 import com.gacfox.meowclaw.entity.Project;
-import com.gacfox.meowclaw.repository.AgentRepository;
-import com.gacfox.meowclaw.repository.ChatEventBatchRepository;
-import com.gacfox.meowclaw.repository.ChatEventRepository;
-import com.gacfox.meowclaw.repository.ConversationRepository;
-import com.gacfox.meowclaw.repository.ContextRecapRepository;
-import com.gacfox.meowclaw.repository.MessageRepository;
-import com.gacfox.meowclaw.repository.ProjectRepository;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ObjectNode;
-import com.gacfox.meowclaw.dto.Pagination;
+import com.gacfox.meowclaw.repository.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -320,7 +305,8 @@ public class ConversationService {
     private void updateContextField(Long id, String name, String value) {
         Conversation conv = getById(id);
         ObjectNode root = contextRoot(conv.getContextJson());
-        if (value == null) root.putNull(name); else root.put(name, value);
+        if (value == null) root.putNull(name);
+        else root.put(name, value);
         saveContext(conv, root);
     }
 

@@ -8,9 +8,9 @@ import com.gacfox.meowclaw.entity.ChatEventBatch;
 import com.gacfox.meowclaw.entity.ContextRecap;
 import com.gacfox.meowclaw.entity.Llm;
 import com.gacfox.meowclaw.entity.Message;
+import com.gacfox.meowclaw.interceptor.llm.LlmCallRecordInterceptor;
 import com.gacfox.meowclaw.interceptor.llm.LlmLoggingInterceptor;
 import com.gacfox.meowclaw.interceptor.llm.TokenUsageAccumulator;
-import com.gacfox.meowclaw.interceptor.llm.LlmCallRecordInterceptor;
 import com.gacfox.meowclaw.interceptor.llm.TokenUsageContext;
 import com.gacfox.meowclaw.repository.ChatEventBatchRepository;
 import com.gacfox.meowclaw.repository.ContextRecapRepository;
@@ -25,20 +25,14 @@ import com.gacfox.proarc.agentic.model.openai.ModelResponse;
 import com.gacfox.proarc.agentic.model.openai.ToolCall;
 import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.stereotype.Service;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.Resource;
+import org.springframework.stereotype.Service;
 
-import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
+import java.util.*;
 
 @Slf4j
 @Service

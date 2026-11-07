@@ -1,10 +1,7 @@
 package com.gacfox.meowclaw.dto;
 
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
+import io.swagger.v3.oas.annotations.media.Schema;
+import lombok.*;
 
 import java.util.List;
 
@@ -16,10 +13,15 @@ import java.util.List;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
+@Schema(description = "Token 用量统计")
 public class TokenStatsDTO {
+    @Schema(description = "Token 用量汇总")
     private TokenStatsSummary summary;
+    @Schema(description = "按调用量排名的模型列表")
     private List<TokenTopModel> topModels;
+    @Schema(description = "统计日期列表")
     private List<String> dates;
+    @Schema(description = "各模型的按日统计序列")
     private List<TokenModelSeries> modelSeries;
 
     /**
@@ -30,10 +32,15 @@ public class TokenStatsDTO {
     @NoArgsConstructor
     @AllArgsConstructor
     @Builder
+    @Schema(description = "Token 用量汇总")
     public static class TokenStatsSummary {
+        @Schema(description = "总输入 Token 数")
         private long totalInputTokens;
+        @Schema(description = "总输出 Token 数")
         private long totalOutputTokens;
+        @Schema(description = "总 Token 数")
         private long totalTokens;
+        @Schema(description = "调用次数")
         private long callCount;
     }
 
@@ -45,12 +52,19 @@ public class TokenStatsDTO {
     @NoArgsConstructor
     @AllArgsConstructor
     @Builder
+    @Schema(description = "按调用量排名的模型")
     public static class TokenTopModel {
+        @Schema(description = "语言模型配置 ID")
         private long llmId;
+        @Schema(description = "语言模型配置名称")
         private String llmName;
+        @Schema(description = "模型名称")
         private String model;
+        @Schema(description = "调用次数")
         private long callCount;
+        @Schema(description = "输入 Token 数")
         private long inputTokens;
+        @Schema(description = "输出 Token 数")
         private long outputTokens;
     }
 
@@ -62,13 +76,21 @@ public class TokenStatsDTO {
     @NoArgsConstructor
     @AllArgsConstructor
     @Builder
+    @Schema(description = "单个模型的按日统计序列")
     public static class TokenModelSeries {
+        @Schema(description = "语言模型配置 ID")
         private long llmId;
+        @Schema(description = "语言模型配置名称")
         private String llmName;
+        @Schema(description = "模型名称")
         private String model;
+        @Schema(description = "各日期的输入 Token 数")
         private long[] input;
+        @Schema(description = "各日期的输出 Token 数")
         private long[] output;
+        @Schema(description = "各日期的总 Token 数")
         private long[] total;
+        @Schema(description = "各日期的调用次数")
         private long[] callCount;
     }
 }

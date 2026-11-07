@@ -36,7 +36,9 @@ class MultimodalToolResultInterceptorTest {
         return ModelInfo.builder().capabilities(vision ? List.of("vision") : List.of()).build();
     }
 
-    /** 捕获请求并直通响应的拦截器链尾 */
+    /**
+     * 捕获请求并直通响应的拦截器链尾
+     */
     private static class CapturingChain implements LlmInterceptorChain {
         ModelRequest captured;
 

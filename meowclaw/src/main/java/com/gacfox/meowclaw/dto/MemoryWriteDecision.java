@@ -2,6 +2,7 @@ package com.gacfox.meowclaw.dto;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.gacfox.proarc.agentic.tool.AgenticToolParam;
+import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -16,33 +17,41 @@ import java.util.List;
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
+@Schema(description = "记忆写入决策")
 public class MemoryWriteDecision {
     @JsonProperty("duplicate")
     @AgenticToolParam(name = "duplicate", description = "已有记忆已覆盖该内容时为true，跳过插入")
+    @Schema(description = "内容是否已被已有记忆覆盖")
     private Boolean duplicate;
 
     @JsonProperty("type")
     @AgenticToolParam(name = "type", description = "记忆类型：fact/preference/rule")
+    @Schema(description = "记忆类型")
     private String type;
 
     @JsonProperty("content")
     @AgenticToolParam(name = "content", description = "提炼后的记忆内容")
+    @Schema(description = "提炼后的记忆内容")
     private String content;
 
     @JsonProperty("entities")
     @AgenticToolParam(name = "entities", description = "提取的实体列表")
+    @Schema(description = "提取的实体列表")
     private List<ExtractedEntity> entities;
 
     @JsonProperty("relations")
     @AgenticToolParam(name = "relations", description = "内容与实体的关系描述列表")
+    @Schema(description = "提取的实体关系列表")
     private List<ExtractedRelation> relations;
 
     @JsonProperty("updates")
     @AgenticToolParam(name = "updates", description = "需要更新内容的已有记忆列表")
+    @Schema(description = "待更新的已有记忆列表")
     private List<MemoryUpdate> updates;
 
     @JsonProperty("deletes")
     @AgenticToolParam(name = "deletes", description = "需要删除的已有记忆ID列表")
+    @Schema(description = "待删除的已有记忆 ID 列表")
     private List<Long> deletes;
 
     public static MemoryWriteDecision plainAdd(String type, String content) {
@@ -61,10 +70,12 @@ public class MemoryWriteDecision {
     @Setter
     @NoArgsConstructor
     @AllArgsConstructor
+    @Schema(description = "提取的实体")
     public static class ExtractedEntity {
 
         @JsonProperty("name")
         @AgenticToolParam(name = "name", description = "实体名称")
+        @Schema(description = "实体名称")
         private String name;
     }
 
@@ -72,14 +83,17 @@ public class MemoryWriteDecision {
     @Setter
     @NoArgsConstructor
     @AllArgsConstructor
+    @Schema(description = "提取的实体关系")
     public static class ExtractedRelation {
 
         @JsonProperty("entityName")
         @AgenticToolParam(name = "entityName", description = "关联实体名称")
+        @Schema(description = "关联实体名称")
         private String entityName;
 
         @JsonProperty("description")
         @AgenticToolParam(name = "description", description = "该记忆与实体的关系描述")
+        @Schema(description = "记忆与实体的关系描述")
         private String description;
     }
 
@@ -87,14 +101,17 @@ public class MemoryWriteDecision {
     @Setter
     @NoArgsConstructor
     @AllArgsConstructor
+    @Schema(description = "已有记忆更新内容")
     public static class MemoryUpdate {
 
         @JsonProperty("memoryId")
         @AgenticToolParam(name = "memoryId", description = "要更新的已有记忆ID，必须来自相似记忆列表")
+        @Schema(description = "已有记忆 ID")
         private Long memoryId;
 
         @JsonProperty("content")
         @AgenticToolParam(name = "content", description = "修正后的完整记忆内容")
+        @Schema(description = "修正后的完整记忆内容")
         private String content;
     }
 }

@@ -1,10 +1,10 @@
 package com.gacfox.meowclaw.interceptor.agent;
 
+import com.gacfox.meowclaw.util.JsonUtil;
 import com.gacfox.proarc.agentic.agent.AgentContext;
+import com.gacfox.proarc.agentic.agent.AgentLoopResult;
 import com.gacfox.proarc.agentic.agent.interceptor.AgentInterceptor;
 import com.gacfox.proarc.agentic.agent.interceptor.AgentInterceptorChain;
-import com.gacfox.proarc.agentic.agent.AgentLoopResult;
-import com.gacfox.meowclaw.util.JsonUtil;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 

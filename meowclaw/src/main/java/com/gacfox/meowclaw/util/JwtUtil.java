@@ -29,7 +29,8 @@ public class JwtUtil {
 
     public String generateToken(UserDTO user) {
         long now = System.currentTimeMillis();
-        Map<String, Object> userMap = OBJECT_MAPPER.convertValue(user, new TypeReference<>() {});
+        Map<String, Object> userMap = OBJECT_MAPPER.convertValue(user, new TypeReference<>() {
+        });
         return Jwts.builder()
                 .subject(String.valueOf(user.getId()))
                 .claim(USER_CLAIM, userMap)

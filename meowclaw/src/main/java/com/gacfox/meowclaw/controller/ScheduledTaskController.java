@@ -1,27 +1,20 @@
 package com.gacfox.meowclaw.controller;
 
-import com.gacfox.meowclaw.dto.CreateScheduledTaskRequest;
-import com.gacfox.meowclaw.dto.ScheduledTaskDTO;
-import com.gacfox.meowclaw.dto.ScheduledTaskExecutionDTO;
-import com.gacfox.meowclaw.dto.UpdateScheduledTaskRequest;
+import com.gacfox.meowclaw.dto.*;
 import com.gacfox.meowclaw.service.ScheduledTaskService;
-import com.gacfox.meowclaw.dto.ApiResult;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.web.bind.annotation.DeleteMapping;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.PutMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
 /**
  * 定时任务配置管理
  */
+@Tag(name = "定时任务")
 @RestController
 @RequestMapping("/api/scheduled-task")
 public class ScheduledTaskController {
@@ -32,40 +25,47 @@ public class ScheduledTaskController {
         this.scheduledTaskService = scheduledTaskService;
     }
 
+    @Operation(summary = "查询定时任务列表")
     @GetMapping
     public ApiResult<List<ScheduledTaskDTO>> list() {
         return ApiResult.success(scheduledTaskService.list());
     }
 
+    @Operation(summary = "创建定时任务")
     @PostMapping
     public ApiResult<ScheduledTaskDTO> create(@RequestBody @Valid CreateScheduledTaskRequest req) {
         return ApiResult.success(scheduledTaskService.create(req));
     }
 
+    @Operation(summary = "更新定时任务")
     @PutMapping("/{id}")
-    public ApiResult<ScheduledTaskDTO> update(@PathVariable Long id, @RequestBody @Valid UpdateScheduledTaskRequest req) {
+    public ApiResult<ScheduledTaskDTO> update(@Parameter(description = "定时任务 ID") @PathVariable Long id, @RequestBody @Valid UpdateScheduledTaskRequest req) {
         return ApiResult.success(scheduledTaskService.update(id, req));
     }
 
+    @Operation(summary = "删除定时任务")
     @DeleteMapping("/{id}")
-    public ApiResult<?> delete(@PathVariable Long id) {
+    public ApiResult<?> delete(@Parameter(description = "定时任务 ID") @PathVariable Long id) {
         scheduledTaskService.delete(id);
         return ApiResult.success();
     }
 
+    @Operation(summary = "切换定时任务启用状态")
     @PutMapping("/{id}/toggle")
-    public ApiResult<ScheduledTaskDTO> toggleEnabled(@PathVariable Long id) {
+    public ApiResult<ScheduledTaskDTO> toggleEnabled(@Parameter(description = "定时任务 ID") @PathVariable Long id) {
         return ApiResult.success(scheduledTaskService.toggleEnabled(id));
     }
 
+    @Operation(summary = "立即执行定时任务")
     @PostMapping("/{id}/trigger")
-    public ApiResult<?> triggerOnce(@PathVariable Long id) {
+    public ApiResult<?> triggerOnce(@Parameter(description = "定时任务 ID") @PathVariable Long id) {
         scheduledTaskService.triggerOnce(id);
         return ApiResult.success();
     }
 
+    @Operation(summary = "查询定时任务执行记录")
     @GetMapping("/{id}/execution")
-    public ApiResult<List<ScheduledTaskExecutionDTO>> listExecutions(@PathVariable Long id) {
+    public ApiResult<List<ScheduledTaskExecutionDTO>> listExecutions(@Parameter(description = "定时任务 ID") @PathVariable Long id) {
         return ApiResult.success(scheduledTaskService.listExecutions(id));
     }
 }
