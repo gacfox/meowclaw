@@ -3,6 +3,8 @@ package com.gacfox.meowclaw.service;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.gacfox.meowclaw.util.ToolPathUtil;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Component;
 import org.springframework.util.AntPathMatcher;
 
 import java.util.ArrayList;
@@ -15,6 +17,7 @@ import java.util.Set;
  * 规则自上而下首个命中生效，未命中时使用defaultDecision；tools支持*通配，
  * paths为Ant风格路径模式且支持${cwd}占位符，路径匹配统一忽略大小写
  */
+@Component
 public class GuardrailPolicyEngine {
     public static final String ACTION_ALLOW = "allow";
     public static final String ACTION_ASK = "ask";
@@ -22,8 +25,14 @@ public class GuardrailPolicyEngine {
     public static final String CWD_PLACEHOLDER = "${cwd}";
 
     private static final Set<String> ACTIONS = Set.of(ACTION_ALLOW, ACTION_ASK, ACTION_DENY);
-    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
     private static final AntPathMatcher PATH_MATCHER = new AntPathMatcher();
+
+    private final ObjectMapper objectMapper;
+
+    @Autowired
+    public GuardrailPolicyEngine(ObjectMapper objectMapper) {
+        this.objectMapper = objectMapper;
+    }
 
     /**
      * 求值结果
@@ -47,16 +56,13 @@ public class GuardrailPolicyEngine {
     private record PolicyConfig(String defaultDecision, List<Rule> rules) {
     }
 
-    private GuardrailPolicyEngine() {
-    }
-
     /**
      * 校验策略配置JSON合法性
      *
      * @param configJson 策略配置JSON
      * @throws IllegalArgumentException 配置不合法时抛出，信息包含具体原因
      */
-    public static void validate(String configJson) {
+    public void validate(String configJson) {
         parse(configJson);
     }
 
@@ -69,7 +75,7 @@ public class GuardrailPolicyEngine {
      * @param cwd        当前工作目录，用于解析相对路径与${cwd}占位符
      * @return 求值结果
      */
-    public static Decision evaluate(String configJson, String toolName, String rawPath, String cwd) {
+    public Decision evaluate(String configJson, String toolName, String rawPath, String cwd) {
         PolicyConfig config = parse(configJson);
         for (int i = 0; i < config.rules().size(); i++) {
             Rule rule = config.rules().get(i);
@@ -115,10 +121,10 @@ public class GuardrailPolicyEngine {
         return normalized.toLowerCase();
     }
 
-    private static PolicyConfig parse(String configJson) {
+    private PolicyConfig parse(String configJson) {
         JsonNode root;
         try {
-            root = OBJECT_MAPPER.readTree(configJson);
+            root = objectMapper.readTree(configJson);
         } catch (Exception e) {
             throw new IllegalArgumentException("策略配置不是合法JSON: " + e.getMessage());
         }

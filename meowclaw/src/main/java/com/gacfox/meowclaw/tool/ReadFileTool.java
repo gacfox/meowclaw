@@ -23,6 +23,12 @@ public class ReadFileTool {
     private static final int MAX_LINE_LENGTH = 2000;
     private static final int BINARY_PROBE_BYTES = 8192;
 
+    private final ImageToolResult imageToolResult;
+
+    public ReadFileTool(ImageToolResult imageToolResult) {
+        this.imageToolResult = imageToolResult;
+    }
+
     /**
      * 读取文本文件内容。
      *
@@ -55,7 +61,7 @@ public class ReadFileTool {
                 if (bytes > ImageToolResult.MAX_IMAGE_BYTES) {
                     return "Error: 图片超过10MB大小限制: " + path;
                 }
-                return ImageToolResult.build(file, imageMime, bytes);
+                return imageToolResult.build(file, imageMime, bytes);
             }
 
             try (InputStream in = Files.newInputStream(file)) {

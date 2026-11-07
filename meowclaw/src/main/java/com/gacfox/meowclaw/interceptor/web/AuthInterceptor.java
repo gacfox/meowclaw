@@ -1,8 +1,8 @@
 package com.gacfox.meowclaw.interceptor.web;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.gacfox.meowclaw.dto.ApiResult;
 import com.gacfox.meowclaw.dto.UserDTO;
+import com.gacfox.meowclaw.util.JsonUtil;
 import com.gacfox.meowclaw.util.JwtUtil;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -16,12 +16,12 @@ public class AuthInterceptor implements HandlerInterceptor {
     private static final String BEARER_PREFIX = "Bearer ";
     private static final String USER_ATTR = "currentUser";
 
-    private final ObjectMapper objectMapper;
+    private final JsonUtil jsonUtil;
     private final JwtUtil jwtUtil;
 
     @Autowired
-    public AuthInterceptor(ObjectMapper objectMapper, JwtUtil jwtUtil) {
-        this.objectMapper = objectMapper;
+    public AuthInterceptor(JsonUtil jsonUtil, JwtUtil jwtUtil) {
+        this.jsonUtil = jsonUtil;
         this.jwtUtil = jwtUtil;
     }
 
@@ -39,7 +39,7 @@ public class AuthInterceptor implements HandlerInterceptor {
         }
         response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
         response.setContentType("application/json;charset=UTF-8");
-        response.getWriter().write(objectMapper.writeValueAsString(ApiResult.failure("未登录")));
+        response.getWriter().write(jsonUtil.dump(ApiResult.failure("未登录")));
         return false;
     }
 }

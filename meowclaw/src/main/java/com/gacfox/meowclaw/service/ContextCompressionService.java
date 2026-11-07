@@ -16,6 +16,7 @@ import com.gacfox.meowclaw.repository.ChatEventBatchRepository;
 import com.gacfox.meowclaw.repository.ContextRecapRepository;
 import com.gacfox.meowclaw.repository.MessageRepository;
 import com.gacfox.meowclaw.util.CapabilityUtil;
+import com.gacfox.meowclaw.util.JsonUtil;
 import com.gacfox.proarc.agentic.client.LlmClient;
 import com.gacfox.proarc.agentic.client.OpenAiLlmClient;
 import com.gacfox.proarc.agentic.client.interceptor.builtin.RetryInterceptor;
@@ -25,6 +26,7 @@ import com.gacfox.proarc.agentic.model.openai.ModelResponse;
 import com.gacfox.proarc.agentic.model.openai.ToolCall;
 import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.Resource;
 import org.springframework.stereotype.Service;
@@ -38,7 +40,8 @@ import java.util.*;
 @Service
 public class ContextCompressionService {
     private static final String TRUNCATED = "... [此处因上下文压缩已截断]";
-    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
+    private final ObjectMapper objectMapper;
+    private final JsonUtil jsonUtil;
     private final ChatEventBatchRepository batchRepository;
     private final ContextRecapRepository recapRepository;
     private final MessageRepository messageRepository;
@@ -53,11 +56,15 @@ public class ContextCompressionService {
 
     private String recapSystemPrompt;
 
+    @Autowired
     public ContextCompressionService(ChatEventBatchRepository batchRepository, ContextRecapRepository recapRepository,
                                      MessageRepository messageRepository, ChatPersistenceService persistenceService,
                                      LlmCallLogService llmCallLogService, LlmLoggingInterceptor llmLoggingInterceptor,
                                      ChatAttachmentService chatAttachmentService,
-                                     reactor.netty.http.client.HttpClient httpClient) {
+                                     reactor.netty.http.client.HttpClient httpClient,
+                                     ObjectMapper objectMapper, JsonUtil jsonUtil) {
+        this.objectMapper = objectMapper;
+        this.jsonUtil = jsonUtil;
         this.batchRepository = batchRepository;
         this.recapRepository = recapRepository;
         this.messageRepository = messageRepository;
@@ -117,7 +124,7 @@ public class ContextCompressionService {
                         .toolCallId(message.getToolCallId());
                 if (message.getToolCallsJson() != null) {
                     try {
-                        List<ToolCall> calls = OBJECT_MAPPER.readValue(message.getToolCallsJson(),
+                        List<ToolCall> calls = jsonUtil.load(message.getToolCallsJson(),
                                 new TypeReference<>() {
                                 });
                         builder.toolCalls(calls);
@@ -223,7 +230,7 @@ public class ContextCompressionService {
                         .build())
                 .httpClient(httpClient)
                 .interceptors(List.of(llmLoggingInterceptor,
-                        new LlmCallRecordInterceptor(tokenAccum, llmCallLogService, tokenUsageContext),
+                        new LlmCallRecordInterceptor(tokenAccum, llmCallLogService, tokenUsageContext, jsonUtil),
                         new RetryInterceptor()))
                 .build();
     }
@@ -275,7 +282,7 @@ public class ContextCompressionService {
                 }
                 if (message.getToolCallsJson() != null) {
                     try {
-                        List<ToolCall> calls = OBJECT_MAPPER.readValue(message.getToolCallsJson(), new TypeReference<>() {
+                        List<ToolCall> calls = jsonUtil.load(message.getToolCallsJson(), new TypeReference<>() {
                         });
                         for (ToolCall call : calls) {
                             String name = call.getFunction().getName();
@@ -320,7 +327,7 @@ public class ContextCompressionService {
             return false;
         }
         try {
-            List<ToolCall> calls = OBJECT_MAPPER.readValue(message.getToolCallsJson(), new TypeReference<>() {
+            List<ToolCall> calls = jsonUtil.load(message.getToolCallsJson(), new TypeReference<>() {
             });
             return calls.stream().noneMatch(call -> "final_answer".equals(call.getFunction().getName()));
         } catch (Exception ignored) {
@@ -336,12 +343,12 @@ public class ContextCompressionService {
             return null;
         }
         try {
-            List<ToolCall> calls = OBJECT_MAPPER.readValue(message.getToolCallsJson(), new TypeReference<>() {
+            List<ToolCall> calls = jsonUtil.load(message.getToolCallsJson(), new TypeReference<>() {
             });
             for (ToolCall call : calls) {
                 if (!"final_answer".equals(call.getFunction().getName())) continue;
                 try {
-                    JsonNode messageNode = OBJECT_MAPPER.readTree(call.getFunction().getArguments()).get("message");
+                    JsonNode messageNode = objectMapper.readTree(call.getFunction().getArguments()).get("message");
                     if (messageNode != null && messageNode.isTextual()) {
                         return messageNode.asText();
                     }
@@ -383,7 +390,7 @@ public class ContextCompressionService {
     List<ChatAttachmentDTO> parseAttachments(String json) {
         if (json == null || json.isBlank()) return List.of();
         try {
-            return OBJECT_MAPPER.readValue(json, new TypeReference<>() {
+            return jsonUtil.load(json, new TypeReference<>() {
             });
         } catch (Exception e) {
             return List.of();

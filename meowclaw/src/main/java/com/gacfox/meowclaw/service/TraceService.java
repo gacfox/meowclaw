@@ -9,6 +9,7 @@ import com.gacfox.meowclaw.entity.Agent;
 import com.gacfox.meowclaw.entity.ChatEventBatch;
 import com.gacfox.meowclaw.entity.Conversation;
 import com.gacfox.meowclaw.repository.*;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
@@ -33,6 +34,7 @@ public class TraceService {
     private final LlmCallLogConverter llmCallLogConverter;
     private final ContextCompressionService contextCompressionService;
 
+    @Autowired
     public TraceService(ChatEventBatchRepository batchRepository,
                         ChatEventRepository chatEventRepository,
                         LlmCallLogRepository llmCallLogRepository,

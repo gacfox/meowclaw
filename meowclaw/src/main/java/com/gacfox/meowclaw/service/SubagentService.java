@@ -1,12 +1,13 @@
 package com.gacfox.meowclaw.service;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.gacfox.meowclaw.dto.ChatEventBatchDTO;
 import com.gacfox.meowclaw.dto.ChatEventDTO;
 import com.gacfox.meowclaw.entity.Conversation;
 import com.gacfox.meowclaw.repository.ConversationRepository;
+import com.gacfox.meowclaw.util.JsonUtil;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -22,21 +23,23 @@ import java.util.concurrent.atomic.AtomicReference;
 public class SubagentService {
     public static final String TYPE_SUBAGENT = "SUBAGENT";
 
-    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
-
     private final ConversationRepository conversationRepository;
     private final ConversationService conversationService;
     private final SubagentRegistry subagentRegistry;
     private final ObjectProvider<ChatService> chatServiceProvider;
+    private final JsonUtil jsonUtil;
 
+    @Autowired
     public SubagentService(ConversationRepository conversationRepository,
                            ConversationService conversationService,
                            SubagentRegistry subagentRegistry,
-                           ObjectProvider<ChatService> chatServiceProvider) {
+                           ObjectProvider<ChatService> chatServiceProvider,
+                           JsonUtil jsonUtil) {
         this.conversationRepository = conversationRepository;
         this.conversationService = conversationService;
         this.subagentRegistry = subagentRegistry;
         this.chatServiceProvider = chatServiceProvider;
+        this.jsonUtil = jsonUtil;
     }
 
     /**
@@ -54,7 +57,7 @@ public class SubagentService {
         child.setType(TYPE_SUBAGENT);
         child.setParentConversationId(parentConversationId);
         try {
-            child.setAllowedTools(OBJECT_MAPPER.writeValueAsString(allowedTools));
+            child.setAllowedTools(jsonUtil.dump(allowedTools));
         } catch (Exception e) {
             throw new IllegalStateException("工具白名单序列化失败", e);
         }

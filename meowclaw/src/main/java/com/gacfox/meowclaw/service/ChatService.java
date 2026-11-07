@@ -13,7 +13,9 @@ import com.gacfox.meowclaw.interceptor.agent.*;
 import com.gacfox.meowclaw.interceptor.llm.*;
 import com.gacfox.meowclaw.repository.AgentRepository;
 import com.gacfox.meowclaw.repository.LlmRepository;
+import com.gacfox.meowclaw.tool.ImageToolResult;
 import com.gacfox.meowclaw.util.CapabilityUtil;
+import com.gacfox.meowclaw.util.JsonUtil;
 import com.gacfox.proarc.agentic.agent.AgentContext;
 import com.gacfox.proarc.agentic.agent.ReActAgentExecutor;
 import com.gacfox.proarc.agentic.agent.ToolInvocation;
@@ -46,8 +48,10 @@ import java.util.stream.Collectors;
 @Slf4j
 @Service
 public class ChatService {
-    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
-
+    private final ObjectMapper objectMapper;
+    private final JsonUtil jsonUtil;
+    private final GuardrailPolicyEngine guardrailPolicyEngine;
+    private final ImageToolResult imageToolResult;
     private final ConversationService conversationService;
     private final ChatPersistenceService chatPersistenceService;
     private final AgentRepository agentRepository;
@@ -81,7 +85,15 @@ public class ChatService {
                        ChatAttachmentService chatAttachmentService,
                        MemoryService memoryService,
                        GuardrailPolicyService guardrailPolicyService,
-                       SubagentRegistry subagentRegistry) {
+                       SubagentRegistry subagentRegistry,
+                       ObjectMapper objectMapper,
+                       JsonUtil jsonUtil,
+                       GuardrailPolicyEngine guardrailPolicyEngine,
+                       ImageToolResult imageToolResult) {
+        this.objectMapper = objectMapper;
+        this.jsonUtil = jsonUtil;
+        this.guardrailPolicyEngine = guardrailPolicyEngine;
+        this.imageToolResult = imageToolResult;
         this.conversationService = conversationService;
         this.chatPersistenceService = chatPersistenceService;
         this.agentRepository = agentRepository;
@@ -277,8 +289,8 @@ public class ChatService {
         }
     }
 
-    private static String approvalContent(String decision, String policyName, int matchedRuleIndex, Long decidedAt,
-                                          Long childConversationId) {
+    private String approvalContent(String decision, String policyName, int matchedRuleIndex, Long decidedAt,
+                                   Long childConversationId) {
         try {
             Map<String, Object> map = new LinkedHashMap<>();
             map.put("decision", decision);
@@ -288,7 +300,7 @@ public class ChatService {
             if (childConversationId != null) {
                 map.put("childConversationId", childConversationId);
             }
-            return OBJECT_MAPPER.writeValueAsString(map);
+            return jsonUtil.dump(map);
         } catch (Exception e) {
             return "{\"decision\":\"" + decision + "\"}";
         }
@@ -329,13 +341,13 @@ public class ChatService {
                 .id(eventId).type("subagent").toolCallId(toolCallId).content(content).build());
     }
 
-    private static String subagentContent(Long childConversationId, String description, String status) {
+    private String subagentContent(Long childConversationId, String description, String status) {
         try {
             Map<String, Object> map = new LinkedHashMap<>();
             map.put("childConversationId", childConversationId);
             map.put("description", description);
             map.put("status", status);
-            return OBJECT_MAPPER.writeValueAsString(map);
+            return jsonUtil.dump(map);
         } catch (Exception e) {
             return "{\"status\":\"" + status + "\"}";
         }
@@ -377,7 +389,7 @@ public class ChatService {
 
             List<ChatAttachmentDTO> attachments = chatAttachmentService.store(images);
             String attachmentsJson = attachments.isEmpty() ? null
-                    : OBJECT_MAPPER.writeValueAsString(attachments);
+                    : jsonUtil.dump(attachments);
             ChatEventBatch batch = chatPersistenceService.createBatch(
                     conversationId, userContent == null ? "" : userContent, attachmentsJson);
             batchId = batch.getId();
@@ -395,10 +407,10 @@ public class ChatService {
             List<String> toolNames;
             if (SubagentService.TYPE_SUBAGENT.equals(conv.getType())
                     && conv.getAllowedTools() != null && !conv.getAllowedTools().isBlank()) {
-                toolNames = new ArrayList<>(parseJsonArray(conv.getAllowedTools()));
+                toolNames = new ArrayList<>(parseJsonArray(conv.getAllowedTools(), jsonUtil));
             } else {
-                toolNames = new ArrayList<>(parseJsonArray(agent.getEnabledTools()));
-                toolNames.addAll(parseJsonArray(agent.getEnabledMcpTools()));
+                toolNames = new ArrayList<>(parseJsonArray(agent.getEnabledTools(), jsonUtil));
+                toolNames.addAll(parseJsonArray(agent.getEnabledMcpTools(), jsonUtil));
             }
             toolNames.removeIf(name -> {
                 if (toolRegistry.getAgenticTool(name) == null) {
@@ -453,8 +465,8 @@ public class ChatService {
                 .modelInfo(buildModelInfo(llm))
                 .httpClient(httpClient)
                 .interceptors(List.of(llmLoggingInterceptor,
-                        new LlmCallRecordInterceptor(tokenAccum, llmCallLogService, tokenUsageContext),
-                        new MultimodalToolResultInterceptor(),
+                        new LlmCallRecordInterceptor(tokenAccum, llmCallLogService, tokenUsageContext, jsonUtil),
+                        new MultimodalToolResultInterceptor(imageToolResult),
                         new RetryInterceptor()))
                 .build();
     }
@@ -466,7 +478,7 @@ public class ChatService {
                 .modelInfo(buildModelInfo(llm))
                 .httpClient(httpClient)
                 .interceptors(List.of(llmLoggingInterceptor,
-                        new LlmCallRecordInterceptor(new TokenUsageAccumulator(), llmCallLogService, tokenUsageContext),
+                        new LlmCallRecordInterceptor(new TokenUsageAccumulator(), llmCallLogService, tokenUsageContext, jsonUtil),
                         new RetryInterceptor()))
                 .build();
     }
@@ -475,7 +487,8 @@ public class ChatService {
                                              ActiveRun run, Long batchId, Long conversationId) {
         GuardrailInterceptor guardrailInterceptor = new GuardrailInterceptor(guardrailPolicyService,
                 (invocation, policyName, matchedRuleIndex) ->
-                        awaitApproval(run, batchId, conversationId, invocation, policyName, matchedRuleIndex));
+                        awaitApproval(run, batchId, conversationId, invocation, policyName, matchedRuleIndex),
+                objectMapper, guardrailPolicyEngine);
         return ReActAgentExecutor.builder()
                 .defaultLlmClient(llmClient)
                 .toolRegistry(toolRegistry)
@@ -500,7 +513,7 @@ public class ChatService {
         String contextJson = conv.getContextJson();
         if (contextJson != null && !contextJson.isBlank()) {
             try {
-                com.fasterxml.jackson.databind.JsonNode node = OBJECT_MAPPER.readTree(contextJson);
+                com.fasterxml.jackson.databind.JsonNode node = objectMapper.readTree(contextJson);
                 com.fasterxml.jackson.databind.JsonNode cwdNode = node.get("cwd");
                 if (cwdNode != null && cwdNode.isTextual()) {
                     currentCwd = cwdNode.asText();
@@ -557,7 +570,7 @@ public class ChatService {
                 .toolNames(toolNames)
                 .temperature(temperature)
                 .maxTokens(llm.getMaxTokens())
-                .reasoningEffort(resolveReasoningEffort(llm, reasoningEffort))
+                .reasoningEffort(resolveReasoningEffort(llm, reasoningEffort, jsonUtil))
                 .streaming(true)
                 .variables(variables)
                 .build();
@@ -748,8 +761,8 @@ public class ChatService {
      * 解析本次执行的思考强度：优先使用合法的页面选中值，否则依次回退medium、最高内置值、最后一项自定义值；
      * 可选项为空时返回null，保持旧版请求行为
      */
-    static String resolveReasoningEffort(Llm llm, String selected) {
-        List<String> options = parseJsonArray(llm.getReasoningEffortOptions()).stream()
+    static String resolveReasoningEffort(Llm llm, String selected, JsonUtil jsonUtil) {
+        List<String> options = parseJsonArray(llm.getReasoningEffortOptions(), jsonUtil).stream()
                 .filter(value -> value != null && !value.isBlank())
                 .map(String::trim)
                 .distinct()
@@ -771,10 +784,10 @@ public class ChatService {
         return options.get(options.size() - 1);
     }
 
-    private static List<String> parseJsonArray(String json) {
+    private static List<String> parseJsonArray(String json, JsonUtil jsonUtil) {
         if (json == null || json.isBlank()) return Collections.emptyList();
         try {
-            return OBJECT_MAPPER.readValue(json, new TypeReference<>() {
+            return jsonUtil.load(json, new TypeReference<>() {
             });
         } catch (Exception e) {
             return Collections.emptyList();

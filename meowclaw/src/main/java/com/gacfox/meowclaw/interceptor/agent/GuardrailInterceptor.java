@@ -17,7 +17,6 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class GuardrailInterceptor implements ToolCallInterceptor {
     private static final String FINAL_ANSWER_TOOL = "final_answer";
-    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
     /**
      * 审批结果
@@ -36,10 +35,15 @@ public class GuardrailInterceptor implements ToolCallInterceptor {
 
     private final GuardrailPolicyService guardrailPolicyService;
     private final ApprovalHandler approvalHandler;
+    private final ObjectMapper objectMapper;
+    private final GuardrailPolicyEngine guardrailPolicyEngine;
 
-    public GuardrailInterceptor(GuardrailPolicyService guardrailPolicyService, ApprovalHandler approvalHandler) {
+    public GuardrailInterceptor(GuardrailPolicyService guardrailPolicyService, ApprovalHandler approvalHandler,
+                                ObjectMapper objectMapper, GuardrailPolicyEngine guardrailPolicyEngine) {
         this.guardrailPolicyService = guardrailPolicyService;
         this.approvalHandler = approvalHandler;
+        this.objectMapper = objectMapper;
+        this.guardrailPolicyEngine = guardrailPolicyEngine;
     }
 
     @Override
@@ -51,7 +55,7 @@ public class GuardrailInterceptor implements ToolCallInterceptor {
         Object conversationId = invocation.getAgentContext().getVariables().get("conversationId");
         Object cwd = invocation.getAgentContext().getVariables().get("cwd");
         GuardrailPolicy policy = guardrailPolicyService.resolvePolicy(((Number) conversationId).longValue());
-        GuardrailPolicyEngine.Decision decision = GuardrailPolicyEngine.evaluate(
+        GuardrailPolicyEngine.Decision decision = guardrailPolicyEngine.evaluate(
                 policy.getConfigJson(), toolName, extractPath(invocation.getArguments()),
                 cwd instanceof String s ? s : null);
 
@@ -76,9 +80,9 @@ public class GuardrailInterceptor implements ToolCallInterceptor {
     /**
      * 提取工具参数中的path字段，内置文件类工具统一使用该字段名，无path参数返回null
      */
-    private static String extractPath(String arguments) {
+    private String extractPath(String arguments) {
         try {
-            JsonNode node = OBJECT_MAPPER.readTree(arguments);
+            JsonNode node = objectMapper.readTree(arguments);
             JsonNode path = node == null ? null : node.get("path");
             return path != null && path.isTextual() ? path.asText() : null;
         } catch (Exception e) {

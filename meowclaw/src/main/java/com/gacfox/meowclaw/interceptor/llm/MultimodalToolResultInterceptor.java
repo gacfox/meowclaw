@@ -23,6 +23,12 @@ import java.util.Map;
  */
 @Slf4j
 public class MultimodalToolResultInterceptor implements LlmInterceptor {
+    private final ImageToolResult imageToolResult;
+
+    public MultimodalToolResultInterceptor(ImageToolResult imageToolResult) {
+        this.imageToolResult = imageToolResult;
+    }
+
     @Override
     public ModelResponse interceptBlocking(ModelRequest request, ModelInfo modelInfo, LlmInterceptorChain chain) {
         return chain.nextBlocking(expandImages(request, modelInfo));
@@ -35,7 +41,7 @@ public class MultimodalToolResultInterceptor implements LlmInterceptor {
 
     private ModelRequest expandImages(ModelRequest request, ModelInfo modelInfo) {
         List<Message> messages = request.getMessages();
-        if (messages == null || messages.stream().noneMatch(m -> ImageToolResult.parse(m.getContent()) != null)) {
+        if (messages == null || messages.stream().noneMatch(m -> imageToolResult.parse(m.getContent()) != null)) {
             return request;
         }
         boolean visionSupported = modelInfo.getCapabilities() != null
@@ -43,7 +49,7 @@ public class MultimodalToolResultInterceptor implements LlmInterceptor {
         List<Message> expanded = new ArrayList<>(messages.size() + 2);
         for (Message message : messages) {
             ImageToolResult.ImageRef ref = Message.ROLE_TOOL.equals(message.getRole())
-                    ? ImageToolResult.parse(message.getContent()) : null;
+                    ? imageToolResult.parse(message.getContent()) : null;
             if (ref == null) {
                 expanded.add(message);
                 continue;

@@ -59,14 +59,17 @@ public class GuardrailPolicyService {
     private final GuardrailPolicyRepository guardrailPolicyRepository;
     private final ConversationRepository conversationRepository;
     private final GuardrailPolicyConverter guardrailPolicyConverter;
+    private final GuardrailPolicyEngine guardrailPolicyEngine;
 
     @Autowired
     public GuardrailPolicyService(GuardrailPolicyRepository guardrailPolicyRepository,
                                   ConversationRepository conversationRepository,
-                                  GuardrailPolicyConverter guardrailPolicyConverter) {
+                                  GuardrailPolicyConverter guardrailPolicyConverter,
+                                  GuardrailPolicyEngine guardrailPolicyEngine) {
         this.guardrailPolicyRepository = guardrailPolicyRepository;
         this.conversationRepository = conversationRepository;
         this.guardrailPolicyConverter = guardrailPolicyConverter;
+        this.guardrailPolicyEngine = guardrailPolicyEngine;
     }
 
     /**
@@ -103,7 +106,7 @@ public class GuardrailPolicyService {
         if (guardrailPolicyRepository.existsByName(req.getName())) {
             throw new IllegalArgumentException("策略名已存在: " + req.getName());
         }
-        GuardrailPolicyEngine.validate(req.getConfigJson());
+        guardrailPolicyEngine.validate(req.getConfigJson());
         GuardrailPolicy policy = new GuardrailPolicy();
         policy.setName(req.getName().trim());
         policy.setConfigJson(req.getConfigJson());
@@ -124,7 +127,7 @@ public class GuardrailPolicyService {
         if (!policy.getName().equals(req.getName()) && guardrailPolicyRepository.existsByName(req.getName())) {
             throw new IllegalArgumentException("策略名已存在: " + req.getName());
         }
-        GuardrailPolicyEngine.validate(req.getConfigJson());
+        guardrailPolicyEngine.validate(req.getConfigJson());
         policy.setName(req.getName().trim());
         policy.setConfigJson(req.getConfigJson());
         policy.setUpdatedAt(System.currentTimeMillis());

@@ -1,5 +1,7 @@
 package com.gacfox.meowclaw.tool;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.gacfox.meowclaw.util.JsonUtil;
 import com.gacfox.proarc.agentic.agent.AgentContext;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -18,7 +20,9 @@ class ReadFileToolTest {
     @TempDir
     Path tempDir;
 
-    private final ReadFileTool tool = new ReadFileTool();
+    private final ObjectMapper objectMapper = new ObjectMapper();
+    private final ReadFileTool tool = new ReadFileTool(
+            new ImageToolResult(objectMapper, new JsonUtil(objectMapper)));
 
     @Test
     void readsFileWithOneBasedLineNumbers() throws IOException {

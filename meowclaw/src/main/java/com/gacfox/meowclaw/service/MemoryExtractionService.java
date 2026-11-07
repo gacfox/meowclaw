@@ -13,6 +13,7 @@ import com.gacfox.meowclaw.repository.AgentRepository;
 import com.gacfox.meowclaw.repository.LlmRepository;
 import com.gacfox.meowclaw.repository.MemoryEntityRepository;
 import com.gacfox.meowclaw.util.CapabilityUtil;
+import com.gacfox.meowclaw.util.JsonUtil;
 import com.gacfox.proarc.agentic.client.LlmClient;
 import com.gacfox.proarc.agentic.client.OpenAiLlmClient;
 import com.gacfox.proarc.agentic.client.interceptor.builtin.RetryInterceptor;
@@ -51,6 +52,7 @@ public class MemoryExtractionService {
     private final HttpClient httpClient;
     private final LlmLoggingInterceptor llmLoggingInterceptor;
     private final LlmCallLogService llmCallLogService;
+    private final JsonUtil jsonUtil;
 
     @Value("classpath:prompt/memory-write-prompt.md")
     private Resource promptResource;
@@ -65,7 +67,8 @@ public class MemoryExtractionService {
                                    EmbeddingService embeddingService,
                                    HttpClient httpClient,
                                    LlmLoggingInterceptor llmLoggingInterceptor,
-                                   LlmCallLogService llmCallLogService) {
+                                   LlmCallLogService llmCallLogService,
+                                   JsonUtil jsonUtil) {
         this.agentRepository = agentRepository;
         this.llmRepository = llmRepository;
         this.memoryEntityRepository = memoryEntityRepository;
@@ -74,6 +77,7 @@ public class MemoryExtractionService {
         this.httpClient = httpClient;
         this.llmLoggingInterceptor = llmLoggingInterceptor;
         this.llmCallLogService = llmCallLogService;
+        this.jsonUtil = jsonUtil;
     }
 
     @PostConstruct
@@ -171,7 +175,7 @@ public class MemoryExtractionService {
                 .httpClient(httpClient)
                 .interceptors(List.of(
                         llmLoggingInterceptor,
-                        new LlmCallRecordInterceptor(new TokenUsageAccumulator(), llmCallLogService, tokenUsageContext),
+                        new LlmCallRecordInterceptor(new TokenUsageAccumulator(), llmCallLogService, tokenUsageContext, jsonUtil),
                         new RetryInterceptor()))
                 .build();
     }

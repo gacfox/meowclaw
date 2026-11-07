@@ -18,10 +18,12 @@ import java.util.List;
 @Component
 public class MemoryTool {
     private final MemoryService memoryService;
+    private final JsonUtil jsonUtil;
 
     @Autowired
-    public MemoryTool(MemoryService memoryService) {
+    public MemoryTool(MemoryService memoryService, JsonUtil jsonUtil) {
         this.memoryService = memoryService;
+        this.jsonUtil = jsonUtil;
     }
 
     @AgenticTool(name = "memory_write", description = "写入一条长期记忆，type 必须是 fact/preference/rule 之一。写入是异步的：提交后立即返回，系统后台自动完成相似记忆查重、结构抽取与入库，无需等待；相同内容严禁多次重复调用")
@@ -38,6 +40,6 @@ public class MemoryTool {
                          AgentContext ctx) {
         Long agentId = (Long) ctx.getVariables().get("agentId");
         List<com.gacfox.meowclaw.dto.MemoryNodeDTO> nodes = memoryService.recall(agentId, param.getQuery(), param.getLimit());
-        return JsonUtil.dump(nodes);
+        return jsonUtil.dump(nodes);
     }
 }

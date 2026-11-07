@@ -1,7 +1,6 @@
 package com.gacfox.meowclaw.service;
 
 import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.gacfox.meowclaw.dto.ConversationDTO;
 import com.gacfox.meowclaw.entity.ChatEvent;
 import com.gacfox.meowclaw.entity.ChatEventBatch;
@@ -9,8 +8,10 @@ import com.gacfox.meowclaw.entity.Message;
 import com.gacfox.meowclaw.repository.ChatEventBatchRepository;
 import com.gacfox.meowclaw.repository.ChatEventRepository;
 import com.gacfox.meowclaw.repository.MessageRepository;
+import com.gacfox.meowclaw.util.JsonUtil;
 import com.gacfox.proarc.agentic.model.openai.ToolCall;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -19,21 +20,23 @@ import java.util.List;
 @Slf4j
 @Service
 public class ChatPersistenceService {
-    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
-
     private final ChatEventBatchRepository chatEventBatchRepository;
     private final ChatEventRepository chatEventRepository;
     private final MessageRepository messageRepository;
     private final ConversationService conversationService;
+    private final JsonUtil jsonUtil;
 
+    @Autowired
     public ChatPersistenceService(ChatEventBatchRepository chatEventBatchRepository,
                                   ChatEventRepository chatEventRepository,
                                   MessageRepository messageRepository,
-                                  ConversationService conversationService) {
+                                  ConversationService conversationService,
+                                  JsonUtil jsonUtil) {
         this.chatEventBatchRepository = chatEventBatchRepository;
         this.chatEventRepository = chatEventRepository;
         this.messageRepository = messageRepository;
         this.conversationService = conversationService;
+        this.jsonUtil = jsonUtil;
     }
 
     @Transactional
@@ -120,7 +123,7 @@ public class ChatPersistenceService {
         entity.setToolCallId(msg.getToolCallId());
         if (msg.getToolCalls() != null && !msg.getToolCalls().isEmpty()) {
             try {
-                entity.setToolCallsJson(OBJECT_MAPPER.writeValueAsString(msg.getToolCalls()));
+                entity.setToolCallsJson(jsonUtil.dump(msg.getToolCalls()));
             } catch (Exception e) {
                 log.warn("Failed to serialize tool calls", e);
             }
@@ -142,7 +145,7 @@ public class ChatPersistenceService {
         }
         if (entity.getToolCallsJson() != null) {
             try {
-                List<ToolCall> toolCalls = OBJECT_MAPPER.readValue(
+                List<ToolCall> toolCalls = jsonUtil.load(
                         entity.getToolCallsJson(), new TypeReference<>() {
                         });
                 builder.toolCalls(toolCalls);

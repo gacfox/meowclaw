@@ -3,14 +3,20 @@ package com.gacfox.meowclaw.util;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.springframework.stereotype.Component;
 
 import java.util.Map;
 
 /**
  * Json序列化和反序列化工具类
  */
+@Component
 public class JsonUtil {
-    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
+    private final ObjectMapper objectMapper;
+
+    public JsonUtil(ObjectMapper objectMapper) {
+        this.objectMapper = objectMapper;
+    }
 
     /**
      * 将对象序列化为JSON
@@ -18,9 +24,9 @@ public class JsonUtil {
      * @param o 对象
      * @return JSON字符串
      */
-    public static String dump(Object o) {
+    public String dump(Object o) {
         try {
-            return OBJECT_MAPPER.writeValueAsString(o);
+            return objectMapper.writeValueAsString(o);
         } catch (JsonProcessingException e) {
             throw new RuntimeException(e);
         }
@@ -32,9 +38,9 @@ public class JsonUtil {
      * @param jsonStr JSON字符串
      * @return 结果Map
      */
-    public static Map<String, Object> load(String jsonStr) {
+    public Map<String, Object> load(String jsonStr) {
         try {
-            return OBJECT_MAPPER.readValue(jsonStr, new TypeReference<Map<String, Object>>() {
+            return objectMapper.readValue(jsonStr, new TypeReference<Map<String, Object>>() {
             });
         } catch (JsonProcessingException e) {
             throw new RuntimeException(e);
@@ -49,9 +55,9 @@ public class JsonUtil {
      * @param <T>     结果类型
      * @return 结果对象
      */
-    public static <T> T load(String jsonStr, Class<T> clazz) {
+    public <T> T load(String jsonStr, Class<T> clazz) {
         try {
-            return OBJECT_MAPPER.readValue(jsonStr, clazz);
+            return objectMapper.readValue(jsonStr, clazz);
         } catch (JsonProcessingException e) {
             throw new RuntimeException(e);
         }
@@ -65,9 +71,9 @@ public class JsonUtil {
      * @param <T>           结果类型
      * @return 结果对象
      */
-    public static <T> T load(String jsonStr, TypeReference<T> typeReference) {
+    public <T> T load(String jsonStr, TypeReference<T> typeReference) {
         try {
-            return OBJECT_MAPPER.readValue(jsonStr, typeReference);
+            return objectMapper.readValue(jsonStr, typeReference);
         } catch (JsonProcessingException e) {
             throw new RuntimeException(e);
         }

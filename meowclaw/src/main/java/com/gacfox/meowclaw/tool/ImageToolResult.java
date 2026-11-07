@@ -2,6 +2,8 @@ package com.gacfox.meowclaw.tool;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.gacfox.meowclaw.util.JsonUtil;
+import org.springframework.stereotype.Component;
 
 import java.nio.file.Path;
 import java.util.Map;
@@ -11,11 +13,11 @@ import java.util.Map;
  * 由 MultimodalToolResultInterceptor 在每次LLM请求发出前物化为多模态图片部件，
  * 避免base64进入消息历史与数据库
  */
+@Component
 public class ImageToolResult {
     public static final String MARKER_PREFIX = "<<<image>>>";
     public static final long MAX_IMAGE_BYTES = 10L * 1024 * 1024;
 
-    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
     private static final Map<String, String> MIME_BY_EXT = Map.of(
             "png", "image/png",
             "jpg", "image/jpeg",
@@ -34,7 +36,12 @@ public class ImageToolResult {
     public record ImageRef(String path, String mimeType, long bytes, String note) {
     }
 
-    private ImageToolResult() {
+    private final ObjectMapper objectMapper;
+    private final JsonUtil jsonUtil;
+
+    public ImageToolResult(ObjectMapper objectMapper, JsonUtil jsonUtil) {
+        this.objectMapper = objectMapper;
+        this.jsonUtil = jsonUtil;
     }
 
     /**
@@ -52,10 +59,10 @@ public class ImageToolResult {
     /**
      * 构建带标记的工具结果文本：首行为机器可读标记，其后为说明文本
      */
-    public static String build(Path path, String mimeType, long bytes) {
+    public String build(Path path, String mimeType, long bytes) {
         String note = "图片文件已读取，内容将随请求附加给模型（" + path + "，" + bytes + " bytes），无需再用文本方式读取。";
         try {
-            String json = OBJECT_MAPPER.writeValueAsString(Map.of(
+            String json = jsonUtil.dump(Map.of(
                     "path", path.toString(), "mimeType", mimeType, "bytes", bytes));
             return MARKER_PREFIX + json + "\n" + note;
         } catch (Exception e) {
@@ -66,7 +73,7 @@ public class ImageToolResult {
     /**
      * 解析工具结果中的图片标记，非标记内容返回null
      */
-    public static ImageRef parse(Object content) {
+    public ImageRef parse(Object content) {
         if (!(content instanceof String text) || !text.startsWith(MARKER_PREFIX)) {
             return null;
         }
@@ -75,7 +82,7 @@ public class ImageToolResult {
         String note = newline >= 0 ? markerLine.substring(newline + 1) : "";
         markerLine = newline >= 0 ? markerLine.substring(0, newline) : markerLine;
         try {
-            JsonNode node = OBJECT_MAPPER.readTree(markerLine);
+            JsonNode node = objectMapper.readTree(markerLine);
             return new ImageRef(node.get("path").asText(), node.get("mimeType").asText(),
                     node.get("bytes").asLong(), note);
         } catch (Exception e) {

@@ -10,6 +10,7 @@ import com.gacfox.meowclaw.entity.ChatEventBatch;
 import com.gacfox.meowclaw.entity.Conversation;
 import com.gacfox.meowclaw.entity.Project;
 import com.gacfox.meowclaw.repository.*;
+import com.gacfox.meowclaw.util.JsonUtil;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -22,7 +23,8 @@ import java.util.stream.Stream;
 
 @Service
 public class ConversationService {
-    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
+    private final ObjectMapper objectMapper;
+    private final JsonUtil jsonUtil;
     private final ConversationRepository conversationRepository;
     private final MessageRepository messageRepository;
     private final ChatEventBatchRepository chatEventBatchRepository;
@@ -50,7 +52,11 @@ public class ConversationService {
                                ChatEventConverter chatEventConverter,
                                GuardrailPolicyService guardrailPolicyService,
                                ProjectRepository projectRepository,
-                               ProjectConverter projectConverter) {
+                               ProjectConverter projectConverter,
+                               ObjectMapper objectMapper,
+                               JsonUtil jsonUtil) {
+        this.objectMapper = objectMapper;
+        this.jsonUtil = jsonUtil;
         this.conversationRepository = conversationRepository;
         this.messageRepository = messageRepository;
         this.chatEventBatchRepository = chatEventBatchRepository;
@@ -76,7 +82,7 @@ public class ConversationService {
         }
         if (conv.getContextJson() != null && !conv.getContextJson().isBlank()) {
             try {
-                JsonNode health = OBJECT_MAPPER.readTree(conv.getContextJson()).path("context");
+                JsonNode health = objectMapper.readTree(conv.getContextJson()).path("context");
                 if (health.has("promptTokens")) {
                     dto.setContextPromptTokens(health.path("promptTokens").asLong());
                 }
@@ -283,7 +289,7 @@ public class ConversationService {
     public String getContextStatus(Long id) {
         Conversation conv = getById(id);
         try {
-            JsonNode node = OBJECT_MAPPER.readTree(conv.getContextJson());
+            JsonNode node = objectMapper.readTree(conv.getContextJson());
             JsonNode status = node.path("context").path("status");
             return status.isTextual() ? status.asText() : "NORMAL";
         } catch (Exception e) {
@@ -295,7 +301,7 @@ public class ConversationService {
     public long getContextPromptTokens(Long id) {
         Conversation conv = getById(id);
         try {
-            JsonNode node = OBJECT_MAPPER.readTree(conv.getContextJson());
+            JsonNode node = objectMapper.readTree(conv.getContextJson());
             return node.path("context").path("promptTokens").asLong(0);
         } catch (Exception e) {
             return 0;
@@ -312,16 +318,16 @@ public class ConversationService {
 
     private ObjectNode contextRoot(String contextJson) {
         try {
-            JsonNode node = contextJson == null ? null : OBJECT_MAPPER.readTree(contextJson);
+            JsonNode node = contextJson == null ? null : objectMapper.readTree(contextJson);
             if (node instanceof ObjectNode objectNode) return objectNode;
         } catch (Exception ignored) {
         }
-        return OBJECT_MAPPER.createObjectNode();
+        return objectMapper.createObjectNode();
     }
 
     private void saveContext(Conversation conv, ObjectNode root) {
         try {
-            conv.setContextJson(OBJECT_MAPPER.writeValueAsString(root));
+            conv.setContextJson(jsonUtil.dump(root));
             conv.setUpdatedAt(System.currentTimeMillis());
             conversationRepository.save(conv);
         } catch (Exception e) {

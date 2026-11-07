@@ -11,6 +11,7 @@ import com.gacfox.meowclaw.repository.ScheduledTaskExecutionRepository;
 import com.gacfox.meowclaw.repository.ScheduledTaskRepository;
 import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.scheduling.support.CronExpression;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -27,6 +28,7 @@ public class ScheduledTaskService {
     private final SchedulerManager schedulerManager;
     private final ScheduledTaskExecutor scheduledTaskExecutor;
 
+    @Autowired
     public ScheduledTaskService(ScheduledTaskRepository scheduledTaskRepository,
                                 ScheduledTaskExecutionRepository scheduledTaskExecutionRepository,
                                 ScheduledTaskConverter scheduledTaskConverter,

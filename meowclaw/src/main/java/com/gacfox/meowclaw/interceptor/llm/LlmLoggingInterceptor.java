@@ -8,18 +8,26 @@ import com.gacfox.proarc.agentic.model.openai.ModelInfo;
 import com.gacfox.proarc.agentic.model.openai.ModelRequest;
 import com.gacfox.proarc.agentic.model.openai.ModelResponse;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Flux;
 
 @Slf4j
 @Component
 public class LlmLoggingInterceptor implements LlmInterceptor {
+    private final JsonUtil jsonUtil;
+
+    @Autowired
+    public LlmLoggingInterceptor(JsonUtil jsonUtil) {
+        this.jsonUtil = jsonUtil;
+    }
+
     @Override
     public ModelResponse interceptBlocking(ModelRequest request, ModelInfo modelInfo, LlmInterceptorChain chain) {
-        log.info("Llm blocking request [{}]: {}", modelInfo.getModel(), JsonUtil.dump(request));
+        log.info("Llm blocking request [{}]: {}", modelInfo.getModel(), jsonUtil.dump(request));
         try {
             ModelResponse response = chain.nextBlocking(request);
-            log.info("Llm blocking response [{}]: {}", modelInfo.getModel(), JsonUtil.dump(response));
+            log.info("Llm blocking response [{}]: {}", modelInfo.getModel(), jsonUtil.dump(response));
             return response;
         } catch (LlmProviderException e) {
             log.error("Llm provider error [{}] HTTP {} body: {}",
@@ -30,7 +38,7 @@ public class LlmLoggingInterceptor implements LlmInterceptor {
 
     @Override
     public Flux<ModelResponse> interceptStreaming(ModelRequest request, ModelInfo modelInfo, LlmInterceptorChain chain) {
-        log.info("Llm streaming request [{}]: {}", modelInfo.getModel(), JsonUtil.dump(request));
+        log.info("Llm streaming request [{}]: {}", modelInfo.getModel(), jsonUtil.dump(request));
         return chain.nextStreaming(request)
                 .doOnComplete(() -> log.info("Llm stream complete [{}]", modelInfo.getModel()))
                 .doOnError(e -> {

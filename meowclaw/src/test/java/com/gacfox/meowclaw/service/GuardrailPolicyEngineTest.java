@@ -1,11 +1,14 @@
 package com.gacfox.meowclaw.service;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class GuardrailPolicyEngineTest {
+    private final GuardrailPolicyEngine guardrailPolicyEngine =
+            new GuardrailPolicyEngine(new ObjectMapper());
     private static final String CWD = "H:\\workspace\\proj";
 
     private static String config(String defaultDecision, String rules) {
@@ -14,7 +17,7 @@ class GuardrailPolicyEngineTest {
 
     @Test
     void fallsBackToDefaultDecisionWhenNoRules() {
-        GuardrailPolicyEngine.Decision decision = GuardrailPolicyEngine.evaluate(config("ask", "[]"), "exec", null, CWD);
+        GuardrailPolicyEngine.Decision decision = guardrailPolicyEngine.evaluate(config("ask", "[]"), "exec", null, CWD);
 
         assertThat(decision.action()).isEqualTo("ask");
         assertThat(decision.matchedRuleIndex()).isEqualTo(-1);
@@ -24,9 +27,9 @@ class GuardrailPolicyEngineTest {
     void allowsPathInsideWorkspace() {
         String rules = "[{\"tools\":[\"read\",\"write\"],\"paths\":[\"${cwd}/**\"],\"action\":\"allow\"}]";
 
-        assertThat(GuardrailPolicyEngine.evaluate(config("ask", rules), "read", "src/a.txt", CWD).action())
+        assertThat(guardrailPolicyEngine.evaluate(config("ask", rules), "read", "src/a.txt", CWD).action())
                 .isEqualTo("allow");
-        assertThat(GuardrailPolicyEngine.evaluate(config("ask", rules), "write", "H:\\workspace\\proj\\out.txt", CWD).action())
+        assertThat(guardrailPolicyEngine.evaluate(config("ask", rules), "write", "H:\\workspace\\proj\\out.txt", CWD).action())
                 .isEqualTo("allow");
     }
 
@@ -34,7 +37,7 @@ class GuardrailPolicyEngineTest {
     void asksForPathOutsideWorkspace() {
         String rules = "[{\"tools\":[\"read\"],\"paths\":[\"${cwd}/**\"],\"action\":\"allow\"}]";
 
-        GuardrailPolicyEngine.Decision decision = GuardrailPolicyEngine.evaluate(config("ask", rules), "read", "C:\\Windows\\system.ini", CWD);
+        GuardrailPolicyEngine.Decision decision = guardrailPolicyEngine.evaluate(config("ask", rules), "read", "C:\\Windows\\system.ini", CWD);
 
         assertThat(decision.action()).isEqualTo("ask");
         assertThat(decision.matchedRuleIndex()).isEqualTo(-1);
@@ -44,7 +47,7 @@ class GuardrailPolicyEngineTest {
     void pathMatchingIsCaseAndSlashInsensitive() {
         String rules = "[{\"tools\":[\"read\"],\"paths\":[\"${cwd}/**\"],\"action\":\"allow\"}]";
 
-        assertThat(GuardrailPolicyEngine.evaluate(config("ask", rules), "read", "H:/WORKSPACE/proj/A.TXT", CWD).action())
+        assertThat(guardrailPolicyEngine.evaluate(config("ask", rules), "read", "H:/WORKSPACE/proj/A.TXT", CWD).action())
                 .isEqualTo("allow");
     }
 
@@ -52,7 +55,7 @@ class GuardrailPolicyEngineTest {
     void toolWithoutPathArgSkipsPathsRule() {
         String rules = "[{\"tools\":[\"exec\"],\"paths\":[\"${cwd}/**\"],\"action\":\"allow\"}]";
 
-        assertThat(GuardrailPolicyEngine.evaluate(config("ask", rules), "exec", null, CWD).action())
+        assertThat(guardrailPolicyEngine.evaluate(config("ask", rules), "exec", null, CWD).action())
                 .isEqualTo("ask");
     }
 
@@ -60,11 +63,11 @@ class GuardrailPolicyEngineTest {
     void matchesToolNameWildcards() {
         String rules = "[{\"tools\":[\"Tavily__*\"],\"action\":\"deny\"},{\"tools\":[\"*\"],\"action\":\"allow\"}]";
 
-        GuardrailPolicyEngine.Decision mcp = GuardrailPolicyEngine.evaluate(config("ask", rules), "Tavily__tavily_search", null, CWD);
+        GuardrailPolicyEngine.Decision mcp = guardrailPolicyEngine.evaluate(config("ask", rules), "Tavily__tavily_search", null, CWD);
         assertThat(mcp.action()).isEqualTo("deny");
         assertThat(mcp.matchedRuleIndex()).isEqualTo(0);
 
-        GuardrailPolicyEngine.Decision builtin = GuardrailPolicyEngine.evaluate(config("ask", rules), "exec", null, CWD);
+        GuardrailPolicyEngine.Decision builtin = guardrailPolicyEngine.evaluate(config("ask", rules), "exec", null, CWD);
         assertThat(builtin.action()).isEqualTo("allow");
         assertThat(builtin.matchedRuleIndex()).isEqualTo(1);
     }
@@ -76,9 +79,9 @@ class GuardrailPolicyEngineTest {
                 + "{\"tools\":[\"read\"],\"action\":\"deny\"}"
                 + "]";
 
-        assertThat(GuardrailPolicyEngine.evaluate(config("ask", rules), "read", "a.txt", CWD).action())
+        assertThat(guardrailPolicyEngine.evaluate(config("ask", rules), "read", "a.txt", CWD).action())
                 .isEqualTo("allow");
-        assertThat(GuardrailPolicyEngine.evaluate(config("ask", rules), "read", "C:\\other\\b.txt", CWD).action())
+        assertThat(guardrailPolicyEngine.evaluate(config("ask", rules), "read", "C:\\other\\b.txt", CWD).action())
                 .isEqualTo("deny");
     }
 
@@ -86,29 +89,29 @@ class GuardrailPolicyEngineTest {
     void antStyleSubPathPattern() {
         String rules = "[{\"tools\":[\"read\"],\"paths\":[\"**/config/*.json\"],\"action\":\"deny\"}]";
 
-        assertThat(GuardrailPolicyEngine.evaluate(config("allow", rules), "read", "config/app.json", CWD).action())
+        assertThat(guardrailPolicyEngine.evaluate(config("allow", rules), "read", "config/app.json", CWD).action())
                 .isEqualTo("deny");
-        assertThat(GuardrailPolicyEngine.evaluate(config("allow", rules), "read", "config/app.yaml", CWD).action())
+        assertThat(guardrailPolicyEngine.evaluate(config("allow", rules), "read", "config/app.yaml", CWD).action())
                 .isEqualTo("allow");
     }
 
     @Test
     void validateRejectsInvalidConfigs() {
-        assertThatThrownBy(() -> GuardrailPolicyEngine.validate("{bad json"))
+        assertThatThrownBy(() -> guardrailPolicyEngine.validate("{bad json"))
                 .isInstanceOf(IllegalArgumentException.class);
-        assertThatThrownBy(() -> GuardrailPolicyEngine.validate("{\"rules\":[]}"))
+        assertThatThrownBy(() -> guardrailPolicyEngine.validate("{\"rules\":[]}"))
                 .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("defaultDecision");
-        assertThatThrownBy(() -> GuardrailPolicyEngine.validate("{\"defaultDecision\":\"allow\",\"rules\":{}}"))
+        assertThatThrownBy(() -> guardrailPolicyEngine.validate("{\"defaultDecision\":\"allow\",\"rules\":{}}"))
                 .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("rules");
-        assertThatThrownBy(() -> GuardrailPolicyEngine.validate("{\"defaultDecision\":\"allow\",\"rules\":[{\"tools\":[],\"action\":\"allow\"}]}"))
+        assertThatThrownBy(() -> guardrailPolicyEngine.validate("{\"defaultDecision\":\"allow\",\"rules\":[{\"tools\":[],\"action\":\"allow\"}]}"))
                 .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("tools");
-        assertThatThrownBy(() -> GuardrailPolicyEngine.validate("{\"defaultDecision\":\"allow\",\"rules\":[{\"tools\":[\"read\"],\"action\":\"maybe\"}]}"))
+        assertThatThrownBy(() -> guardrailPolicyEngine.validate("{\"defaultDecision\":\"allow\",\"rules\":[{\"tools\":[\"read\"],\"action\":\"maybe\"}]}"))
                 .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("action");
     }
 
     @Test
     void validateAcceptsBuiltinWorkspaceConfig() {
-        GuardrailPolicyEngine.validate("""
+        guardrailPolicyEngine.validate("""
                 {
                   "defaultDecision": "ask",
                   "rules": [

@@ -1,5 +1,7 @@
 package com.gacfox.meowclaw.tool;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.gacfox.meowclaw.util.JsonUtil;
 import org.junit.jupiter.api.Test;
 
 import java.nio.file.Path;
@@ -7,6 +9,9 @@ import java.nio.file.Path;
 import static org.assertj.core.api.Assertions.assertThat;
 
 class ImageToolResultTest {
+    private final ObjectMapper objectMapper = new ObjectMapper();
+    private final ImageToolResult imageToolResult =
+            new ImageToolResult(objectMapper, new JsonUtil(objectMapper));
 
     @Test
     void detectsImageByExtension() {
@@ -18,9 +23,9 @@ class ImageToolResultTest {
 
     @Test
     void buildAndParseRoundTripsWindowsPath() {
-        String content = ImageToolResult.build(Path.of("H:\\workspace\\cat.png"), "image/png", 12345);
+        String content = imageToolResult.build(Path.of("H:\\workspace\\cat.png"), "image/png", 12345);
 
-        ImageToolResult.ImageRef ref = ImageToolResult.parse(content);
+        ImageToolResult.ImageRef ref = imageToolResult.parse(content);
 
         assertThat(ref).isNotNull();
         assertThat(ref.path()).isEqualTo("H:\\workspace\\cat.png");
@@ -31,8 +36,8 @@ class ImageToolResultTest {
 
     @Test
     void parseReturnsNullForNonMarker() {
-        assertThat(ImageToolResult.parse("普通文本")).isNull();
-        assertThat(ImageToolResult.parse("<<<image>>>不是合法json")).isNull();
-        assertThat(ImageToolResult.parse(null)).isNull();
+        assertThat(imageToolResult.parse("普通文本")).isNull();
+        assertThat(imageToolResult.parse("<<<image>>>不是合法json")).isNull();
+        assertThat(imageToolResult.parse(null)).isNull();
     }
 }

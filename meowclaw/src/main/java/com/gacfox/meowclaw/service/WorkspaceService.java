@@ -6,6 +6,7 @@ import com.gacfox.meowclaw.dto.FileEntryDTO;
 import com.gacfox.meowclaw.entity.Agent;
 import com.gacfox.meowclaw.repository.AgentRepository;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -40,6 +41,7 @@ public class WorkspaceService {
 
     private final AgentRepository agentRepository;
 
+    @Autowired
     public WorkspaceService(AgentRepository agentRepository) {
         this.agentRepository = agentRepository;
     }

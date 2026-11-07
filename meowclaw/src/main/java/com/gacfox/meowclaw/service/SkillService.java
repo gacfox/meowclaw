@@ -9,6 +9,7 @@ import com.gacfox.meowclaw.repository.AgentRepository;
 import com.gacfox.meowclaw.repository.SkillPackageRepository;
 import com.gacfox.meowclaw.util.FrontmatterParseUtil;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -44,6 +45,7 @@ public class SkillService {
     private final SkillPackageRepository skillPackageRepository;
     private final AgentRepository agentRepository;
 
+    @Autowired
     public SkillService(SkillPackageRepository skillPackageRepository, AgentRepository agentRepository) {
         this.skillPackageRepository = skillPackageRepository;
         this.agentRepository = agentRepository;

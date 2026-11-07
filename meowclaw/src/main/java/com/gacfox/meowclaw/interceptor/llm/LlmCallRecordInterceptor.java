@@ -1,7 +1,7 @@
 package com.gacfox.meowclaw.interceptor.llm;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.gacfox.meowclaw.service.LlmCallLogService;
+import com.gacfox.meowclaw.util.JsonUtil;
 import com.gacfox.proarc.agentic.client.interceptor.LlmInterceptor;
 import com.gacfox.proarc.agentic.client.interceptor.LlmInterceptorChain;
 import com.gacfox.proarc.agentic.model.openai.ModelInfo;
@@ -23,17 +23,18 @@ import java.util.List;
 @Slf4j
 public class LlmCallRecordInterceptor implements LlmInterceptor {
     private static final int MAX_REQUEST_MESSAGES_CHARS = 256 * 1024;
-    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
     private final TokenUsageAccumulator accumulator;
     private final LlmCallLogService logService;
     private final TokenUsageContext context;
+    private final JsonUtil jsonUtil;
 
     public LlmCallRecordInterceptor(TokenUsageAccumulator accumulator, LlmCallLogService logService,
-                                    TokenUsageContext context) {
+                                    TokenUsageContext context, JsonUtil jsonUtil) {
         this.accumulator = accumulator;
         this.logService = logService;
         this.context = context;
+        this.jsonUtil = jsonUtil;
     }
 
     @Override
@@ -82,7 +83,7 @@ public class LlmCallRecordInterceptor implements LlmInterceptor {
 
     private String serializeMessages(ModelRequest request) {
         try {
-            String json = OBJECT_MAPPER.writeValueAsString(request.getMessages());
+            String json = jsonUtil.dump(request.getMessages());
             if (json.length() > MAX_REQUEST_MESSAGES_CHARS) {
                 return json.substring(0, MAX_REQUEST_MESSAGES_CHARS) + "...[因长度截断]";
             }

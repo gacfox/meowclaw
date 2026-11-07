@@ -5,6 +5,7 @@ import com.gacfox.meowclaw.entity.ScheduledTaskExecution;
 import com.gacfox.meowclaw.repository.ScheduledTaskExecutionRepository;
 import com.gacfox.meowclaw.repository.ScheduledTaskRepository;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 @Slf4j
@@ -15,6 +16,7 @@ public class ScheduledTaskExecutor {
     private final ScheduledTaskRepository scheduledTaskRepository;
     private final ScheduledTaskExecutionRepository scheduledTaskExecutionRepository;
 
+    @Autowired
     public ScheduledTaskExecutor(ChatService chatService,
                                  ConversationService conversationService,
                                  ScheduledTaskRepository scheduledTaskRepository,

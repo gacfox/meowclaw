@@ -1,6 +1,8 @@
 package com.gacfox.meowclaw.interceptor.llm;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.gacfox.meowclaw.tool.ImageToolResult;
+import com.gacfox.meowclaw.util.JsonUtil;
 import com.gacfox.proarc.agentic.client.interceptor.LlmInterceptorChain;
 import com.gacfox.proarc.agentic.model.openai.Message;
 import com.gacfox.proarc.agentic.model.openai.ModelInfo;
@@ -22,7 +24,10 @@ class MultimodalToolResultInterceptorTest {
     @TempDir
     Path tempDir;
 
-    private final MultimodalToolResultInterceptor interceptor = new MultimodalToolResultInterceptor();
+    private final ObjectMapper objectMapper = new ObjectMapper();
+    private final ImageToolResult imageToolResult = new ImageToolResult(objectMapper, new JsonUtil(objectMapper));
+    private final MultimodalToolResultInterceptor interceptor =
+            new MultimodalToolResultInterceptor(imageToolResult);
 
     private static ModelRequest requestWith(Message... messages) {
         return ModelRequest.builder().messages(new ArrayList<>(List.of(messages))).build();
@@ -70,7 +75,7 @@ class MultimodalToolResultInterceptorTest {
     void expandsMarkerIntoImagePartsForVisionModel() throws Exception {
         Path image = tempDir.resolve("cat.png");
         Files.write(image, new byte[]{1, 2, 3});
-        String marked = ImageToolResult.build(image, "image/png", 3);
+        String marked = imageToolResult.build(image, "image/png", 3);
         CapturingChain chain = new CapturingChain();
 
         interceptor.interceptBlocking(requestWith(toolMessage(marked)), modelInfo(true), chain);
@@ -91,7 +96,7 @@ class MultimodalToolResultInterceptorTest {
     void degradesToNoteForNonVisionModel() throws Exception {
         Path image = tempDir.resolve("cat.png");
         Files.write(image, new byte[]{1, 2, 3});
-        String marked = ImageToolResult.build(image, "image/png", 3);
+        String marked = imageToolResult.build(image, "image/png", 3);
         CapturingChain chain = new CapturingChain();
 
         interceptor.interceptBlocking(requestWith(toolMessage(marked)), modelInfo(false), chain);
@@ -102,7 +107,7 @@ class MultimodalToolResultInterceptorTest {
 
     @Test
     void degradesToNoteWhenImageFileMissing() {
-        String marked = ImageToolResult.build(tempDir.resolve("gone.png"), "image/png", 3);
+        String marked = imageToolResult.build(tempDir.resolve("gone.png"), "image/png", 3);
         CapturingChain chain = new CapturingChain();
 
         interceptor.interceptBlocking(requestWith(toolMessage(marked)), modelInfo(true), chain);
@@ -115,7 +120,7 @@ class MultimodalToolResultInterceptorTest {
     void streamingPathAlsoExpands() throws Exception {
         Path image = tempDir.resolve("cat.png");
         Files.write(image, new byte[]{1});
-        String marked = ImageToolResult.build(image, "image/png", 1);
+        String marked = imageToolResult.build(image, "image/png", 1);
         CapturingChain chain = new CapturingChain();
 
         interceptor.interceptStreaming(requestWith(toolMessage(marked)), modelInfo(true), chain);

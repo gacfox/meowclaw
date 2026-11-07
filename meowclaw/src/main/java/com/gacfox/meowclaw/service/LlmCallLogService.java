@@ -10,8 +10,10 @@ import com.gacfox.meowclaw.entity.LlmCallLog;
 import com.gacfox.meowclaw.interceptor.llm.TokenUsageContext;
 import com.gacfox.meowclaw.repository.LlmCallLogRepository;
 import com.gacfox.meowclaw.repository.LlmRepository;
+import com.gacfox.meowclaw.util.JsonUtil;
 import com.gacfox.proarc.agentic.model.openai.ModelResponse;
 import com.gacfox.proarc.agentic.model.openai.Usage;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -23,15 +25,16 @@ import java.util.stream.Collectors;
 
 @Service
 public class LlmCallLogService {
-    private static final com.fasterxml.jackson.databind.ObjectMapper OBJECT_MAPPER =
-            new com.fasterxml.jackson.databind.ObjectMapper();
-
     private final LlmCallLogRepository llmCallLogRepository;
     private final LlmRepository llmRepository;
+    private final JsonUtil jsonUtil;
 
-    public LlmCallLogService(LlmCallLogRepository llmCallLogRepository, LlmRepository llmRepository) {
+    @Autowired
+    public LlmCallLogService(LlmCallLogRepository llmCallLogRepository, LlmRepository llmRepository,
+                             JsonUtil jsonUtil) {
         this.llmCallLogRepository = llmCallLogRepository;
         this.llmRepository = llmRepository;
+        this.jsonUtil = jsonUtil;
     }
 
     /**
@@ -59,7 +62,7 @@ public class LlmCallLogService {
             var toolCalls = response.extractBlockingToolCalls();
             if (toolCalls != null && !toolCalls.isEmpty()) {
                 try {
-                    log.setResponseToolCalls(OBJECT_MAPPER.writeValueAsString(toolCalls));
+                    log.setResponseToolCalls(jsonUtil.dump(toolCalls));
                 } catch (Exception ignored) {
                 }
             }

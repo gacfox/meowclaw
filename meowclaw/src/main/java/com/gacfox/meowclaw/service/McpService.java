@@ -8,6 +8,7 @@ import com.gacfox.meowclaw.entity.Agent;
 import com.gacfox.meowclaw.entity.McpServiceConfig;
 import com.gacfox.meowclaw.repository.AgentRepository;
 import com.gacfox.meowclaw.repository.McpServiceConfigRepository;
+import com.gacfox.meowclaw.util.JsonUtil;
 import com.gacfox.proarc.agentic.tool.ToolDefinition;
 import com.gacfox.proarc.agentic.tool.ToolInvoker;
 import com.gacfox.proarc.agentic.tool.ToolRegistry;
@@ -39,7 +40,6 @@ import java.util.concurrent.ConcurrentHashMap;
 @Slf4j
 @Service
 public class McpService {
-    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
     private static final Duration REQUEST_TIMEOUT = Duration.ofSeconds(30);
     private static final Duration INIT_TIMEOUT = Duration.ofSeconds(30);
     private static final String TOOL_NAME_SEPARATOR = "__";
@@ -51,6 +51,8 @@ public class McpService {
     private final McpServiceConverter converter;
     private final ToolRegistry toolRegistry;
     private final ThreadPoolTaskScheduler taskScheduler;
+    private final ObjectMapper objectMapper;
+    private final JsonUtil jsonUtil;
     private final Map<Long, McpSyncClient> activeClients = new ConcurrentHashMap<>();
 
     @Autowired
@@ -58,12 +60,16 @@ public class McpService {
                       AgentRepository agentRepository,
                       McpServiceConverter converter,
                       ToolRegistry toolRegistry,
-                      ThreadPoolTaskScheduler taskScheduler) {
+                      ThreadPoolTaskScheduler taskScheduler,
+                      ObjectMapper objectMapper,
+                      JsonUtil jsonUtil) {
         this.mcpServiceRepository = mcpServiceRepository;
         this.agentRepository = agentRepository;
         this.converter = converter;
         this.toolRegistry = toolRegistry;
         this.taskScheduler = taskScheduler;
+        this.objectMapper = objectMapper;
+        this.jsonUtil = jsonUtil;
     }
 
     @PostConstruct
@@ -277,7 +283,7 @@ public class McpService {
             List<String> enabledMcpTools = Collections.emptyList();
             if (toolsJson != null && !toolsJson.isBlank()) {
                 try {
-                    enabledMcpTools = OBJECT_MAPPER.readValue(toolsJson, new TypeReference<>() {
+                    enabledMcpTools = jsonUtil.load(toolsJson, new TypeReference<>() {
                     });
                 } catch (Exception ignored) {
                 }
@@ -335,7 +341,7 @@ public class McpService {
     private McpClientTransport buildTransport(String protocol, String configJson) {
         Map<String, Object> config;
         try {
-            config = OBJECT_MAPPER.readValue(configJson, new TypeReference<>() {
+            config = jsonUtil.load(configJson, new TypeReference<>() {
             });
         } catch (Exception e) {
             throw new IllegalArgumentException("协议配置JSON解析失败: " + e.getMessage(), e);
@@ -482,7 +488,7 @@ public class McpService {
         return (arguments, ctx) -> {
             Map<String, Object> args = arguments == null || arguments.isBlank()
                     ? Map.of()
-                    : OBJECT_MAPPER.readValue(arguments, new TypeReference<>() {
+                    : jsonUtil.load(arguments, new TypeReference<>() {
             });
             McpSchema.CallToolRequest request = new McpSchema.CallToolRequest.Builder()
                     .name(originalToolName)
@@ -520,7 +526,7 @@ public class McpService {
         wrapper.put("type", "function");
         wrapper.put("function", function);
         try {
-            return OBJECT_MAPPER.writeValueAsString(wrapper);
+            return jsonUtil.dump(wrapper);
         } catch (Exception e) {
             throw new RuntimeException("Failed to serialize MCP tool schema: " + toolName, e);
         }
@@ -540,7 +546,7 @@ public class McpService {
             return Collections.emptyList();
         }
         try {
-            return OBJECT_MAPPER.readValue(toolsCache, new TypeReference<>() {
+            return jsonUtil.load(toolsCache, new TypeReference<>() {
             });
         } catch (Exception e) {
             log.warn("Failed to parse toolsCache for MCP service", e);
@@ -550,7 +556,7 @@ public class McpService {
 
     private String serializeTools(List<McpToolInfo> tools) {
         try {
-            return OBJECT_MAPPER.writeValueAsString(tools);
+            return jsonUtil.dump(tools);
         } catch (Exception e) {
             throw new RuntimeException("Failed to serialize MCP tools cache", e);
         }
@@ -564,7 +570,7 @@ public class McpService {
 
     private void validateConfig(String protocol, String config) {
         try {
-            OBJECT_MAPPER.readTree(config);
+            objectMapper.readTree(config);
         } catch (Exception e) {
             throw new IllegalArgumentException("协议配置不是合法JSON: " + e.getMessage());
         }

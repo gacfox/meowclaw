@@ -8,6 +8,7 @@ import com.gacfox.meowclaw.dto.LlmDTO;
 import com.gacfox.meowclaw.dto.UpdateLlmRequest;
 import com.gacfox.meowclaw.entity.Llm;
 import com.gacfox.meowclaw.repository.LlmRepository;
+import com.gacfox.meowclaw.util.JsonUtil;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -18,15 +19,18 @@ import java.util.Set;
 
 @Service
 public class LlmService {
-    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
-
     private final LlmRepository llmRepository;
     private final LlmConverter llmConverter;
+    private final ObjectMapper objectMapper;
+    private final JsonUtil jsonUtil;
 
     @Autowired
-    public LlmService(LlmRepository llmRepository, LlmConverter llmConverter) {
+    public LlmService(LlmRepository llmRepository, LlmConverter llmConverter,
+                      ObjectMapper objectMapper, JsonUtil jsonUtil) {
         this.llmRepository = llmRepository;
         this.llmConverter = llmConverter;
+        this.objectMapper = objectMapper;
+        this.jsonUtil = jsonUtil;
     }
 
     @Transactional(readOnly = true)
@@ -81,12 +85,12 @@ public class LlmService {
     /**
      * 校验并规范化思考强度可选项：必须为非空字符串组成的JSON数组，去空去重且保持原顺序
      */
-    static String normalizeReasoningEffortOptions(String raw) {
+    String normalizeReasoningEffortOptions(String raw) {
         if (raw == null || raw.isBlank()) {
             return null;
         }
         try {
-            JsonNode node = OBJECT_MAPPER.readTree(raw);
+            JsonNode node = objectMapper.readTree(raw);
             if (node == null || !node.isArray()) {
                 throw new IllegalArgumentException("思考强度可选项必须是JSON字符串数组");
             }
@@ -97,7 +101,7 @@ public class LlmService {
                 }
                 options.add(item.asText().trim());
             }
-            return options.isEmpty() ? null : OBJECT_MAPPER.writeValueAsString(options);
+            return options.isEmpty() ? null : jsonUtil.dump(options);
         } catch (IllegalArgumentException e) {
             throw e;
         } catch (Exception e) {

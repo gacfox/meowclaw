@@ -16,20 +16,22 @@ import java.util.Map;
 @Component
 public class JwtUtil {
     private static final String USER_CLAIM = "user";
-    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
     private final SecretKey key;
     private final long expireMillis;
+    private final ObjectMapper objectMapper;
 
     public JwtUtil(@Value("${meowclaw.jwt.secret}") String secret,
-                   @Value("${meowclaw.jwt.expire-hours}") long expireHours) {
+                   @Value("${meowclaw.jwt.expire-hours}") long expireHours,
+                   ObjectMapper objectMapper) {
         this.key = Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8));
         this.expireMillis = expireHours * 3600_000L;
+        this.objectMapper = objectMapper;
     }
 
     public String generateToken(UserDTO user) {
         long now = System.currentTimeMillis();
-        Map<String, Object> userMap = OBJECT_MAPPER.convertValue(user, new TypeReference<>() {
+        Map<String, Object> userMap = objectMapper.convertValue(user, new TypeReference<>() {
         });
         return Jwts.builder()
                 .subject(String.valueOf(user.getId()))
@@ -43,6 +45,6 @@ public class JwtUtil {
     public UserDTO parseToken(String token) {
         var claims = Jwts.parser().verifyWith(key).build().parseSignedClaims(token).getPayload();
         Object userObj = claims.get(USER_CLAIM);
-        return OBJECT_MAPPER.convertValue(userObj, UserDTO.class);
+        return objectMapper.convertValue(userObj, UserDTO.class);
     }
 }
