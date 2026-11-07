@@ -28,7 +28,6 @@ import java.util.stream.Collectors;
 
 @Service
 public class LlmCallLogService {
-
     private static final com.fasterxml.jackson.databind.ObjectMapper OBJECT_MAPPER =
             new com.fasterxml.jackson.databind.ObjectMapper();
 

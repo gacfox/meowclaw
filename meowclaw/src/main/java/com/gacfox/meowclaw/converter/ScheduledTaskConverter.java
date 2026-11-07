@@ -6,7 +6,6 @@ import org.mapstruct.Mapper;
 
 @Mapper(componentModel = "spring")
 public interface ScheduledTaskConverter {
-
     ScheduledTaskDTO toDTO(ScheduledTask entity);
 
     ScheduledTask toEntity(ScheduledTaskDTO dto);

@@ -19,7 +19,6 @@ import java.util.List;
 @Slf4j
 @Service
 public class ChatPersistenceService {
-
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
     private final ChatEventBatchRepository chatEventBatchRepository;

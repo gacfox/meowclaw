@@ -17,6 +17,9 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.util.Map;
 
+/**
+ * 初始化、登录和退出
+ */
 @RestController
 @RequestMapping("/api/auth")
 public class AuthController {

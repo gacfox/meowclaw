@@ -12,7 +12,6 @@ import java.util.List;
 
 @Repository
 public interface MemoryNodeEntityRepository extends JpaRepository<MemoryNodeEntity, Long> {
-
     List<MemoryNodeEntity> findByNodeIdIn(Collection<Long> nodeIds);
 
     List<MemoryNodeEntity> findByNodeId(Long nodeId);

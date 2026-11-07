@@ -17,6 +17,9 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * 项目会话文件夹管理
+ */
 @RestController
 @RequestMapping("/api/project")
 public class ProjectController {

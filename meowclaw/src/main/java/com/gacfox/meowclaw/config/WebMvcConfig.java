@@ -16,6 +16,9 @@ import org.springframework.web.servlet.resource.PathResourceResolver;
 import java.io.IOException;
 import java.nio.file.Paths;
 
+/**
+ * SpringMVC 配置
+ */
 @Configuration
 public class WebMvcConfig implements WebMvcConfigurer {
     private final AuthInterceptor authInterceptor;

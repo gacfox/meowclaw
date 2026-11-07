@@ -30,6 +30,9 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 
+/**
+ * 工作区管理
+ */
 @RestController
 @RequestMapping("/api/workspace")
 public class WorkspaceController {
@@ -41,13 +44,13 @@ public class WorkspaceController {
 
     @GetMapping
     public ApiResult<List<FileEntryDTO>> list(@RequestParam Long agentId,
-                                           @RequestParam(required = false) String path) throws IOException {
+                                              @RequestParam(required = false) String path) throws IOException {
         return ApiResult.success(workspaceService.list(agentId, path));
     }
 
     @GetMapping("/file")
     public ApiResult<FileContentDTO> read(@RequestParam Long agentId,
-                                       @RequestParam String path) throws IOException {
+                                          @RequestParam String path) throws IOException {
         return ApiResult.success(workspaceService.read(agentId, path));
     }
 
@@ -87,8 +90,8 @@ public class WorkspaceController {
 
     @PostMapping("/upload")
     public ApiResult<FileEntryDTO> upload(@RequestParam Long agentId,
-                                       @RequestParam(required = false) String path,
-                                       @RequestParam("file") MultipartFile file) throws IOException {
+                                          @RequestParam(required = false) String path,
+                                          @RequestParam("file") MultipartFile file) throws IOException {
         return ApiResult.success(workspaceService.upload(agentId, path, file));
     }
 

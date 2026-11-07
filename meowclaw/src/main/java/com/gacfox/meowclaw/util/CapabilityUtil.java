@@ -7,7 +7,6 @@ import java.util.List;
  * 模型能力标签解析
  */
 public final class CapabilityUtil {
-
     private CapabilityUtil() {
     }
 

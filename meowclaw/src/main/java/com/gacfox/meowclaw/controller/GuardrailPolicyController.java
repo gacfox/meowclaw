@@ -17,6 +17,9 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
 
+/**
+ * 安全围栏策略管理
+ */
 @RestController
 @RequestMapping("/api/guardrail/policy")
 public class GuardrailPolicyController {

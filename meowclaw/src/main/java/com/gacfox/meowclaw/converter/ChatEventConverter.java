@@ -7,5 +7,6 @@ import org.mapstruct.Mapper;
 @Mapper(componentModel = "spring")
 public interface ChatEventConverter {
     ChatEventDTO toDTO(ChatEvent entity);
+
     ChatEvent toEntity(ChatEventDTO dto);
 }

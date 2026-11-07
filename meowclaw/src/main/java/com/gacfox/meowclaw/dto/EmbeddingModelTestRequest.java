@@ -13,7 +13,6 @@ import lombok.Setter;
 @NoArgsConstructor
 @AllArgsConstructor
 public class EmbeddingModelTestRequest {
-
     @NotBlank(message = "端点URL不能为空")
     @Size(max = 500, message = "端点URL长度不能超过500")
     private String endpointUrl;

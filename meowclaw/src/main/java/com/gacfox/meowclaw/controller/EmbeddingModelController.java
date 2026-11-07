@@ -20,6 +20,9 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
 
+/**
+ * 嵌入模型配置管理
+ */
 @RestController
 @RequestMapping("/api/embedding-model")
 public class EmbeddingModelController {
@@ -42,7 +45,7 @@ public class EmbeddingModelController {
 
     @PutMapping("/{id}")
     public ApiResult<EmbeddingModelDTO> update(@PathVariable Long id,
-                                                   @RequestBody @Valid UpdateEmbeddingModelRequest req) {
+                                               @RequestBody @Valid UpdateEmbeddingModelRequest req) {
         return ApiResult.success(embeddingModelService.update(id, req));
     }
 

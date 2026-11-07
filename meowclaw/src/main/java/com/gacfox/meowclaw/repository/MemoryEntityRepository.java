@@ -12,7 +12,6 @@ import java.util.List;
 
 @Repository
 public interface MemoryEntityRepository extends JpaRepository<MemoryEntity, Long> {
-
     long countByAgentId(Long agentId);
 
     List<MemoryEntity> findByAgentId(Long agentId);

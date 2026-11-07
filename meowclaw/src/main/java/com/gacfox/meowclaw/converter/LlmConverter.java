@@ -6,7 +6,6 @@ import org.mapstruct.Mapper;
 
 @Mapper(componentModel = "spring")
 public interface LlmConverter {
-
     LlmDTO toDTO(Llm entity);
 
     Llm toEntity(LlmDTO dto);

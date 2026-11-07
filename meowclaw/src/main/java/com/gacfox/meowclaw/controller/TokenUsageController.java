@@ -9,10 +9,12 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+/**
+ * Token统计信息
+ */
 @RestController
 @RequestMapping("/api/tokens")
 public class TokenUsageController {
-
     private final LlmCallLogService llmCallLogService;
 
     @Autowired

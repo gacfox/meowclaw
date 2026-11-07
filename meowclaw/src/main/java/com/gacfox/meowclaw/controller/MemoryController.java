@@ -22,6 +22,9 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
 
+/**
+ * 长期记忆管理
+ */
 @RestController
 @RequestMapping("/api/memory")
 public class MemoryController {

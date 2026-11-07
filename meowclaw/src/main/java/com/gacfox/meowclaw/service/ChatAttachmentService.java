@@ -20,7 +20,6 @@ import java.util.UUID;
  */
 @Service
 public class ChatAttachmentService {
-
     private static final int MAX_IMAGES = 5;
     private static final long MAX_IMAGE_BYTES = 10L * 1024 * 1024;
     private static final Map<String, String> MIME_EXTENSIONS = Map.of(

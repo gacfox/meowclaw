@@ -8,7 +8,6 @@ import org.mapstruct.factory.Mappers;
 
 @Mapper(componentModel = "spring")
 public interface McpServiceConverter {
-
     @Mapping(target = "tools", ignore = true)
     McpServiceDTO toDTO(McpServiceConfig entity);
 

@@ -29,7 +29,6 @@ import java.util.Set;
  */
 @Component
 public class MemoryLuceneSearcher {
-
     private final MemoryIndexManager indexManager;
 
     @Autowired

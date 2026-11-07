@@ -1,5 +1,7 @@
 package com.gacfox.meowclaw.interceptor.llm;
 
+import lombok.Setter;
+
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 
@@ -7,11 +9,8 @@ public class TokenUsageAccumulator {
     private final AtomicLong inputTokens = new AtomicLong(0);
     private final AtomicLong outputTokens = new AtomicLong(0);
     private final AtomicLong lastPromptTokens = new AtomicLong(0);
+    @Setter
     private volatile Consumer<Long> promptTokensListener;
-
-    public void setPromptTokensListener(Consumer<Long> promptTokensListener) {
-        this.promptTokensListener = promptTokensListener;
-    }
 
     public void addInput(int tokens) {
         inputTokens.addAndGet(tokens);

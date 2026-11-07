@@ -12,10 +12,12 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+/**
+ * 追踪管理
+ */
 @RestController
 @RequestMapping("/api/trace")
 public class TraceController {
-
     private final TraceService traceService;
 
     @Autowired

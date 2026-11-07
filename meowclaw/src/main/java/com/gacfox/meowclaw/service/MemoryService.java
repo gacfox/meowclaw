@@ -45,7 +45,6 @@ import java.util.stream.Collectors;
 @Slf4j
 @Service
 public class MemoryService {
-
     private static final Set<String> VALID_TYPES = Set.of("fact", "preference", "rule");
     private static final int WRITE_RECALL_LIMIT = 5;
 

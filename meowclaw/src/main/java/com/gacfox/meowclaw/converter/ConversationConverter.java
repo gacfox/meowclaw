@@ -6,7 +6,6 @@ import org.mapstruct.Mapper;
 
 @Mapper(componentModel = "spring")
 public interface ConversationConverter {
-
     ConversationDTO toDTO(Conversation entity);
 
     Conversation toEntity(ConversationDTO dto);

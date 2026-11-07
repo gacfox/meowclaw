@@ -12,7 +12,6 @@ import java.io.Serializable;
 @AllArgsConstructor
 @NoArgsConstructor
 public class ApiResult<T> implements Serializable {
-
     private String code;
     private String message;
     private T data;

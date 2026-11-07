@@ -6,7 +6,6 @@ import org.mapstruct.Mapper;
 
 @Mapper(componentModel = "spring")
 public interface EmbeddingModelConverter {
-
     EmbeddingModelDTO toDTO(EmbeddingModel entity);
 
     EmbeddingModel toEntity(EmbeddingModelDTO dto);

@@ -23,7 +23,6 @@ import java.util.Map;
  */
 @Slf4j
 public class MultimodalToolResultInterceptor implements LlmInterceptor {
-
     @Override
     public ModelResponse interceptBlocking(ModelRequest request, ModelInfo modelInfo, LlmInterceptorChain chain) {
         return chain.nextBlocking(expandImages(request, modelInfo));

@@ -20,6 +20,9 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 
+/**
+ * 智能体配置管理
+ */
 @RestController
 @RequestMapping("/api/agent")
 public class AgentController {

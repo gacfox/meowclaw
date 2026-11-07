@@ -16,7 +16,6 @@ import java.nio.file.StandardOpenOption;
  */
 @Component
 public class WriteFileTool {
-
     /**
      * 写入文本文件。
      *

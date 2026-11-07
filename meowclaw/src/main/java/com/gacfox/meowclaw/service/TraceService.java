@@ -28,7 +28,6 @@ import java.util.stream.Collectors;
  */
 @Service
 public class TraceService {
-
     private final ChatEventBatchRepository batchRepository;
     private final ChatEventRepository chatEventRepository;
     private final LlmCallLogRepository llmCallLogRepository;

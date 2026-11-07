@@ -18,7 +18,6 @@ import java.nio.file.Path;
  */
 @Component
 public class ReadFileTool {
-
     private static final int MAX_READ_LINES = 2000;
     private static final int MAX_READ_BYTES = 50 * 1024;
     private static final int MAX_LINE_LENGTH = 2000;

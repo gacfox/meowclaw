@@ -18,6 +18,9 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
 
+/**
+ * 用户管理
+ */
 @RestController
 @RequestMapping("/api/user")
 public class UserController {

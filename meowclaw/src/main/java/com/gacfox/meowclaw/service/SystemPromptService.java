@@ -29,7 +29,6 @@ import java.util.stream.Stream;
 @Slf4j
 @Service
 public class SystemPromptService {
-
     private static final DateTimeFormatter DATE_TIME_FORMATTER =
             DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 

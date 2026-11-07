@@ -16,7 +16,6 @@ import java.nio.file.Path;
  */
 @Component
 public class SkillTool {
-
     @AgenticTool(name = "skill", description = "读取工作区中指定技能的 SKILL.md 完整内容")
     public String skill(@AgenticToolParam(name = "param", description = "技能读取参数") SkillParam param,
                         AgentContext ctx) {

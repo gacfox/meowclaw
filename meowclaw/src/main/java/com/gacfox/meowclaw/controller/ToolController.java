@@ -11,6 +11,9 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
 
+/**
+ * 工具管理
+ */
 @RestController
 @RequestMapping("/api/tool")
 public class ToolController {

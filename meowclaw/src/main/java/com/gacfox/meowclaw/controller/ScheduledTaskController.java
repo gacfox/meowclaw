@@ -19,6 +19,9 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
 
+/**
+ * 定时任务配置管理
+ */
 @RestController
 @RequestMapping("/api/scheduled-task")
 public class ScheduledTaskController {

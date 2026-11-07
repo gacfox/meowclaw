@@ -14,6 +14,5 @@ public class SkillInstallRequest {
     @NotNull(message = "agentId 不能为空")
     private Long agentId;
 
-    /** true 时跳过目录冲突检查，强制覆盖安装。 */
     private Boolean overwrite;
 }

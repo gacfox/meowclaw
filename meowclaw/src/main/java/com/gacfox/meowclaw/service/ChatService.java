@@ -60,7 +60,6 @@ import java.util.stream.Collectors;
 @Slf4j
 @Service
 public class ChatService {
-
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
     private final ConversationService conversationService;

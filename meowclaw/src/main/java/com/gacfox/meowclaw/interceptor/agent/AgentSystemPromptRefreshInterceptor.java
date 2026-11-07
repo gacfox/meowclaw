@@ -17,7 +17,6 @@ import org.springframework.stereotype.Component;
  */
 @Component
 public class AgentSystemPromptRefreshInterceptor implements AgentInterceptor {
-
     private final AgentRepository agentRepository;
     private final SystemPromptService systemPromptService;
     private final ContextCompressionService contextCompressionService;

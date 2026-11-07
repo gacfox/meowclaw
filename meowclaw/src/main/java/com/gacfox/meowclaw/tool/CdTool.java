@@ -15,7 +15,6 @@ import java.nio.file.Path;
  */
 @Component
 public class CdTool {
-
     @AgenticTool(name = "cd", description = "切换当前工作目录（cwd）。后续所有文件/命令工具以新cwd为基础路径解析相对路径")
     public String cd(@AgenticToolParam(name = "param", description = "目录切换参数") CdParam param,
                      AgentContext ctx) {

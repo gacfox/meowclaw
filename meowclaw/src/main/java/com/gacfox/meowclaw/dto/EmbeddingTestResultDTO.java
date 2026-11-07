@@ -10,7 +10,6 @@ import lombok.Setter;
 @NoArgsConstructor
 @AllArgsConstructor
 public class EmbeddingTestResultDTO {
-
     private boolean success;
     private Integer dimensions;
     private String errorMessage;

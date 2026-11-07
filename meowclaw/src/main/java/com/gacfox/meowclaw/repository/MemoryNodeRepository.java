@@ -14,7 +14,6 @@ import java.util.List;
 
 @Repository
 public interface MemoryNodeRepository extends JpaRepository<MemoryNode, Long> {
-
     long countByAgentId(Long agentId);
 
     List<MemoryNode> findByAgentIdAndIdIn(Long agentId, Collection<Long> ids);

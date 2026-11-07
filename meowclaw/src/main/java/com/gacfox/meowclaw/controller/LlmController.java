@@ -18,6 +18,9 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
 
+/**
+ * 大语言模型配置管理
+ */
 @RestController
 @RequestMapping("/api/llm")
 public class LlmController {

@@ -25,7 +25,6 @@ import java.util.concurrent.ConcurrentHashMap;
 @Slf4j
 @Component
 public class MemoryIndexManager {
-
     private final String baseDir;
     private final Map<Long, AgentMemoryIndex> indexes = new ConcurrentHashMap<>();
 

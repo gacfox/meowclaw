@@ -33,6 +33,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
+/**
+ * 会话管理
+ */
 @RestController
 @RequestMapping("/api/conversation")
 public class ConversationController {

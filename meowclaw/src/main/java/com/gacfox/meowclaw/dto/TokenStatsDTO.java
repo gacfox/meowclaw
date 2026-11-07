@@ -17,7 +17,6 @@ import java.util.List;
 @AllArgsConstructor
 @Builder
 public class TokenStatsDTO {
-
     private TokenStatsSummary summary;
     private List<TokenTopModel> topModels;
     private List<String> dates;

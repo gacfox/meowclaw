@@ -10,7 +10,6 @@ import java.util.Collection;
 import java.util.List;
 
 public interface LlmCallLogRepository extends JpaRepository<LlmCallLog, Long> {
-
     List<LlmCallLog> findByBatchIdOrderByCreatedAtAsc(Long batchId);
 
     @Query("select l.batchId, count(l) from LlmCallLog l where l.batchId in :ids group by l.batchId")

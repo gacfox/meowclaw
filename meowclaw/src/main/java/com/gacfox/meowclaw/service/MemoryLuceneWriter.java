@@ -23,7 +23,6 @@ import java.util.List;
 @Slf4j
 @Component
 public class MemoryLuceneWriter {
-
     private final MemoryIndexManager indexManager;
 
     @Autowired
