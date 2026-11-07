@@ -31,6 +31,20 @@ export async function request<T>(url: string, options?: RequestInit): Promise<Ap
   return json;
 }
 
+export async function downloadRequest(url: string): Promise<Blob> {
+  const token = getToken();
+  const headers: Record<string, string> = {};
+  if (token) {
+    headers["Authorization"] = `Bearer ${token}`;
+  }
+  const res = await fetch(url, { headers });
+  if (!res.ok) {
+    const error = (await res.json().catch(() => null)) as ApiResult<unknown> | null;
+    throw new Error(error?.message || `下载失败（HTTP ${res.status}）`);
+  }
+  return res.blob();
+}
+
 export async function uploadRequest<T = string>(url: string, file: File): Promise<T> {
   const token = getToken();
   const headers: Record<string, string> = {};

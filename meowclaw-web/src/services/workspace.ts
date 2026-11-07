@@ -1,5 +1,5 @@
 import type { CreateEntryType, FileContent, FileEntry } from "@/types";
-import { request, uploadRequest } from "./request";
+import { downloadRequest, request, uploadRequest } from "./request";
 
 export async function listWorkspaceFiles(agentId: number, path = ""): Promise<FileEntry[]> {
   const res = await request<FileEntry[]>(`/api/workspace?agentId=${agentId}&path=${encodeURIComponent(path)}`);
@@ -9,6 +9,10 @@ export async function listWorkspaceFiles(agentId: number, path = ""): Promise<Fi
 export async function readWorkspaceFile(agentId: number, path: string): Promise<FileContent> {
   const res = await request<FileContent>(`/api/workspace/file?agentId=${agentId}&path=${encodeURIComponent(path)}`);
   return res.data;
+}
+
+export async function downloadWorkspaceFile(agentId: number, path: string): Promise<Blob> {
+  return downloadRequest(`/api/workspace/download?agentId=${agentId}&path=${encodeURIComponent(path)}`);
 }
 
 export async function saveWorkspaceFile(data: {

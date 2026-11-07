@@ -4,6 +4,7 @@ import { listAgents } from "@/services/agent";
 import {
   createWorkspaceEntry,
   deleteWorkspaceFile,
+  downloadWorkspaceFile,
   listWorkspaceFiles,
   moveWorkspaceFile,
   readWorkspaceFile,
@@ -50,11 +51,13 @@ import {
 } from "@/components/ui/breadcrumb";
 import {
   ArrowUp,
+  Download,
   FileImage,
   FilePlus,
   FileText,
   Folder,
   FolderPlus,
+  Loader2,
   Move,
   Pencil,
   RefreshCw,
@@ -289,6 +292,31 @@ export function WorkspacePage() {
     }
   };
 
+  // ---- 下载 ----
+  const [downloadingPath, setDownloadingPath] = useState<string | null>(null);
+
+  const handleDownload = async (entry: FileEntry) => {
+    if (selectedAgentId == null || entry.directory || downloadingPath != null) return;
+    setDownloadingPath(entry.path);
+    try {
+      const blob = await downloadWorkspaceFile(selectedAgentId, entry.path);
+      const objectUrl = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = objectUrl;
+      link.download = entry.name;
+      link.style.display = "none";
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+      toast.success("下载已开始");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "下载失败");
+    } finally {
+      setDownloadingPath(null);
+    }
+  };
+
   // ---- 上传 ----
   const uploadRef = useRef<HTMLInputElement>(null);
   const handleUploadSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -436,9 +464,20 @@ export function WorkspacePage() {
                 <TableCell className="text-right">
                   <div className="flex items-center justify-end gap-1">
                     {!entry.directory && (
-                      <Button variant="ghost" size="icon-sm" onClick={() => openPreview(entry)} title="查看 / 编辑">
-                        <Pencil className="size-4" />
-                      </Button>
+                      <>
+                        <Button variant="ghost" size="icon-sm" onClick={() => openPreview(entry)} title="查看 / 编辑">
+                          <Pencil className="size-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
+                          onClick={() => handleDownload(entry)}
+                          title="下载"
+                          disabled={downloadingPath != null}
+                        >
+                          {downloadingPath === entry.path ? <Loader2 className="size-4 animate-spin" /> : <Download className="size-4" />}
+                        </Button>
+                      </>
                     )}
                     <Button variant="ghost" size="icon-sm" onClick={() => openMove(entry)} title="移动 / 重命名">
                       <Move className="size-4" />

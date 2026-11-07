@@ -80,6 +80,23 @@ public class WorkspaceService {
         return new FileContentDTO(FileContentDTO.Kind.UNSUPPORTED, null, null, null);
     }
 
+    public Path resolveFileForDownload(Long agentId, String path) throws IOException {
+        Path root = resolveRoot(agentId);
+        Path file = resolveWithin(root, path);
+        if (!Files.exists(file)) {
+            throw new IllegalArgumentException("文件不存在");
+        }
+        Path realRoot = root.toRealPath();
+        Path realFile = file.toRealPath();
+        if (!realFile.startsWith(realRoot)) {
+            throw new IllegalArgumentException("非法路径：" + path);
+        }
+        if (!Files.isRegularFile(realFile)) {
+            throw new IllegalArgumentException("不能下载目录");
+        }
+        return realFile;
+    }
+
     public void saveText(Long agentId, String path, String content) throws IOException {
         Path root = resolveRoot(agentId);
         Path file = resolveWithin(root, path);

@@ -8,6 +8,12 @@ import com.gacfox.meowclaw.dto.SaveFileRequest;
 import com.gacfox.meowclaw.service.WorkspaceService;
 import com.gacfox.meowclaw.dto.ApiResult;
 import jakarta.validation.Valid;
+import org.springframework.core.io.FileSystemResource;
+import org.springframework.core.io.Resource;
+import org.springframework.http.ContentDisposition;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -19,6 +25,9 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.List;
 
 @RestController
@@ -40,6 +49,22 @@ public class WorkspaceController {
     public ApiResult<FileContentDTO> read(@RequestParam Long agentId,
                                        @RequestParam String path) throws IOException {
         return ApiResult.success(workspaceService.read(agentId, path));
+    }
+
+    @GetMapping("/download")
+    public ResponseEntity<Resource> download(@RequestParam Long agentId,
+                                             @RequestParam String path) throws IOException {
+        Path file = workspaceService.resolveFileForDownload(agentId, path);
+        Resource resource = new FileSystemResource(file);
+        String contentDisposition = ContentDisposition.attachment()
+                .filename(file.getFileName().toString(), StandardCharsets.UTF_8)
+                .build()
+                .toString();
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, contentDisposition)
+                .contentLength(Files.size(file))
+                .contentType(MediaType.APPLICATION_OCTET_STREAM)
+                .body(resource);
     }
 
     @PutMapping("/file")
