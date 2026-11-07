@@ -16,13 +16,12 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, SquarePen, Loader2, ChevronRight, Copy, Pencil, RefreshCw, ArrowUp, ArrowDown, Check, Clock, TriangleAlert, X, Square, Shield, ShieldAlert, MoreHorizontal, FolderPlus, Brain, MessagesSquare } from "lucide-react";
+import { Plus, SquarePen, Loader2, Copy, Pencil, RefreshCw, ArrowUp, ArrowDown, Check, Clock, TriangleAlert, X, Square, Shield, ShieldAlert, MoreHorizontal, FolderPlus, Brain, MessagesSquare } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Alert, AlertTitle, AlertDescription, AlertAction } from "@/components/ui/alert";
 import { motion, AnimatePresence } from "framer-motion";
-import { MarkdownRenderer } from "@/components/markdown/MarkdownRenderer";
-import { BatchBubble, FinalAnswerIndicator, ToolCallDetails, ApprovalDetails, SubagentDetails } from "@/components/chat/ChatEventBubble";
+import { ApprovalDetails, BatchBubble, ConversationResponse, ConversationToolCall, ExecutionProcess, SubagentDetails, ThinkingPreview } from "@/components/chat/ChatEventBubble";
 import { parseApprovalContent } from "@/lib/approval";
 import type { ApprovalContent } from "@/lib/approval";
 import { parseSubagentContent } from "@/lib/subagent";
@@ -68,56 +67,54 @@ function approvalArgsPreview(toolArguments: string): string {
 }
 
 function StreamBubble({ steps, content, thinking, onOpenSubagent }: { steps: StreamStep[]; content: string; thinking?: boolean; onOpenSubagent?: (childConversationId: number, description?: string) => void }) {
+  const hasProcess = steps.some((step) =>
+    step.type === "thinking"
+    || step.type === "approval"
+    || (step.type === "tool_call" && step.name !== "final_answer")
+  );
+  const thinkingCount = steps.filter((step) => step.type === "thinking").length;
+  const toolCount = steps.filter((step) => step.type === "tool_call" && step.name !== "final_answer").length;
   return (
-    <div className="max-w-[95%] space-y-2 rounded-lg bg-muted px-3 py-2 text-sm sm:max-w-[80%] sm:px-4">
-      {thinking && (
-        <div className="flex items-center gap-2 text-muted-foreground">
-          <Loader2 className="size-3 animate-spin" />
-          思考中...
-        </div>
-      )}
-      {steps.map((step, i) =>
-        step.type === "thinking" ? (
-          <details key={i} className="group text-xs text-muted-foreground" open>
-            <summary className="flex cursor-pointer items-center gap-1 list-none [&::-webkit-details-marker]:hidden">
-              <ChevronRight className="size-3 shrink-0 transition-transform group-open:rotate-90" />
-              思考过程
-            </summary>
-            <div className="mt-1 whitespace-pre-wrap">{step.content}</div>
-          </details>
-        ) : step.type === "approval" ? (
-          <ApprovalDetails
-            key={i}
-            name={step.name ?? "tool"}
-            args={step.args}
-            decision={step.approval?.decision ?? "pending"}
-            policyName={step.approval?.policyName}
-            matchedRuleIndex={step.approval?.matchedRuleIndex}
-          />
-        ) : step.name === "spawn_subagent" ? (
-          <SubagentDetails
-            key={i}
-            args={step.args}
-            description={step.subagent?.description}
-            status={step.subagent?.status ?? "running"}
-            onOpen={step.subagent?.childConversationId != null && onOpenSubagent != null
-              ? () => onOpenSubagent(step.subagent!.childConversationId, step.subagent?.description)
-              : undefined}
-          />
-        ) : step.name === "final_answer" ? (
-          <FinalAnswerIndicator key={i} />
-        ) : (
-          <ToolCallDetails
-            key={i}
-            name={step.name ?? "tool"}
-            args={step.args}
-            result={step.result}
-            pending={step.result === undefined}
-          />
-        )
-      )}
-      {content && <MarkdownRenderer content={content} />}
-    </div>
+    <ConversationResponse
+      answer={content}
+      thinking={thinking}
+      process={hasProcess ? (
+        <ExecutionProcess thinkingCount={thinkingCount} toolCount={toolCount} running>
+          {steps.map((step, i) =>
+            step.type === "thinking" ? (
+              <ThinkingPreview key={i} content={step.content} streaming />
+            ) : step.type === "approval" ? (
+              <ApprovalDetails
+                key={i}
+                name={step.name ?? "tool"}
+                args={step.args}
+                decision={step.approval?.decision ?? "pending"}
+                policyName={step.approval?.policyName}
+                matchedRuleIndex={step.approval?.matchedRuleIndex}
+              />
+            ) : step.name === "spawn_subagent" ? (
+              <SubagentDetails
+                key={i}
+                args={step.args}
+                description={step.subagent?.description}
+                status={step.subagent?.status ?? "running"}
+                onOpen={step.subagent?.childConversationId != null && onOpenSubagent != null
+                  ? () => onOpenSubagent(step.subagent!.childConversationId, step.subagent?.description)
+                  : undefined}
+              />
+            ) : step.name === "final_answer" ? null : (
+              <ConversationToolCall
+                key={i}
+                name={step.name ?? "tool"}
+                args={step.args}
+                result={step.result}
+                pending={step.result === undefined}
+              />
+            )
+          )}
+        </ExecutionProcess>
+      ) : undefined}
+    />
   );
 }
 
@@ -1451,15 +1448,19 @@ export function ChatPage() {
                       </div>
                       {/* Agent response bubble */}
                       {batch.events.length > 0 && (
-                        <div className="flex flex-col items-start">
-                          <div className="flex items-start justify-start gap-2">
-                            <Avatar className="mt-0.5 size-7 shrink-0">
+                        <div className="w-full min-w-0">
+                          <div className="mb-2 flex items-center gap-2">
+                            <Avatar className="size-7 shrink-0">
                               <AvatarImage src={currentAgent?.avatarUrl ?? undefined} />
                               <AvatarFallback className="text-xs">{currentAgent?.name?.[0]?.toUpperCase() ?? "A"}</AvatarFallback>
                             </Avatar>
-                            <BatchBubble events={batch.events} onOpenSubagent={openSubagent} />
+                            <span className="truncate text-sm font-medium">{currentAgent?.name ?? "AI"}</span>
+                            <span className="shrink-0 text-xs text-muted-foreground">
+                              {new Date(batch.createdAt).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })}
+                            </span>
                           </div>
-                          <div className="ml-9 flex items-center gap-1">
+                          <BatchBubble events={batch.events} onOpenSubagent={openSubagent} displayMode="conversation" />
+                          <div className="mt-1 flex flex-wrap items-center gap-1">
                             <Tooltip>
                               <TooltipTrigger asChild>
                                 <Button variant="ghost" size="icon-xs" onClick={() => finalAnswer?.content && handleCopy(finalAnswer.content, `agent-${batch.id}`)}>
@@ -1531,13 +1532,17 @@ export function ChatPage() {
 
                   {/* Streaming agent response */}
                   {streamConvoId === selectedConvoId && (
-                    <div className="flex items-start justify-start gap-2">
-                      <Avatar className="mt-0.5 size-7 shrink-0">
-                        <AvatarImage src={currentAgent?.avatarUrl ?? undefined} />
-                        <AvatarFallback className="text-xs">{currentAgent?.name?.[0]?.toUpperCase() ?? "A"}</AvatarFallback>
-                      </Avatar>
+                    <div className="w-full min-w-0">
+                      <div className="mb-2 flex items-center gap-2">
+                        <Avatar className="size-7 shrink-0">
+                          <AvatarImage src={currentAgent?.avatarUrl ?? undefined} />
+                          <AvatarFallback className="text-xs">{currentAgent?.name?.[0]?.toUpperCase() ?? "A"}</AvatarFallback>
+                        </Avatar>
+                        <span className="truncate text-sm font-medium">{currentAgent?.name ?? "AI"}</span>
+                        <span className="shrink-0 text-xs text-muted-foreground">正在生成</span>
+                      </div>
                       <StreamBubble steps={streamSteps} content={throttledStreamContent} thinking={!streamContent && !streamError && streamSteps.length === 0} onOpenSubagent={openSubagent} />
-                      {streamError && <div className="text-destructive">{streamError}</div>}
+                      {streamError && <div className="mt-2 text-destructive">{streamError}</div>}
                     </div>
                   )}
 
