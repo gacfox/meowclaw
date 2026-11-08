@@ -24,7 +24,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sh
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
-import { FlaskConical, Pencil, Plus, RotateCcw, Search, Trash2 } from "lucide-react";
+import { FlaskConical, Pencil, Plus, RefreshCw, RotateCcw, Search, Trash2 } from "lucide-react";
 
 const DEFAULT_SIZE = 20;
 const ALL_VALUE = "ALL";
@@ -415,6 +415,16 @@ export function MemoryPage() {
           <Button onClick={openCreate} disabled={!agentId}>
             <Plus className="mr-1 size-4" />
             添加记忆
+          </Button>
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={refreshAll}
+            title="刷新"
+            aria-label="刷新"
+            disabled={!agentId || loading}
+          >
+            <RefreshCw className={loading ? "size-4 animate-spin" : "size-4"} />
           </Button>
         </div>
       </div>

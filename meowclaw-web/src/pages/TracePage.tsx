@@ -38,7 +38,7 @@ import {
 } from "@/components/ui/pagination";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Badge } from "@/components/ui/badge";
-import { ArrowDown, ArrowUp, CalendarIcon, ChevronDown, ChevronRight, RotateCcw, Search, Trash2 } from "lucide-react";
+import { ArrowDown, ArrowUp, CalendarIcon, ChevronDown, ChevronRight, RefreshCw, RotateCcw, Search, Trash2 } from "lucide-react";
 
 const DEFAULT_SIZE = 20;
 const ALL_VALUE = "ALL";
@@ -353,26 +353,38 @@ export function TracePage() {
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold">追踪观测</h1>
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="outline" disabled={retentionSaving}>
-              数据留存策略
-              <ChevronDown className="ml-1 size-4" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-48">
-            <DropdownMenuRadioGroup
-              value={retentionPolicy}
-              onValueChange={(value) => handleRetentionPolicyChange(value as TraceRetentionPolicy)}
-            >
-              {RETENTION_OPTIONS.map((option) => (
-                <DropdownMenuRadioItem key={option.value} value={option.value} disabled={retentionSaving}>
-                  {option.label}
-                </DropdownMenuRadioItem>
-              ))}
-            </DropdownMenuRadioGroup>
-          </DropdownMenuContent>
-        </DropdownMenu>
+        <div className="flex items-center gap-2">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" disabled={retentionSaving}>
+                数据留存策略
+                <ChevronDown className="ml-1 size-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-48">
+              <DropdownMenuRadioGroup
+                value={retentionPolicy}
+                onValueChange={(value) => handleRetentionPolicyChange(value as TraceRetentionPolicy)}
+              >
+                {RETENTION_OPTIONS.map((option) => (
+                  <DropdownMenuRadioItem key={option.value} value={option.value} disabled={retentionSaving}>
+                    {option.label}
+                  </DropdownMenuRadioItem>
+                ))}
+              </DropdownMenuRadioGroup>
+            </DropdownMenuContent>
+          </DropdownMenu>
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={() => load(data.current, appliedFilters)}
+            title="刷新"
+            aria-label="刷新"
+            disabled={loading || deleting}
+          >
+            <RefreshCw className={loading ? "size-4 animate-spin" : "size-4"} />
+          </Button>
+        </div>
       </div>
 
       <div className="flex flex-wrap items-end gap-3 rounded-lg border bg-card p-4">
