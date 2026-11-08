@@ -7,6 +7,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.util.Collection;
 import java.util.List;
 
 public interface ChatEventBatchRepository extends JpaRepository<ChatEventBatch, Long> {
@@ -15,6 +16,7 @@ public interface ChatEventBatchRepository extends JpaRepository<ChatEventBatch, 
     void deleteByConversationId(Long conversationId);
 
     @Query("select b from ChatEventBatch b where b.type = 'USER'"
+            + " and exists (select l.id from LlmCallLog l where l.batchId = b.id and l.purpose = 'agent')"
             + " and (:conversationId is null or b.conversationId = :conversationId)"
             + " and (:agentId is null or b.conversationId in"
             + " (select c.id from Conversation c where c.agentId = :agentId))"
@@ -30,4 +32,9 @@ public interface ChatEventBatchRepository extends JpaRepository<ChatEventBatch, 
                                       @Param("startTime") Long startTime,
                                       @Param("endTime") Long endTime,
                                       Pageable pageable);
+
+    @Query("select b.id from ChatEventBatch b where b.id in :ids and b.type = 'USER'"
+            + " and b.status <> 'RUNNING'"
+            + " and exists (select l.id from LlmCallLog l where l.batchId = b.id and l.purpose = 'agent')")
+    List<Long> findDeletableTraceIds(@Param("ids") Collection<Long> ids);
 }

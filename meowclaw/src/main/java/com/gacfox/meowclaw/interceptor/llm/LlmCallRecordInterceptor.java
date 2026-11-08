@@ -1,6 +1,7 @@
 package com.gacfox.meowclaw.interceptor.llm;
 
 import com.gacfox.meowclaw.service.LlmCallLogService;
+import com.gacfox.meowclaw.service.TokenUsageService;
 import com.gacfox.meowclaw.util.JsonUtil;
 import com.gacfox.proarc.agentic.client.interceptor.LlmInterceptor;
 import com.gacfox.proarc.agentic.client.interceptor.LlmInterceptorChain;
@@ -16,8 +17,8 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * LLM调用记录拦截器：记录每次调用的完整明细（请求/响应/tokens/耗时/状态），
- * 供追踪观测与tokens统计使用；同时累加批次tokens（供上下文水位计算）。
+ * LLM调用记录拦截器：分别记录可清理的追踪明细和独立Token统计，
+ * 同时累加批次tokens（供上下文水位计算）。
  * 位于重试拦截器外层，一次逻辑调用（含重试）只记一条记录。
  */
 @Slf4j
@@ -26,13 +27,15 @@ public class LlmCallRecordInterceptor implements LlmInterceptor {
 
     private final TokenUsageAccumulator accumulator;
     private final LlmCallLogService logService;
+    private final TokenUsageService tokenUsageService;
     private final TokenUsageContext context;
     private final JsonUtil jsonUtil;
 
     public LlmCallRecordInterceptor(TokenUsageAccumulator accumulator, LlmCallLogService logService,
-                                    TokenUsageContext context, JsonUtil jsonUtil) {
+                                    TokenUsageService tokenUsageService, TokenUsageContext context, JsonUtil jsonUtil) {
         this.accumulator = accumulator;
         this.logService = logService;
+        this.tokenUsageService = tokenUsageService;
         this.context = context;
         this.jsonUtil = jsonUtil;
     }
@@ -76,7 +79,12 @@ public class LlmCallRecordInterceptor implements LlmInterceptor {
             try {
                 logService.recordCall(context, requestMessages, response, durationMs, status, errorMessage);
             } catch (Exception e) {
-                log.warn("LLM调用记录落库失败: {}", e.getMessage());
+                log.warn("LLM追踪记录落库失败: {}", e.getMessage());
+            }
+            try {
+                tokenUsageService.recordCall(context, response, status);
+            } catch (Exception e) {
+                log.warn("Token统计落库失败: {}", e.getMessage());
             }
         });
     }

@@ -63,6 +63,7 @@ public class ChatService {
     private final LlmLoggingInterceptor llmLoggingInterceptor;
     private final TitleGenerationRegistryService titleGenerationRegistryService;
     private final LlmCallLogService llmCallLogService;
+    private final TokenUsageService tokenUsageService;
     private final ContextCompressionService contextCompressionService;
     private final ChatAttachmentService chatAttachmentService;
     private final MemoryService memoryService;
@@ -81,6 +82,7 @@ public class ChatService {
                        LlmLoggingInterceptor llmLoggingInterceptor,
                        TitleGenerationRegistryService titleGenerationRegistryService,
                        LlmCallLogService llmCallLogService,
+                       TokenUsageService tokenUsageService,
                        ContextCompressionService contextCompressionService,
                        ChatAttachmentService chatAttachmentService,
                        MemoryService memoryService,
@@ -105,6 +107,7 @@ public class ChatService {
         this.llmLoggingInterceptor = llmLoggingInterceptor;
         this.titleGenerationRegistryService = titleGenerationRegistryService;
         this.llmCallLogService = llmCallLogService;
+        this.tokenUsageService = tokenUsageService;
         this.contextCompressionService = contextCompressionService;
         this.chatAttachmentService = chatAttachmentService;
         this.memoryService = memoryService;
@@ -465,7 +468,7 @@ public class ChatService {
                 .modelInfo(buildModelInfo(llm))
                 .httpClient(httpClient)
                 .interceptors(List.of(llmLoggingInterceptor,
-                        new LlmCallRecordInterceptor(tokenAccum, llmCallLogService, tokenUsageContext, jsonUtil),
+                        new LlmCallRecordInterceptor(tokenAccum, llmCallLogService, tokenUsageService, tokenUsageContext, jsonUtil),
                         new MultimodalToolResultInterceptor(imageToolResult),
                         new RetryInterceptor()))
                 .build();
@@ -478,7 +481,7 @@ public class ChatService {
                 .modelInfo(buildModelInfo(llm))
                 .httpClient(httpClient)
                 .interceptors(List.of(llmLoggingInterceptor,
-                        new LlmCallRecordInterceptor(new TokenUsageAccumulator(), llmCallLogService, tokenUsageContext, jsonUtil),
+                        new LlmCallRecordInterceptor(new TokenUsageAccumulator(), llmCallLogService, tokenUsageService, tokenUsageContext, jsonUtil),
                         new RetryInterceptor()))
                 .build();
     }

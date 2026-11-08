@@ -12,6 +12,18 @@ CREATE TABLE IF NOT EXISTS mc_user
 
 CREATE UNIQUE INDEX IF NOT EXISTS idx_mc_user_username ON mc_user (username);
 
+CREATE TABLE IF NOT EXISTS mc_sys_config
+(
+    id           BIGINT       NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+    config_key   VARCHAR(100) NOT NULL COMMENT '配置键',
+    config_value TEXT         NOT NULL COMMENT '配置值',
+    created_at   BIGINT       NOT NULL COMMENT '创建时间(时间戳毫秒)',
+    updated_at   BIGINT       NOT NULL COMMENT '更新时间(时间戳毫秒)',
+    PRIMARY KEY (id)
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS uk_mc_sys_config_key ON mc_sys_config (config_key);
+
 CREATE TABLE IF NOT EXISTS mc_llm
 (
     id                       BIGINT       NOT NULL AUTO_INCREMENT COMMENT '主键ID',
@@ -219,6 +231,24 @@ CREATE TABLE IF NOT EXISTS mc_llm_call_log
 CREATE INDEX IF NOT EXISTS idx_mc_llm_call_log_batch_id ON mc_llm_call_log (batch_id);
 CREATE INDEX IF NOT EXISTS idx_mc_llm_call_log_created_at ON mc_llm_call_log (created_at);
 CREATE INDEX IF NOT EXISTS idx_mc_llm_call_log_conversation_id ON mc_llm_call_log (conversation_id);
+
+CREATE TABLE IF NOT EXISTS mc_token_usage
+(
+    id            BIGINT      NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+    llm_id        BIGINT COMMENT '关联LLM配置ID',
+    agent_id      BIGINT COMMENT '关联智能体ID',
+    model         VARCHAR(100) COMMENT '模型名快照',
+    purpose       VARCHAR(32) COMMENT '调用用途',
+    status        VARCHAR(20) NOT NULL COMMENT '调用状态：SUCCESS/ERROR',
+    input_tokens  BIGINT      NOT NULL DEFAULT 0 COMMENT '输入token数',
+    output_tokens BIGINT      NOT NULL DEFAULT 0 COMMENT '输出token数',
+    total_tokens  BIGINT      NOT NULL DEFAULT 0 COMMENT '合计token数',
+    created_at    BIGINT      NOT NULL COMMENT '调用时间(时间戳毫秒)',
+    PRIMARY KEY (id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_mc_token_usage_created_at ON mc_token_usage (created_at);
+CREATE INDEX IF NOT EXISTS idx_mc_token_usage_llm_created_at ON mc_token_usage (llm_id, created_at);
 
 CREATE TABLE IF NOT EXISTS mc_embedding_model
 (

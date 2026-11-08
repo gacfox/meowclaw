@@ -7,7 +7,7 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 /**
- * LLM调用记录，每次LLM调用一条，同时服务于tokens统计与追踪观测
+ * LLM调用追踪明细，每次LLM调用一条，可按留存策略独立清理
  */
 @Getter
 @Setter

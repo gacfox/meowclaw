@@ -52,6 +52,7 @@ public class MemoryExtractionService {
     private final HttpClient httpClient;
     private final LlmLoggingInterceptor llmLoggingInterceptor;
     private final LlmCallLogService llmCallLogService;
+    private final TokenUsageService tokenUsageService;
     private final JsonUtil jsonUtil;
 
     @Value("classpath:prompt/memory-write-prompt.md")
@@ -68,6 +69,7 @@ public class MemoryExtractionService {
                                    HttpClient httpClient,
                                    LlmLoggingInterceptor llmLoggingInterceptor,
                                    LlmCallLogService llmCallLogService,
+                                   TokenUsageService tokenUsageService,
                                    JsonUtil jsonUtil) {
         this.agentRepository = agentRepository;
         this.llmRepository = llmRepository;
@@ -77,6 +79,7 @@ public class MemoryExtractionService {
         this.httpClient = httpClient;
         this.llmLoggingInterceptor = llmLoggingInterceptor;
         this.llmCallLogService = llmCallLogService;
+        this.tokenUsageService = tokenUsageService;
         this.jsonUtil = jsonUtil;
     }
 
@@ -175,7 +178,7 @@ public class MemoryExtractionService {
                 .httpClient(httpClient)
                 .interceptors(List.of(
                         llmLoggingInterceptor,
-                        new LlmCallRecordInterceptor(new TokenUsageAccumulator(), llmCallLogService, tokenUsageContext, jsonUtil),
+                        new LlmCallRecordInterceptor(new TokenUsageAccumulator(), llmCallLogService, tokenUsageService, tokenUsageContext, jsonUtil),
                         new RetryInterceptor()))
                 .build();
     }

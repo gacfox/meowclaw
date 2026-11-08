@@ -4,8 +4,17 @@ import type { DateRange } from "react-day-picker";
 import { endOfDay, format, startOfDay } from "date-fns";
 import { toast } from "sonner";
 import { listAgents } from "@/services/agent";
-import { listTraces, getTraceDetail, type TraceQuery } from "@/services/trace";
-import type { AgentDTO, LlmCallLogItem, PageResult, TraceDetail, TraceItem } from "@/types";
+import {
+  batchDeleteTraces,
+  deleteAllTraces,
+  deleteTrace,
+  getTraceDetail,
+  getTraceRetentionPolicy,
+  listTraces,
+  updateTraceRetentionPolicy,
+  type TraceQuery,
+} from "@/services/trace";
+import type { AgentDTO, LlmCallLogItem, PageResult, TraceDetail, TraceItem, TraceRetentionPolicy } from "@/types";
 import { BatchBubble } from "@/components/chat/ChatEventBubble";
 import { JsonViewer } from "@/components/json-viewer/JsonViewer";
 import { Button } from "@/components/ui/button";
@@ -14,6 +23,13 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
@@ -22,7 +38,7 @@ import {
 } from "@/components/ui/pagination";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Badge } from "@/components/ui/badge";
-import { ArrowDown, ArrowUp, CalendarIcon, ChevronRight, RotateCcw, Search } from "lucide-react";
+import { ArrowDown, ArrowUp, CalendarIcon, ChevronDown, ChevronRight, RotateCcw, Search, Trash2 } from "lucide-react";
 
 const DEFAULT_SIZE = 20;
 const ALL_VALUE = "ALL";
@@ -32,6 +48,14 @@ const STATUS_OPTIONS = [
   { value: "COMPLETED", label: "已完成" },
   { value: "RUNNING", label: "运行中" },
   { value: "ERROR", label: "错误" },
+];
+
+const RETENTION_OPTIONS: { value: TraceRetentionPolicy; label: string }[] = [
+  { value: "DAYS_3", label: "最近 3 天" },
+  { value: "DAYS_7", label: "最近 7 天" },
+  { value: "MONTH_1", label: "最近一个月" },
+  { value: "YEAR_1", label: "最近一年" },
+  { value: "ALL", label: "全部留存（默认）" },
 ];
 
 const PURPOSE_LABELS: Record<string, string> = {
@@ -132,9 +156,20 @@ export function TracePage() {
   const [loading, setLoading] = useState(false);
   const [detail, setDetail] = useState<TraceDetail | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [deleteTarget, setDeleteTarget] = useState<TraceItem | null>(null);
+  const [batchDeleteOpen, setBatchDeleteOpen] = useState(false);
+  const [clearAllOpen, setClearAllOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [retentionPolicy, setRetentionPolicy] = useState<TraceRetentionPolicy>("ALL");
+  const [pendingRetentionPolicy, setPendingRetentionPolicy] = useState<TraceRetentionPolicy | null>(null);
+  const [retentionSaving, setRetentionSaving] = useState(false);
 
   useEffect(() => {
     listAgents().then(setAgents).catch(() => {});
+    getTraceRetentionPolicy()
+      .then(setRetentionPolicy)
+      .catch((err) => toast.error(err instanceof Error ? err.message : "加载数据留存策略失败"));
   }, []);
 
   const load = useCallback(async (page: number, currentFilters: Filters) => {
@@ -158,6 +193,126 @@ export function TracePage() {
     load(1, appliedFilters);
   }, [appliedFilters, load]);
 
+  const handleQuery = () => {
+    setAppliedFilters(filters);
+    setSelectedIds(new Set());
+  };
+
+  const handleReset = () => {
+    setFilters(defaultFilters);
+    setAppliedFilters(defaultFilters);
+    setSelectedIds(new Set());
+  };
+
+  const handleToggleSelect = (batchId: number) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(batchId)) next.delete(batchId);
+      else next.add(batchId);
+      return next;
+    });
+  };
+
+  const handleTogglePageSelect = () => {
+    const pageIds = data.list.filter((item) => item.status !== "RUNNING").map((item) => item.batchId);
+    const allSelected = pageIds.length > 0 && pageIds.every((id) => selectedIds.has(id));
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (allSelected) pageIds.forEach((id) => next.delete(id));
+      else pageIds.forEach((id) => next.add(id));
+      return next;
+    });
+  };
+
+  const handleDelete = async () => {
+    if (!deleteTarget || deleteTarget.status === "RUNNING") return;
+    const batchId = deleteTarget.batchId;
+    setDeleting(true);
+    try {
+      const deletedCount = await deleteTrace(batchId);
+      toast.success(deletedCount > 0 ? "已删除追踪记录" : "追踪已不存在或正在运行");
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        next.delete(batchId);
+        return next;
+      });
+      if (detail?.batchId === batchId) {
+        setDetail(null);
+        setDetailLoading(false);
+      }
+      setDeleteTarget(null);
+      const remainingTotal = Math.max(0, data.total - deletedCount);
+      const nextPage = Math.min(data.current, Math.max(1, Math.ceil(remainingTotal / data.pageSize)));
+      await load(nextPage, appliedFilters);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "删除失败");
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  const handleBatchDelete = async () => {
+    const batchIds = Array.from(selectedIds);
+    if (batchIds.length === 0) return;
+    setDeleting(true);
+    try {
+      const deletedCount = await batchDeleteTraces(batchIds);
+      toast.success(`已删除 ${deletedCount} 条追踪记录`);
+      setSelectedIds(new Set());
+      if (detail && batchIds.includes(detail.batchId)) {
+        setDetail(null);
+        setDetailLoading(false);
+      }
+      setBatchDeleteOpen(false);
+      const remainingTotal = Math.max(0, data.total - deletedCount);
+      const nextPage = Math.min(data.current, Math.max(1, Math.ceil(remainingTotal / data.pageSize)));
+      await load(nextPage, appliedFilters);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "删除失败");
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  const handleClearAll = async () => {
+    setDeleting(true);
+    try {
+      await deleteAllTraces();
+      toast.success("已清空追踪记录，运行中记录已保留");
+      setSelectedIds(new Set());
+      if (detail && detail.status !== "RUNNING") {
+        setDetail(null);
+        setDetailLoading(false);
+      }
+      setClearAllOpen(false);
+      await load(1, appliedFilters);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "清空失败");
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  const saveRetentionPolicy = async (policy: TraceRetentionPolicy) => {
+    setRetentionSaving(true);
+    try {
+      await updateTraceRetentionPolicy(policy);
+      setRetentionPolicy(policy);
+      setPendingRetentionPolicy(null);
+      toast.success("数据留存策略已保存");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "保存数据留存策略失败");
+    } finally {
+      setRetentionSaving(false);
+    }
+  };
+
+  const handleRetentionPolicyChange = (policy: TraceRetentionPolicy) => {
+    if (policy === retentionPolicy || retentionSaving) return;
+    if (policy === "ALL") void saveRetentionPolicy(policy);
+    else setPendingRetentionPolicy(policy);
+  };
+
   const openDetail = async (batchId: number) => {
     setDetailLoading(true);
     try {
@@ -168,6 +323,13 @@ export function TracePage() {
       setDetailLoading(false);
     }
   };
+
+  const selectablePageIds = useMemo(
+    () => data.list.filter((item) => item.status !== "RUNNING").map((item) => item.batchId),
+    [data.list],
+  );
+  const pageSelectedAll = selectablePageIds.length > 0 && selectablePageIds.every((id) => selectedIds.has(id));
+  const pageSelectedPartial = selectablePageIds.some((id) => selectedIds.has(id)) && !pageSelectedAll;
 
   const totalPages = Math.max(1, Math.ceil(data.total / data.pageSize));
   const pageNumbers = useMemo(() => {
@@ -191,6 +353,26 @@ export function TracePage() {
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold">追踪观测</h1>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="outline" disabled={retentionSaving}>
+              数据留存策略
+              <ChevronDown className="ml-1 size-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-48">
+            <DropdownMenuRadioGroup
+              value={retentionPolicy}
+              onValueChange={(value) => handleRetentionPolicyChange(value as TraceRetentionPolicy)}
+            >
+              {RETENTION_OPTIONS.map((option) => (
+                <DropdownMenuRadioItem key={option.value} value={option.value} disabled={retentionSaving}>
+                  {option.label}
+                </DropdownMenuRadioItem>
+              ))}
+            </DropdownMenuRadioGroup>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
 
       <div className="flex flex-wrap items-end gap-3 rounded-lg border bg-card p-4">
@@ -232,7 +414,7 @@ export function TracePage() {
               className="pl-9"
               value={filters.keyword}
               onChange={(e) => setFilters((prev) => ({ ...prev, keyword: e.target.value }))}
-              onKeyDown={(e) => e.key === "Enter" && setAppliedFilters(filters)}
+              onKeyDown={(e) => e.key === "Enter" && handleQuery()}
             />
           </div>
         </div>
@@ -257,23 +439,50 @@ export function TracePage() {
         </div>
 
         <div className="flex items-center gap-2">
-          <Button variant="outline" onClick={() => { setFilters(defaultFilters); setAppliedFilters(defaultFilters); }}>
+          <Button variant="outline" onClick={handleReset}>
             <RotateCcw className="mr-1 size-4" />
             重置
           </Button>
-          <Button onClick={() => setAppliedFilters(filters)}>
+          <Button onClick={handleQuery}>
             <Search className="mr-1 size-4" />
             查询
           </Button>
         </div>
       </div>
 
-      <div className="text-sm text-muted-foreground">共 {data.total} 条</div>
+      <div className="flex items-center justify-between">
+        <div className="text-sm text-muted-foreground">
+          共 {data.total} 条
+          {selectedIds.size > 0 && <span className="ml-2">已选 {selectedIds.size} 条</span>}
+        </div>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="destructive"
+            disabled={selectedIds.size === 0 || deleting}
+            onClick={() => setBatchDeleteOpen(true)}
+          >
+            <Trash2 className="mr-1 size-4" />
+            批量删除
+          </Button>
+          <Button variant="destructive" disabled={deleting} onClick={() => setClearAllOpen(true)}>
+            <Trash2 className="mr-1 size-4" />
+            清空
+          </Button>
+        </div>
+      </div>
 
       <div className="rounded-lg border">
         <Table>
           <TableHeader>
             <TableRow>
+              <TableHead className="w-12">
+                <Checkbox
+                  aria-label="选择当前页"
+                  checked={pageSelectedPartial ? "indeterminate" : pageSelectedAll}
+                  disabled={selectablePageIds.length === 0 || deleting}
+                  onCheckedChange={handleTogglePageSelect}
+                />
+              </TableHead>
               <TableHead className="w-44">时间</TableHead>
               <TableHead className="w-28">智能体</TableHead>
               <TableHead className="w-40">会话</TableHead>
@@ -282,20 +491,29 @@ export function TracePage() {
               <TableHead className="w-24">LLM调用</TableHead>
               <TableHead className="w-36">tokens</TableHead>
               <TableHead className="w-20">耗时</TableHead>
+              <TableHead className="w-20 text-right">操作</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {loading && data.list.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={8} className="h-32 text-center text-muted-foreground">加载中...</TableCell>
+                <TableCell colSpan={10} className="h-32 text-center text-muted-foreground">加载中...</TableCell>
               </TableRow>
             ) : data.list.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={8} className="h-32 text-center text-muted-foreground">暂无数据</TableCell>
+                <TableCell colSpan={10} className="h-32 text-center text-muted-foreground">暂无数据</TableCell>
               </TableRow>
             ) : (
               data.list.map((item) => (
                 <TableRow key={item.batchId} className="cursor-pointer" onClick={() => openDetail(item.batchId)}>
+                  <TableCell onClick={(event) => event.stopPropagation()}>
+                    <Checkbox
+                      aria-label={`选择批次 ${item.batchId}`}
+                      checked={selectedIds.has(item.batchId)}
+                      disabled={item.status === "RUNNING" || deleting}
+                      onCheckedChange={() => handleToggleSelect(item.batchId)}
+                    />
+                  </TableCell>
                   <TableCell className="text-muted-foreground">{formatTs(item.createdAt)}</TableCell>
                   <TableCell className="max-w-28 truncate">{item.agentName ?? "-"}</TableCell>
                   <TableCell className="max-w-40 truncate">
@@ -312,6 +530,20 @@ export function TracePage() {
                     <span className="inline-flex items-center gap-0.5"><ArrowDown className="size-3" />{item.outputTokens ?? "-"}</span>
                   </TableCell>
                   <TableCell className="text-muted-foreground">{formatDuration(item)}</TableCell>
+                  <TableCell className="text-right" onClick={(event) => event.stopPropagation()}>
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      disabled={item.status === "RUNNING" || deleting}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        setDeleteTarget(item);
+                      }}
+                      title={item.status === "RUNNING" ? "运行中的追踪不可删除" : "删除"}
+                    >
+                      <Trash2 className="size-4 text-destructive" />
+                    </Button>
+                  </TableCell>
                 </TableRow>
               ))
             )}
@@ -353,6 +585,104 @@ export function TracePage() {
           </PaginationContent>
         </Pagination>
       )}
+
+      <AlertDialog open={deleteTarget !== null} onOpenChange={(open) => { if (!open && !deleting) setDeleteTarget(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>确认删除追踪记录</AlertDialogTitle>
+            <AlertDialogDescription>
+              确定要删除批次 #{deleteTarget?.batchId} 的追踪记录吗？删除后不可恢复，不影响会话和 Tokens 统计。
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleting}>取消</AlertDialogCancel>
+            <AlertDialogAction
+              variant="destructive"
+              disabled={deleting}
+              onClick={(event) => {
+                event.preventDefault();
+                void handleDelete();
+              }}
+            >
+              {deleting ? "删除中..." : "确认删除"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={batchDeleteOpen} onOpenChange={(open) => { if (!deleting) setBatchDeleteOpen(open); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>确认批量删除</AlertDialogTitle>
+            <AlertDialogDescription>
+              确定要删除选中的 {selectedIds.size} 条追踪记录吗？删除后不可恢复，不影响会话和 Tokens 统计。
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleting}>取消</AlertDialogCancel>
+            <AlertDialogAction
+              variant="destructive"
+              disabled={deleting}
+              onClick={(event) => {
+                event.preventDefault();
+                void handleBatchDelete();
+              }}
+            >
+              {deleting ? "删除中..." : "确认删除"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={clearAllOpen} onOpenChange={(open) => { if (!deleting) setClearAllOpen(open); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>确认清空所有追踪记录</AlertDialogTitle>
+            <AlertDialogDescription>
+              确定要清空所有追踪记录吗？此操作不影响会话和 Tokens 统计，运行中的追踪记录将保留。删除后不可恢复。
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleting}>取消</AlertDialogCancel>
+            <AlertDialogAction
+              variant="destructive"
+              disabled={deleting}
+              onClick={(event) => {
+                event.preventDefault();
+                void handleClearAll();
+              }}
+            >
+              {deleting ? "清空中..." : "确认清空"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog
+        open={pendingRetentionPolicy !== null}
+        onOpenChange={(open) => { if (!open && !retentionSaving) setPendingRetentionPolicy(null); }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>确认修改数据留存策略</AlertDialogTitle>
+            <AlertDialogDescription>
+              选择“{RETENTION_OPTIONS.find((option) => option.value === pendingRetentionPolicy)?.label}”后，后台将异步清理超出保留期限的追踪记录，清理后不可恢复。确定继续吗？
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={retentionSaving}>取消</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={retentionSaving}
+              onClick={(event) => {
+                event.preventDefault();
+                if (pendingRetentionPolicy) void saveRetentionPolicy(pendingRetentionPolicy);
+              }}
+            >
+              {retentionSaving ? "保存中..." : "确认修改"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <Sheet open={detail !== null || detailLoading} onOpenChange={(open) => { if (!open) setDetail(null); }}>
         <SheetContent className="overflow-y-auto px-4 pb-4 data-[side=right]:sm:max-w-5xl">

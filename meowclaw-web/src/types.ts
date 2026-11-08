@@ -320,6 +320,8 @@ export interface MemoryGraph {
   relations: { memoryId: number; entityId: number; description: string }[];
 }
 
+export type TraceRetentionPolicy = "ALL" | "DAYS_3" | "DAYS_7" | "MONTH_1" | "YEAR_1";
+
 export interface TraceItem {
   batchId: number;
   conversationId: number;

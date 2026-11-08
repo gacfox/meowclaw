@@ -47,6 +47,7 @@ public class ContextCompressionService {
     private final MessageRepository messageRepository;
     private final ChatPersistenceService persistenceService;
     private final LlmCallLogService llmCallLogService;
+    private final TokenUsageService tokenUsageService;
     private final LlmLoggingInterceptor llmLoggingInterceptor;
     private final ChatAttachmentService chatAttachmentService;
     private final reactor.netty.http.client.HttpClient httpClient;
@@ -59,8 +60,8 @@ public class ContextCompressionService {
     @Autowired
     public ContextCompressionService(ChatEventBatchRepository batchRepository, ContextRecapRepository recapRepository,
                                      MessageRepository messageRepository, ChatPersistenceService persistenceService,
-                                     LlmCallLogService llmCallLogService, LlmLoggingInterceptor llmLoggingInterceptor,
-                                     ChatAttachmentService chatAttachmentService,
+                                     LlmCallLogService llmCallLogService, TokenUsageService tokenUsageService,
+                                     LlmLoggingInterceptor llmLoggingInterceptor, ChatAttachmentService chatAttachmentService,
                                      reactor.netty.http.client.HttpClient httpClient,
                                      ObjectMapper objectMapper, JsonUtil jsonUtil) {
         this.objectMapper = objectMapper;
@@ -70,6 +71,7 @@ public class ContextCompressionService {
         this.messageRepository = messageRepository;
         this.persistenceService = persistenceService;
         this.llmCallLogService = llmCallLogService;
+        this.tokenUsageService = tokenUsageService;
         this.llmLoggingInterceptor = llmLoggingInterceptor;
         this.chatAttachmentService = chatAttachmentService;
         this.httpClient = httpClient;
@@ -230,7 +232,7 @@ public class ContextCompressionService {
                         .build())
                 .httpClient(httpClient)
                 .interceptors(List.of(llmLoggingInterceptor,
-                        new LlmCallRecordInterceptor(tokenAccum, llmCallLogService, tokenUsageContext, jsonUtil),
+                        new LlmCallRecordInterceptor(tokenAccum, llmCallLogService, tokenUsageService, tokenUsageContext, jsonUtil),
                         new RetryInterceptor()))
                 .build();
     }

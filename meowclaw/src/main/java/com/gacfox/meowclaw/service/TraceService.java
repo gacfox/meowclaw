@@ -33,6 +33,7 @@ public class TraceService {
     private final ChatEventConverter chatEventConverter;
     private final LlmCallLogConverter llmCallLogConverter;
     private final ContextCompressionService contextCompressionService;
+    private final TraceDeletionRegistry traceDeletionRegistry;
 
     @Autowired
     public TraceService(ChatEventBatchRepository batchRepository,
@@ -42,7 +43,8 @@ public class TraceService {
                         AgentRepository agentRepository,
                         ChatEventConverter chatEventConverter,
                         LlmCallLogConverter llmCallLogConverter,
-                        ContextCompressionService contextCompressionService) {
+                        ContextCompressionService contextCompressionService,
+                        TraceDeletionRegistry traceDeletionRegistry) {
         this.batchRepository = batchRepository;
         this.chatEventRepository = chatEventRepository;
         this.llmCallLogRepository = llmCallLogRepository;
@@ -51,6 +53,7 @@ public class TraceService {
         this.chatEventConverter = chatEventConverter;
         this.llmCallLogConverter = llmCallLogConverter;
         this.contextCompressionService = contextCompressionService;
+        this.traceDeletionRegistry = traceDeletionRegistry;
     }
 
     @Transactional(readOnly = true)
@@ -98,6 +101,9 @@ public class TraceService {
 
     @Transactional(readOnly = true)
     public TraceDetailDTO detail(Long batchId) {
+        if (!llmCallLogRepository.existsByBatchIdAndPurpose(batchId, "agent")) {
+            throw new IllegalArgumentException("追踪不存在");
+        }
         ChatEventBatch batch = batchRepository.findById(batchId)
                 .orElseThrow(() -> new IllegalArgumentException("批次不存在"));
         Conversation conv = conversationRepository.findById(batch.getConversationId()).orElse(null);
@@ -122,6 +128,40 @@ public class TraceService {
                 .llmCalls(llmCallLogRepository.findByBatchIdOrderByCreatedAtAsc(batchId).stream()
                         .map(llmCallLogConverter::toDTO).toList())
                 .build();
+    }
+
+    @Transactional
+    public int delete(Long batchId) {
+        return deleteBatch(List.of(batchId));
+    }
+
+    @Transactional
+    public int deleteBatch(List<Long> batchIds) {
+        if (batchIds == null || batchIds.isEmpty()) {
+            return 0;
+        }
+        List<Long> deletableIds = batchRepository.findDeletableTraceIds(
+                batchIds.stream().distinct().toList());
+        if (deletableIds.isEmpty()) {
+            return 0;
+        }
+        return traceDeletionRegistry.delete(deletableIds, () -> {
+            llmCallLogRepository.deleteByBatchIdIn(deletableIds);
+            return deletableIds.size();
+        });
+    }
+
+    @Transactional
+    public void deleteAll() {
+        List<Long> deletedIds = llmCallLogRepository.findNonRunningBatchIds();
+        traceDeletionRegistry.delete(deletedIds, llmCallLogRepository::deleteAllExceptRunning);
+    }
+
+    @Transactional
+    public int deleteExpired(long cutoff) {
+        List<Long> deletedIds = llmCallLogRepository.findExpiredAgentBatchIdsWithoutRecentAgent(cutoff);
+        return traceDeletionRegistry.delete(deletedIds,
+                () -> llmCallLogRepository.deleteExpiredExceptRunning(cutoff));
     }
 
     private Map<Long, Conversation> conversationsOf(List<ChatEventBatch> batches) {

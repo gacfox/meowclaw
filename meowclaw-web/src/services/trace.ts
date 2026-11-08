@@ -1,4 +1,4 @@
-import type { PageResult, TraceDetail, TraceItem } from "@/types";
+import type { PageResult, TraceDetail, TraceItem, TraceRetentionPolicy } from "@/types";
 import { request } from "./request";
 
 export interface TraceQuery {
@@ -27,4 +27,33 @@ export async function listTraces(query: TraceQuery): Promise<PageResult<TraceIte
 export async function getTraceDetail(batchId: number): Promise<TraceDetail> {
   const res = await request<TraceDetail>(`/api/trace/${batchId}`);
   return res.data;
+}
+
+export async function deleteTrace(batchId: number): Promise<number> {
+  const res = await request<number>(`/api/trace/${batchId}`, { method: "DELETE" });
+  return res.data;
+}
+
+export async function batchDeleteTraces(batchIds: number[]): Promise<number> {
+  const res = await request<number>("/api/trace/batch", {
+    method: "DELETE",
+    body: JSON.stringify(batchIds),
+  });
+  return res.data;
+}
+
+export async function deleteAllTraces() {
+  return request("/api/trace/all", { method: "DELETE" });
+}
+
+export async function getTraceRetentionPolicy(): Promise<TraceRetentionPolicy> {
+  const res = await request<TraceRetentionPolicy>("/api/trace/retention-policy");
+  return res.data;
+}
+
+export async function updateTraceRetentionPolicy(policy: TraceRetentionPolicy) {
+  return request("/api/trace/retention-policy", {
+    method: "PUT",
+    body: JSON.stringify({ policy }),
+  });
 }
