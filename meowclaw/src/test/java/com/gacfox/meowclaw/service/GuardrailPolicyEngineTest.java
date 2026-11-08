@@ -17,7 +17,7 @@ class GuardrailPolicyEngineTest {
 
     @Test
     void fallsBackToDefaultDecisionWhenNoRules() {
-        GuardrailPolicyEngine.Decision decision = guardrailPolicyEngine.evaluate(config("ask", "[]"), "exec", null, CWD);
+        GuardrailPolicyEngine.Decision decision = guardrailPolicyEngine.evaluate(config("ask", "[]"), "powershell", null, CWD);
 
         assertThat(decision.action()).isEqualTo("ask");
         assertThat(decision.matchedRuleIndex()).isEqualTo(-1);
@@ -53,9 +53,9 @@ class GuardrailPolicyEngineTest {
 
     @Test
     void toolWithoutPathArgSkipsPathsRule() {
-        String rules = "[{\"tools\":[\"exec\"],\"paths\":[\"${cwd}/**\"],\"action\":\"allow\"}]";
+        String rules = "[{\"tools\":[\"bash\"],\"paths\":[\"${cwd}/**\"],\"action\":\"allow\"}]";
 
-        assertThat(guardrailPolicyEngine.evaluate(config("ask", rules), "exec", null, CWD).action())
+        assertThat(guardrailPolicyEngine.evaluate(config("ask", rules), "powershell", null, CWD).action())
                 .isEqualTo("ask");
     }
 
@@ -67,7 +67,7 @@ class GuardrailPolicyEngineTest {
         assertThat(mcp.action()).isEqualTo("deny");
         assertThat(mcp.matchedRuleIndex()).isEqualTo(0);
 
-        GuardrailPolicyEngine.Decision builtin = guardrailPolicyEngine.evaluate(config("ask", rules), "exec", null, CWD);
+        GuardrailPolicyEngine.Decision builtin = guardrailPolicyEngine.evaluate(config("ask", rules), "powershell", null, CWD);
         assertThat(builtin.action()).isEqualTo("allow");
         assertThat(builtin.matchedRuleIndex()).isEqualTo(1);
     }

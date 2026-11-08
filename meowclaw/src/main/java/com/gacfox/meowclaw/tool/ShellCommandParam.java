@@ -13,9 +13,9 @@ import lombok.Setter;
 @NoArgsConstructor
 @AllArgsConstructor
 @JsonIgnoreProperties(ignoreUnknown = true)
-public class ExecParam {
+public class ShellCommandParam {
     @JsonProperty("command")
-    @AgenticToolParam(name = "command", description = "要执行的shell命令")
+    @AgenticToolParam(name = "command", description = "要执行的Shell命令")
     private String command;
 
     @JsonProperty("timeout")

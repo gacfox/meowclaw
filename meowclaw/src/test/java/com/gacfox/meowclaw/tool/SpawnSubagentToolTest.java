@@ -66,7 +66,7 @@ class SpawnSubagentToolTest {
 
     @Test
     void rejectsToolOutsideParentList() {
-        String result = tool.spawn(param("任务", List.of("exec")), parentContext(List.of("read")));
+        String result = tool.spawn(param("任务", List.of("bash")), parentContext(List.of("read")));
 
         assertThat(result).contains("not in the parent agent's tool list");
         verify(subagentService, never()).spawn(any(), any(), any(), any(), anyList());
