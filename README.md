@@ -2,7 +2,7 @@
 
 可自托管的单用户ReAct风格通用智能体工具。
 
-![](https://github.com/user-attachments/assets/b1f0456c-4dd3-4349-892c-afe5a4b6311f)
+![](https://github.com/user-attachments/assets/03560a20-b305-4e16-8f44-4e35805439ec)
 
 ## 核心特性
 
