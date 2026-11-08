@@ -1,6 +1,7 @@
 import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 import type { AgentDTO, CreateEntryType, FileContent, FileEntry } from "@/types";
 import { listAgents } from "@/services/agent";
+import { readSelectedAgentId, writeSelectedAgentId } from "@/lib/selectedAgent";
 import {
   createWorkspaceEntry,
   deleteWorkspaceFile,
@@ -121,7 +122,12 @@ export function WorkspacePage() {
     try {
       const list = await listAgents();
       setAgents(list);
-      setSelectedAgentId((prev) => prev ?? list[0]?.id ?? null);
+      const cachedAgentId = readSelectedAgentId();
+      const validAgentId = cachedAgentId != null && list.some((agent) => agent.id === cachedAgentId)
+        ? cachedAgentId
+        : list[0]?.id ?? null;
+      setSelectedAgentId((prev) => prev ?? validAgentId);
+      if (validAgentId != null) writeSelectedAgentId(validAgentId);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "加载智能体失败");
     }
@@ -152,7 +158,9 @@ export function WorkspacePage() {
   }, [fetchEntries]);
 
   const onAgentChange = (id: string) => {
-    setSelectedAgentId(Number(id));
+    const agentId = Number(id);
+    setSelectedAgentId(agentId);
+    writeSelectedAgentId(agentId);
     setCurrentPath("");
   };
 

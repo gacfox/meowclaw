@@ -6,6 +6,7 @@ import { listLlms } from "@/services/llm";
 import { listConversations, createConversation, getConversation, deleteConversation, renameConversation, listBatches, chatStream, watchStream, listRunningConversations, stopChat, truncateAfterBatch, waitForTitle, listSidebarGroups, pinConversation, moveConversationToProject } from "@/services/conversation";
 import { createProject, renameProject, deleteProject } from "@/services/project";
 import { listGuardrailPolicies, setConversationGuardrailPolicy, decideApproval } from "@/services/guardrail";
+import { readSelectedAgentId, writeSelectedAgentId } from "@/lib/selectedAgent";
 import { useAuthStore } from "@/stores/auth";
 import { Button } from "@/components/ui/button";
 import {
@@ -230,8 +231,14 @@ export function ChatPage() {
       setAgents(list);
       const agentIdParam = searchParams.get("agentId");
       const urlAgentId = agentIdParam ? Number(agentIdParam) : null;
-      const validAgentId = urlAgentId && list.some((a) => a.id === urlAgentId) ? urlAgentId : list[0]?.id ?? null;
+      const cachedAgentId = readSelectedAgentId();
+      const validAgentId = urlAgentId != null && list.some((a) => a.id === urlAgentId)
+        ? urlAgentId
+        : cachedAgentId != null && list.some((a) => a.id === cachedAgentId)
+          ? cachedAgentId
+          : list[0]?.id ?? null;
       setSelectedAgentId(validAgentId);
+      if (validAgentId != null) writeSelectedAgentId(validAgentId);
     });
     listLlms().then(setLlms).catch(() => {});
     listGuardrailPolicies().then(setPolicies).catch(() => {});
@@ -1202,7 +1209,14 @@ export function ChatPage() {
       <div className={`${mobileConvoOpen ? "fixed inset-y-0 left-0 z-50 flex shadow-xl" : "hidden"} w-72 max-w-[88vw] shrink-0 flex-col border-r bg-background md:relative md:flex md:bg-muted/30 md:shadow-none`}>
         <div className="flex items-center gap-2 border-b p-3">
           <div className="flex-1">
-            <Select value={selectedAgentId != null ? String(selectedAgentId) : ""} onValueChange={(v) => setSelectedAgentId(Number(v))}>
+            <Select
+              value={selectedAgentId != null ? String(selectedAgentId) : ""}
+              onValueChange={(v) => {
+                const agentId = Number(v);
+                setSelectedAgentId(agentId);
+                writeSelectedAgentId(agentId);
+              }}
+            >
             <SelectTrigger className="w-full">
               <SelectValue placeholder="选择智能体" />
             </SelectTrigger>
