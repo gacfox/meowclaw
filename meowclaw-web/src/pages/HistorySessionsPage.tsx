@@ -284,7 +284,7 @@ export function HistorySessionsPage() {
           </Popover>
         </div>
 
-        <div className="flex flex-col gap-1.5 min-w-[200px] flex-1">
+        <div className="flex min-w-[200px] flex-col gap-1.5">
           <Label className="text-xs text-muted-foreground">关键字</Label>
           <div className="relative">
             <Search className="absolute left-2.5 top-2.5 size-4 text-muted-foreground" />
