@@ -28,6 +28,7 @@ import type { ApprovalContent } from "@/lib/approval";
 import { parseSubagentContent } from "@/lib/subagent";
 import type { SubagentContent } from "@/lib/subagent";
 import { SubagentDrawer } from "@/components/chat/SubagentDrawer";
+import { ConversationSearchDialog } from "@/components/chat/ConversationSearchDialog";
 import { ContextUsageGauge } from "@/components/chat/ContextUsageGauge";
 import { useThrottledValue } from "@/lib/useThrottledValue";
 import { defaultReasoningEffort, parseReasoningEffortOptions } from "@/lib/reasoningEffort";
@@ -661,6 +662,23 @@ export function ChatPage() {
     }
   }
 
+  async function handleSearchConversationSelect(conversationId: number) {
+    try {
+      const convo = await getConversation(conversationId);
+      if (selectedAgentId == null || convo.agentId !== selectedAgentId) return;
+      const alreadyLoaded = conversations.some((item) => item.id === conversationId)
+        || pinnedConvs.some((item) => item.id === conversationId)
+        || projects.some((project) => (project.conversations ?? []).some((item) => item.id === conversationId));
+      if (!alreadyLoaded) {
+        setConversations((prev) => [convo, ...prev.filter((item) => item.id !== conversationId)]);
+      }
+      setSelectedConvoId(conversationId);
+      setMobileConvoOpen(false);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "打开会话失败");
+    }
+  }
+
   async function handleNewConvoInProject(projectId: number) {
     await createNewConversation(projectId);
   }
@@ -1232,11 +1250,16 @@ export function ChatPage() {
           </Button>
         </div>
 
-        <div className="border-b p-3">
-          <Button className="w-full" size="sm" onClick={handleNewConvo} disabled={!selectedAgentId}>
+        <div className="flex items-center gap-2 border-b p-3">
+          <Button className="min-w-0 flex-1" size="sm" onClick={handleNewConvo} disabled={!selectedAgentId}>
             <SquarePen className="mr-1 size-4" />
             新对话
           </Button>
+          <ConversationSearchDialog
+            key={selectedAgentId ?? "none"}
+            agentId={selectedAgentId}
+            onSelect={(conversationId) => void handleSearchConversationSelect(conversationId)}
+          />
         </div>
 
         <div className="flex-1 overflow-y-auto" ref={convoListRef} onScroll={handleConvoScroll}>
