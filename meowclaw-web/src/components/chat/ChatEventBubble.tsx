@@ -95,35 +95,6 @@ function ToolCallContent({
   );
 }
 
-export function ToolCallDetails({
-  name,
-  args,
-  result,
-  pending,
-}: {
-  name: string;
-  args?: string;
-  result?: string;
-  pending?: boolean;
-}) {
-  return (
-    <details className="group text-xs">
-      <summary className="flex cursor-pointer items-center gap-1 text-muted-foreground list-none [&::-webkit-details-marker]:hidden">
-        <ChevronRight className="size-3 shrink-0 transition-transform group-open:rotate-90" />
-        <Wrench className="size-3" />
-        {name}
-        {pending && <Loader2 className="size-3 animate-spin" />}
-      </summary>
-      <ToolCallContent
-        parsedArgs={parseToolArgs(args)}
-        result={result}
-        pending={pending}
-        className="mt-2 rounded border bg-background/50 p-2"
-      />
-    </details>
-  );
-}
-
 function toolArgsPreview(args: Record<string, unknown> | null): string | null {
   if (!args) return null;
   const entries = Object.entries(args);
@@ -278,15 +249,6 @@ export function ConversationResponse({
   );
 }
 
-export function FinalAnswerIndicator() {
-  return (
-    <div className="flex items-center gap-1 text-xs text-muted-foreground">
-      <Check className="size-3" />
-      <span>final_answer</span>
-    </div>
-  );
-}
-
 const APPROVAL_LABELS: Record<string, string> = {
   pending: "等待审批",
   approved: "已批准",
@@ -402,174 +364,92 @@ export function SubagentDetails({
 export const BatchBubble = memo(function BatchBubble({
   events,
   onOpenSubagent,
-  displayMode = "legacy",
 }: {
   events: ChatEventDTO[];
   onOpenSubagent?: (childConversationId: number, description?: string) => void;
-  displayMode?: "legacy" | "conversation";
 }) {
   // 执行器保证 tool_result 与 tool_call 严格同序同数；部分模型端点返回空 toolCallId，无法按 id 匹配，故按序配对
   const toolResults = events.filter((e) => e.type === "tool_result");
   let resultCursor = 0;
   const finalAnswer = events.find((e) => e.type === "final_answer");
-
-  if (displayMode === "conversation") {
-    const hasProcess = events.some((event) =>
-      event.type === "thinking"
-      || event.type === "approval"
-      || (event.type === "tool_call" && event.toolName !== "final_answer")
-    );
-    const thinkingCount = events.filter((event) => event.type === "thinking").length;
-    const toolCount = events.filter((event) => event.type === "tool_call" && event.toolName !== "final_answer").length;
-    const processNodes = events.map((event, i) => {
-      if (event.type === "thinking") {
-        return <ThinkingPreview key={event.id ?? i} content={event.content} />;
-      }
-      if (event.type === "tool_call") {
-        const result = toolResults[resultCursor]?.content ?? undefined;
-        resultCursor++;
-        if (event.toolName === "final_answer") return null;
-        if (event.toolName === "spawn_subagent") {
-          const subEvent = events.find((e) => e.type === "subagent" && e.toolCallId === event.toolCallId);
-          const info = parseSubagentContent(subEvent?.content);
-          return (
-            <SubagentDetails
-              key={event.id ?? i}
-              args={event.toolArguments ?? undefined}
-              description={info?.description}
-              status={info?.status ?? "completed"}
-              onOpen={info?.childConversationId != null && onOpenSubagent != null
-                ? () => onOpenSubagent(info.childConversationId, info.description)
-                : undefined}
-            />
-          );
-        }
+  const hasProcess = events.some((event) =>
+    event.type === "thinking"
+    || event.type === "approval"
+    || (event.type === "tool_call" && event.toolName !== "final_answer")
+  );
+  const thinkingCount = events.filter((event) => event.type === "thinking").length;
+  const toolCount = events.filter((event) => event.type === "tool_call" && event.toolName !== "final_answer").length;
+  const processNodes = events.map((event, i) => {
+    if (event.type === "thinking") {
+      return <ThinkingPreview key={event.id ?? i} content={event.content} />;
+    }
+    if (event.type === "tool_call") {
+      const result = toolResults[resultCursor]?.content ?? undefined;
+      resultCursor++;
+      if (event.toolName === "final_answer") return null;
+      if (event.toolName === "spawn_subagent") {
+        const subEvent = events.find((e) => e.type === "subagent" && e.toolCallId === event.toolCallId);
+        const info = parseSubagentContent(subEvent?.content);
         return (
-          <ConversationToolCall
+          <SubagentDetails
             key={event.id ?? i}
-            name={event.toolName ?? "tool"}
             args={event.toolArguments ?? undefined}
-            result={result}
+            description={info?.description}
+            status={info?.status ?? "completed"}
+            onOpen={info?.childConversationId != null && onOpenSubagent != null
+              ? () => onOpenSubagent(info.childConversationId, info.description)
+              : undefined}
           />
         );
       }
-      if (event.type === "approval") {
-        const info = parseApprovalContent(event.content);
-        return (
-          <ApprovalDetails
-            key={event.id ?? i}
-            name={event.toolName ?? "tool"}
-            args={event.toolArguments ?? undefined}
-            decision={info?.decision ?? "pending"}
-            policyName={info?.policyName}
-            matchedRuleIndex={info?.matchedRuleIndex}
-          />
-        );
-      }
-      return null;
-    });
-    const terminalNodes = events.map((event, i) => {
-      if (event.type === "error") {
-        return <div key={event.id ?? i} className="text-destructive">{event.content}</div>;
-      }
-      if (event.type === "stopped") {
-        return (
-          <div key={event.id ?? i} className="flex items-center gap-1 text-xs text-muted-foreground">
-            <CircleStop className="size-3" />
-            <span>已手动停止</span>
-          </div>
-        );
-      }
-      return null;
-    });
-    return (
-      <ConversationResponse
-        answer={finalAnswer?.content}
-        process={hasProcess ? (
-          <ExecutionProcess thinkingCount={thinkingCount} toolCount={toolCount} defaultOpen={false}>
-            {processNodes}
-          </ExecutionProcess>
-        ) : undefined}
-      >
-        {terminalNodes}
-      </ConversationResponse>
-    );
-  }
-
+      return (
+        <ConversationToolCall
+          key={event.id ?? i}
+          name={event.toolName ?? "tool"}
+          args={event.toolArguments ?? undefined}
+          result={result}
+        />
+      );
+    }
+    if (event.type === "approval") {
+      const info = parseApprovalContent(event.content);
+      return (
+        <ApprovalDetails
+          key={event.id ?? i}
+          name={event.toolName ?? "tool"}
+          args={event.toolArguments ?? undefined}
+          decision={info?.decision ?? "pending"}
+          policyName={info?.policyName}
+          matchedRuleIndex={info?.matchedRuleIndex}
+        />
+      );
+    }
+    return null;
+  });
+  const terminalNodes = events.map((event, i) => {
+    if (event.type === "error") {
+      return <div key={event.id ?? i} className="text-destructive">{event.content}</div>;
+    }
+    if (event.type === "stopped") {
+      return (
+        <div key={event.id ?? i} className="flex items-center gap-1 text-xs text-muted-foreground">
+          <CircleStop className="size-3" />
+          <span>已手动停止</span>
+        </div>
+      );
+    }
+    return null;
+  });
   return (
-    <div className="max-w-[95%] space-y-2 rounded-lg bg-muted px-3 py-2 text-sm sm:max-w-[80%] sm:px-4">
-      {events.map((event, i) => {
-        if (event.type === "thinking") {
-          return (
-            <details key={i} className="group text-xs text-muted-foreground">
-              <summary className="flex cursor-pointer items-center gap-1 list-none [&::-webkit-details-marker]:hidden">
-                <ChevronRight className="size-3 shrink-0 transition-transform group-open:rotate-90" />
-                思考过程
-              </summary>
-              <div className="mt-1 whitespace-pre-wrap">{event.content}</div>
-            </details>
-          );
-        }
-        if (event.type === "tool_call") {
-          const result = toolResults[resultCursor]?.content ?? undefined;
-          resultCursor++;
-          if (event.toolName === "final_answer") {
-            return <FinalAnswerIndicator key={i} />;
-          }
-          if (event.toolName === "spawn_subagent") {
-            const subEvent = events.find((e) => e.type === "subagent" && e.toolCallId === event.toolCallId);
-            const info = parseSubagentContent(subEvent?.content);
-            return (
-              <SubagentDetails
-                key={i}
-                args={event.toolArguments ?? undefined}
-                description={info?.description}
-                status={info?.status ?? "completed"}
-                onOpen={info?.childConversationId != null && onOpenSubagent != null
-                  ? () => onOpenSubagent(info.childConversationId, info.description)
-                  : undefined}
-              />
-            );
-          }
-          return (
-            <ToolCallDetails
-              key={i}
-              name={event.toolName ?? "tool"}
-              args={event.toolArguments ?? undefined}
-              result={result}
-            />
-          );
-        }
-        if (event.type === "subagent") {
-          return null;
-        }
-        if (event.type === "approval") {
-          const info = parseApprovalContent(event.content);
-          return (
-            <ApprovalDetails
-              key={i}
-              name={event.toolName ?? "tool"}
-              args={event.toolArguments ?? undefined}
-              decision={info?.decision ?? "pending"}
-              policyName={info?.policyName}
-              matchedRuleIndex={info?.matchedRuleIndex}
-            />
-          );
-        }
-        if (event.type === "error") {
-          return <div key={i} className="text-destructive">{event.content}</div>;
-        }
-        if (event.type === "stopped") {
-          return (
-            <div key={i} className="flex items-center gap-1 text-xs text-muted-foreground">
-              <CircleStop className="size-3" />
-              <span>已手动停止</span>
-            </div>
-          );
-        }
-        return null;
-      })}
-      {finalAnswer?.content && <MarkdownRenderer content={finalAnswer.content} />}
-    </div>
+    <ConversationResponse
+      answer={finalAnswer?.content}
+      process={hasProcess ? (
+        <ExecutionProcess thinkingCount={thinkingCount} toolCount={toolCount} defaultOpen={false}>
+          {processNodes}
+        </ExecutionProcess>
+      ) : undefined}
+    >
+      {terminalNodes}
+    </ConversationResponse>
   );
 });

@@ -1496,7 +1496,7 @@ export function ChatPage() {
                               {new Date(batch.createdAt).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })}
                             </span>
                           </div>
-                          <BatchBubble events={batch.events} onOpenSubagent={openSubagent} displayMode="conversation" />
+                          <BatchBubble events={batch.events} onOpenSubagent={openSubagent} />
                           <div className="mt-1 flex flex-wrap items-center gap-1">
                             <Tooltip>
                               <TooltipTrigger asChild>
