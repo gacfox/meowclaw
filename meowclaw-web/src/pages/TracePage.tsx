@@ -90,7 +90,13 @@ function formatRange(range?: DateRange): string {
   return `${from} ~ ${format(range.to, "yyyy-MM-dd")}`;
 }
 
+function formatCacheHitRate(cachedTokens: number | null, inputTokens: number): string | null {
+  if (cachedTokens == null || inputTokens <= 0) return null;
+  return `${(cachedTokens / inputTokens * 100).toFixed(1)}%`;
+}
+
 function LlmCallCard({ call }: { call: LlmCallLogItem }) {
+  const cacheHitRate = formatCacheHitRate(call.cachedTokens, call.inputTokens);
   return (
     <details className="group rounded-lg border text-sm">
       <summary className="flex cursor-pointer list-none flex-wrap items-center gap-2 p-3 [&::-webkit-details-marker]:hidden">
@@ -103,6 +109,9 @@ function LlmCallCard({ call }: { call: LlmCallLogItem }) {
         <span className="ml-auto flex items-center gap-2 text-xs text-muted-foreground">
           <span className="inline-flex items-center gap-0.5"><ArrowUp className="size-3" />{call.inputTokens}</span>
           <span className="inline-flex items-center gap-0.5"><ArrowDown className="size-3" />{call.outputTokens}</span>
+          <span title="缓存输入 Tokens / 缓存命中率">
+            缓存 {call.cachedTokens ?? "未上报"}{cacheHitRate != null && ` (${cacheHitRate})`}
+          </span>
           {call.durationMs != null && <span>{(call.durationMs / 1000).toFixed(1)}s</span>}
           <span>{formatTs(call.createdAt)}</span>
         </span>

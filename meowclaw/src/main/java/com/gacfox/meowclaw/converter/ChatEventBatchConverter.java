@@ -11,5 +11,6 @@ public interface ChatEventBatchConverter {
     ChatEventBatchDTO toDTO(ChatEventBatch entity);
 
     @Mapping(target = "attachments", ignore = true)
+    @Mapping(target = "promptContextJson", ignore = true)
     ChatEventBatch toEntity(ChatEventBatchDTO dto);
 }

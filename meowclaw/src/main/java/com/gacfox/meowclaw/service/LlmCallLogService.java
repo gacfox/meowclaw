@@ -57,6 +57,8 @@ public class LlmCallLogService {
         log.setInputTokens(input);
         log.setOutputTokens(output);
         log.setTotalTokens(total);
+        log.setCachedTokens(usage != null && usage.getCachedTokens() != null
+                ? usage.getCachedTokens().longValue() : null);
         log.setDurationMs(durationMs);
         log.setStatus(status);
         log.setErrorMessage(errorMessage);

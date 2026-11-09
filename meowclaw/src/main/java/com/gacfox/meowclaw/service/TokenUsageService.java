@@ -52,6 +52,8 @@ public class TokenUsageService {
         tokenUsage.setInputTokens(input);
         tokenUsage.setOutputTokens(output);
         tokenUsage.setTotalTokens(total);
+        tokenUsage.setCachedTokens(usage != null && usage.getCachedTokens() != null
+                ? usage.getCachedTokens().longValue() : null);
         tokenUsage.setCreatedAt(System.currentTimeMillis());
         tokenUsageRepository.save(tokenUsage);
     }
@@ -78,15 +80,23 @@ public class TokenUsageService {
     }
 
     private TokenStatsSummary buildSummary(List<TokenUsageStatsRow> rows) {
-        long input = 0, output = 0;
+        long input = 0, output = 0, cached = 0, cacheReportedInput = 0;
+        boolean cacheReported = false;
         for (TokenUsageStatsRow l : rows) {
             input += l.inputTokens();
             output += l.outputTokens();
+            if (l.cachedTokens() != null) {
+                cacheReported = true;
+                cached += l.cachedTokens();
+                cacheReportedInput += l.inputTokens();
+            }
         }
         return TokenStatsSummary.builder()
                 .totalInputTokens(input)
                 .totalOutputTokens(output)
                 .totalTokens(input + output)
+                .totalCachedTokens(cacheReported ? cached : null)
+                .cacheHitRate(cacheReportedInput > 0 ? (double) cached / cacheReportedInput : null)
                 .callCount(rows.size())
                 .build();
     }

@@ -95,15 +95,18 @@ public class ContextCompressionService {
             if (skipped.contains(batch.getId())) continue;
             int age = batches.size() - i;
             List<ChatAttachmentDTO> attachments = parseAttachments(batch.getAttachments());
-            Object userMessageContent = batch.getUserContent();
+            SystemPromptService.PromptContext promptContext = jsonUtil.load(
+                    batch.getPromptContextJson(), SystemPromptService.PromptContext.class);
+            String userText = SystemPromptService.renderUserMessage(promptContext, batch.getUserContent());
+            Object userMessageContent = userText;
             if (!attachments.isEmpty()) {
                 if (age < 5) {
                     List<Map<String, Object>> parts = new ArrayList<>();
-                    parts.add(Map.of("type", "text", "text", batch.getUserContent()));
+                    parts.add(Map.of("type", "text", "text", userText));
                     parts.addAll(chatAttachmentService.loadImageParts(attachments));
                     userMessageContent = parts;
                 } else {
-                    userMessageContent = batch.getUserContent() + "\n[用户发送了" + attachments.size() + "张图片]";
+                    userMessageContent = userText + "\n[用户发送了" + attachments.size() + "张图片]";
                 }
             }
             result.add(com.gacfox.proarc.agentic.model.openai.Message.builder()
@@ -137,17 +140,6 @@ public class ContextCompressionService {
             }
         }
         return result;
-    }
-
-    public String buildRecapText(Long conversationId) {
-        List<ContextRecap> recaps = recapRepository.findByConversationIdOrderByCreatedAtAsc(conversationId);
-        if (recaps.isEmpty()) return null;
-        log.info("Loaded recaps for conversation {}: {}", conversationId,
-                recaps.stream().map(ContextRecap::getId).toList());
-        return recaps.stream()
-                .map(ContextRecap::getContent)
-                .reduce((a, b) -> a + "\n\n" + b)
-                .orElse(null);
     }
 
     public void afterBatch(Long conversationId, Long completedBatchId, Llm llm) {

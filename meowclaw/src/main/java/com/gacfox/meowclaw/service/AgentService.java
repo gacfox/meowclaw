@@ -60,9 +60,10 @@ public class AgentService {
         agent = agentRepository.save(agent);
 
         if (req.getWorkspaceFolder() != null && !req.getWorkspaceFolder().isBlank()) {
-            agent.setWorkspaceFolder(req.getWorkspaceFolder());
+            agent.setWorkspaceFolder(normalizeWorkspaceFolder(req.getWorkspaceFolder()));
         } else {
-            agent.setWorkspaceFolder(Paths.get(workspaceDir, String.valueOf(agent.getId())).toString());
+            agent.setWorkspaceFolder(normalizeWorkspaceFolder(
+                    Paths.get(workspaceDir, String.valueOf(agent.getId())).toString()));
         }
         agent.setUpdatedAt(System.currentTimeMillis());
         agent = agentRepository.save(agent);
@@ -87,7 +88,9 @@ public class AgentService {
         if (req.getLlmId() != null) agent.setLlmId(req.getLlmId());
         if (req.getSecondaryLlmId() != null) agent.setSecondaryLlmId(req.getSecondaryLlmId());
         agent.setEmbeddingModelId(req.getEmbeddingModelId());
-        if (req.getWorkspaceFolder() != null) agent.setWorkspaceFolder(req.getWorkspaceFolder());
+        if (req.getWorkspaceFolder() != null) {
+            agent.setWorkspaceFolder(normalizeWorkspaceFolder(req.getWorkspaceFolder()));
+        }
         if (req.getAggressiveMemoryRecall() != null) agent.setAggressiveMemoryRecall(req.getAggressiveMemoryRecall());
         agent.setUpdatedAt(System.currentTimeMillis());
         return agentConverter.toDTO(agentRepository.save(agent));
@@ -125,6 +128,11 @@ public class AgentService {
                 .orElseThrow(() -> new IllegalArgumentException("智能体不存在"));
         deleteAvatarFile(agent.getAvatarUrl());
         agentRepository.delete(agent);
+    }
+
+    private String normalizeWorkspaceFolder(String folder) {
+        if (folder == null || folder.isBlank()) return folder;
+        return Paths.get(folder).toAbsolutePath().normalize().toString();
     }
 
     private void deleteAvatarFile(String avatarUrl) {

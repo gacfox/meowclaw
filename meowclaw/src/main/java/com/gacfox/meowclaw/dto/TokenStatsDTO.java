@@ -40,6 +40,10 @@ public class TokenStatsDTO {
         private long totalOutputTokens;
         @Schema(description = "总 Token 数")
         private long totalTokens;
+        @Schema(description = "缓存输入 Token 总数，没有已上报调用时为 null")
+        private Long totalCachedTokens;
+        @Schema(description = "缓存命中率（缓存输入 Token / 已上报调用的输入 Token），无法计算时为 null")
+        private Double cacheHitRate;
         @Schema(description = "调用次数")
         private long callCount;
     }

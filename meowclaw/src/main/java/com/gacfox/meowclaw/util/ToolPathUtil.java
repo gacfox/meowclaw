@@ -15,8 +15,8 @@ public class ToolPathUtil {
             return path.normalize();
         }
         if (cwd == null || cwd.isBlank()) {
-            return path.normalize();
+            return path.toAbsolutePath().normalize();
         }
-        return Path.of(cwd).resolve(input).normalize();
+        return Path.of(cwd).toAbsolutePath().normalize().resolve(path).normalize();
     }
 }

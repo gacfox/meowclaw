@@ -28,6 +28,8 @@ public class LlmCallLogDTO {
     private Long outputTokens;
     @Schema(description = "总 Token 数")
     private Long totalTokens;
+    @Schema(description = "缓存输入 Token 数，未上报时为 null")
+    private Long cachedTokens;
     @Schema(description = "调用耗时（毫秒）")
     private Long durationMs;
     @Schema(description = "请求消息 JSON")

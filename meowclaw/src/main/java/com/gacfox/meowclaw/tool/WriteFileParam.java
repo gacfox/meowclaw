@@ -15,7 +15,7 @@ import lombok.Setter;
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class WriteFileParam {
     @JsonProperty("path")
-    @AgenticToolParam(name = "path", description = "要写入的文件路径（相对 cwd 或绝对路径）")
+    @AgenticToolParam(name = "path", description = "要写入的文件路径（相对CWD或绝对路径）；CWD已是目标目录，不要重复拼接工作区根目录名称")
     private String path;
 
     @JsonProperty("content")

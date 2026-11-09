@@ -21,6 +21,7 @@ import {
   RefreshCw,
   Sigma,
   Trophy,
+  Zap,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -47,6 +48,10 @@ function formatRange(range?: DateRange): string {
 
 function formatNum(n: number): string {
   return n.toLocaleString("en-US");
+}
+
+function formatHitRate(rate: number | null): string {
+  return rate == null ? "未上报" : `${(rate * 100).toFixed(1)}%`;
 }
 
 export function TokensStatisticsPage() {
@@ -200,8 +205,8 @@ export function TokensStatisticsPage() {
         </CardContent>
       </Card>
 
-      {/* 三卡片 */}
-      <div className="grid gap-4 md:grid-cols-3">
+      {/* 汇总卡片 */}
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Tokens 汇总</CardTitle>
@@ -235,6 +240,22 @@ export function TokensStatisticsPage() {
           <CardContent>
             <div className="text-3xl font-bold">{summary ? formatNum(summary.callCount) : "-"}</div>
             <p className="text-xs text-muted-foreground">筛选条件下的调用次数</p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">缓存 Tokens</CardTitle>
+            <Zap className="size-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-3xl font-bold">
+              {summary ? summary.totalCachedTokens == null ? "未上报" : formatNum(summary.totalCachedTokens) : "-"}
+            </div>
+            <p className="mt-1 text-xs text-muted-foreground">
+              命中率 {summary ? formatHitRate(summary.cacheHitRate) : "-"}
+            </p>
+            <p className="mt-1 text-xs text-muted-foreground">仅统计已上报缓存用量的调用</p>
           </CardContent>
         </Card>
 

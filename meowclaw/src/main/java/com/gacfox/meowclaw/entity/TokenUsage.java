@@ -44,6 +44,9 @@ public class TokenUsage {
     @Column(name = "total_tokens", nullable = false)
     private Long totalTokens;
 
+    @Column(name = "cached_tokens")
+    private Long cachedTokens;
+
     @Column(name = "created_at", nullable = false)
     private Long createdAt;
 }

@@ -59,7 +59,7 @@ public class ChatService {
     private final ToolRegistry toolRegistry;
     private final HttpClient httpClient;
     private final AgentLoggingInterceptor agentLoggingInterceptor;
-    private final AgentSystemPromptRefreshInterceptor agentSystemPromptRefreshInterceptor;
+    private final SystemPromptService systemPromptService;
     private final LlmLoggingInterceptor llmLoggingInterceptor;
     private final TitleGenerationRegistryService titleGenerationRegistryService;
     private final LlmCallLogService llmCallLogService;
@@ -78,7 +78,7 @@ public class ChatService {
                        ToolRegistry toolRegistry,
                        HttpClient httpClient,
                        AgentLoggingInterceptor agentLoggingInterceptor,
-                       AgentSystemPromptRefreshInterceptor agentSystemPromptRefreshInterceptor,
+                       SystemPromptService systemPromptService,
                        LlmLoggingInterceptor llmLoggingInterceptor,
                        TitleGenerationRegistryService titleGenerationRegistryService,
                        LlmCallLogService llmCallLogService,
@@ -103,7 +103,7 @@ public class ChatService {
         this.toolRegistry = toolRegistry;
         this.httpClient = httpClient;
         this.agentLoggingInterceptor = agentLoggingInterceptor;
-        this.agentSystemPromptRefreshInterceptor = agentSystemPromptRefreshInterceptor;
+        this.systemPromptService = systemPromptService;
         this.llmLoggingInterceptor = llmLoggingInterceptor;
         this.titleGenerationRegistryService = titleGenerationRegistryService;
         this.llmCallLogService = llmCallLogService;
@@ -422,9 +422,11 @@ public class ChatService {
                 }
                 return false;
             });
+            toolNames.sort(String::compareTo);
             ReActAgentExecutor executor = buildExecutor(llmClient, toolNames, run, batchId, conversationId);
 
-            AgentContext context = buildAgentContext(agent, conv, llm, userContent, images, toolNames, llmClient, reasoningEffort);
+            AgentContext context = buildAgentContext(batchId, agent, conv, llm, userContent,
+                    images, toolNames, llmClient, reasoningEffort);
             run.context = context;
             if (run.stopRequested.get()) {
                 context.requestStop();
@@ -496,15 +498,14 @@ public class ChatService {
                 .defaultLlmClient(llmClient)
                 .toolRegistry(toolRegistry)
                 .defaultToolNames(toolNames)
-                .interceptors(List.of(agentSystemPromptRefreshInterceptor,
-                        new SubagentJoinInterceptor(subagentRegistry),
+                .interceptors(List.of(new SubagentJoinInterceptor(subagentRegistry),
                         new LoopIterationReminderInterceptor(), agentLoggingInterceptor))
                 .toolCallInterceptors(List.of(new ToolCallIdStashInterceptor(), guardrailInterceptor))
                 .maxIterations(Integer.MAX_VALUE)
                 .build();
     }
 
-    private AgentContext buildAgentContext(Agent agent, Conversation conv, Llm llm, String userContent,
+    private AgentContext buildAgentContext(Long batchId, Agent agent, Conversation conv, Llm llm, String userContent,
                                            List<String> images, List<String> toolNames, LlmClient llmClient,
                                            String reasoningEffort) {
         String workspaceFolder = agent.getWorkspaceFolder();
@@ -551,16 +552,22 @@ public class ChatService {
             }
         }
 
+        SystemPromptService.PromptContext promptContext = systemPromptService.buildPromptContext(
+                agent, conv.getId(), currentCwd, (String) variables.get("recalledMemories"));
+        chatPersistenceService.updatePromptContext(batchId, jsonUtil.dump(promptContext));
+
         Double temperature = llm.getTemperature() != null ? llm.getTemperature() / 100.0 : 0.7;
 
         List<Message> messages = new ArrayList<>();
         messages.add(Message.builder()
-                .role(Message.ROLE_SYSTEM).content("").build());
+                .role(Message.ROLE_SYSTEM).content(systemPromptService.buildSystemPrompt(agent)).build());
         messages.addAll(contextCompressionService.buildMessages(conv.getId()));
-        Object userMessageContent = userContent;
+        String renderedUserContent = SystemPromptService.renderUserMessage(
+                promptContext, userContent == null ? "" : userContent);
+        Object userMessageContent = renderedUserContent;
         if (images != null && !images.isEmpty()) {
             List<Map<String, Object>> parts = new ArrayList<>();
-            parts.add(Map.of("type", "text", "text", userContent == null ? "" : userContent));
+            parts.add(Map.of("type", "text", "text", renderedUserContent));
             parts.addAll(chatAttachmentService.toImageParts(images));
             userMessageContent = parts;
         }

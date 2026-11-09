@@ -26,6 +26,9 @@ public class ChatEventBatch {
     @Column(name = "attachments", columnDefinition = "TEXT")
     private String attachments;
 
+    @Column(name = "prompt_context_json", columnDefinition = "TEXT")
+    private String promptContextJson;
+
     @Column(name = "type", nullable = false, length = 32)
     private String type;
 

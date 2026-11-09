@@ -52,6 +52,13 @@ public class ChatPersistenceService {
     }
 
     @Transactional
+    public void updatePromptContext(Long batchId, String promptContextJson) {
+        ChatEventBatch batch = chatEventBatchRepository.findById(batchId).orElseThrow();
+        batch.setPromptContextJson(promptContextJson);
+        chatEventBatchRepository.save(batch);
+    }
+
+    @Transactional
     public ChatEventBatch createContextCompressionBatch(Long conversationId, String content) {
         ChatEventBatch batch = new ChatEventBatch();
         batch.setConversationId(conversationId);

@@ -80,17 +80,18 @@ CREATE INDEX IF NOT EXISTS idx_mc_conversation_agent_id ON mc_conversation (agen
 
 CREATE TABLE IF NOT EXISTS mc_chat_event_batch
 (
-    id              BIGINT      NOT NULL AUTO_INCREMENT COMMENT '主键ID',
-    conversation_id BIGINT      NOT NULL COMMENT '关联会话ID',
-    user_content    TEXT        NOT NULL COMMENT '用户输入内容',
-    attachments     TEXT COMMENT '附件JSON数组:[{name,url,mimeType}]',
-    type            VARCHAR(32) NOT NULL DEFAULT 'USER' COMMENT '批次类型(USER=用户任务,CONTEXT_COMPACTION=上下文主动压缩)',
-    status          VARCHAR(20) NOT NULL DEFAULT 'RUNNING' COMMENT '批次状态(RUNNING=执行中,COMPLETED=已完成,ERROR=出错)',
-    error_message   TEXT COMMENT '错误信息(仅ERROR状态)',
-    input_tokens    BIGINT COMMENT '输入token数',
-    output_tokens   BIGINT COMMENT '输出token数',
-    created_at      BIGINT      NOT NULL COMMENT '创建时间(时间戳毫秒)',
-    completed_at    BIGINT COMMENT '完成时间(时间戳毫秒)',
+    id                  BIGINT      NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+    conversation_id     BIGINT      NOT NULL COMMENT '关联会话ID',
+    user_content        TEXT        NOT NULL COMMENT '用户输入内容',
+    attachments         TEXT COMMENT '附件JSON数组:[{name,url,mimeType}]',
+    prompt_context_json TEXT COMMENT '用户轮次上下文快照JSON',
+    type                VARCHAR(32) NOT NULL DEFAULT 'USER' COMMENT '批次类型(USER=用户任务,CONTEXT_COMPACTION=上下文主动压缩)',
+    status              VARCHAR(20) NOT NULL DEFAULT 'RUNNING' COMMENT '批次状态(RUNNING=执行中,COMPLETED=已完成,ERROR=出错)',
+    error_message       TEXT COMMENT '错误信息(仅ERROR状态)',
+    input_tokens        BIGINT COMMENT '输入token数',
+    output_tokens       BIGINT COMMENT '输出token数',
+    created_at          BIGINT      NOT NULL COMMENT '创建时间(时间戳毫秒)',
+    completed_at        BIGINT COMMENT '完成时间(时间戳毫秒)',
     PRIMARY KEY (id)
 );
 
@@ -221,6 +222,7 @@ CREATE TABLE IF NOT EXISTS mc_llm_call_log
     input_tokens        BIGINT      NOT NULL DEFAULT 0 COMMENT '输入token数',
     output_tokens       BIGINT      NOT NULL DEFAULT 0 COMMENT '输出token数',
     total_tokens        BIGINT      NOT NULL DEFAULT 0 COMMENT '合计token数',
+    cached_tokens       BIGINT COMMENT '缓存输入token数(NULL=provider未上报)',
     duration_ms         BIGINT COMMENT '调用耗时(毫秒)',
     status              VARCHAR(20) NOT NULL COMMENT '调用状态：SUCCESS/ERROR',
     error_message       TEXT COMMENT '错误信息',
@@ -243,6 +245,7 @@ CREATE TABLE IF NOT EXISTS mc_token_usage
     input_tokens  BIGINT      NOT NULL DEFAULT 0 COMMENT '输入token数',
     output_tokens BIGINT      NOT NULL DEFAULT 0 COMMENT '输出token数',
     total_tokens  BIGINT      NOT NULL DEFAULT 0 COMMENT '合计token数',
+    cached_tokens BIGINT COMMENT '缓存输入token数(NULL=provider未上报)',
     created_at    BIGINT      NOT NULL COMMENT '调用时间(时间戳毫秒)',
     PRIMARY KEY (id)
 );

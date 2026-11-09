@@ -17,6 +17,8 @@ public record TokenUsageStatsRow(
         Long outputTokens,
         @Schema(description = "总 Token 数")
         Long totalTokens,
+        @Schema(description = "缓存输入 Token 数，未上报时为 null")
+        Long cachedTokens,
         @Schema(description = "调用时间戳")
         Long createdAt) {
 }

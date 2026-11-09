@@ -15,7 +15,7 @@ import lombok.Setter;
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class GlobParam {
     @JsonProperty("path")
-    @AgenticToolParam(name = "path", description = "搜索的根目录路径")
+    @AgenticToolParam(name = "path", description = "搜索的根目录路径（相对CWD或绝对路径）；搜索当前项目使用.，不要重复拼接工作区根目录名称")
     private String path;
 
     @JsonProperty("pattern")

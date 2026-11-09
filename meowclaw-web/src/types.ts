@@ -239,6 +239,8 @@ export interface TokenStatsSummary {
   totalInputTokens: number;
   totalOutputTokens: number;
   totalTokens: number;
+  totalCachedTokens: number | null;
+  cacheHitRate: number | null;
   callCount: number;
 }
 
@@ -346,6 +348,7 @@ export interface LlmCallLogItem {
   inputTokens: number;
   outputTokens: number;
   totalTokens: number;
+  cachedTokens: number | null;
   durationMs: number | null;
   requestMessages: string | null;
   responseContent: string | null;
