@@ -20,6 +20,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { ServiceStatusIndicator } from "./ServiceStatusIndicator";
+import { AboutDialog } from "./AboutDialog";
 
 const ROUTE_LABELS: Record<string, string> = {
   "/": "对话",
@@ -86,6 +87,7 @@ export function AppHeader() {
             <svg role="img" viewBox="0 0 24 24" className="size-4 fill-current"><path d={siGithub.path} /></svg>
           </a>
         </Button>
+        <AboutDialog />
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" size="icon-sm">
