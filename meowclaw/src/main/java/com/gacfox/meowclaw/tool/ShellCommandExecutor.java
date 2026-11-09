@@ -1,6 +1,8 @@
 package com.gacfox.meowclaw.tool;
 
+import com.gacfox.meowclaw.service.AgentService;
 import com.gacfox.proarc.agentic.agent.AgentContext;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import java.io.File;
@@ -9,6 +11,7 @@ import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.*;
 
 /**
@@ -21,6 +24,13 @@ public class ShellCommandExecutor {
     private static final boolean IS_WINDOWS = System.getProperty("os.name").toLowerCase().contains("windows");
     private static final ExecutorService OUTPUT_READER = Executors.newCachedThreadPool();
     private static volatile Charset cachedWindowsCharset;
+
+    private final AgentService agentService;
+
+    @Autowired
+    public ShellCommandExecutor(AgentService agentService) {
+        this.agentService = agentService;
+    }
 
     public String execute(ShellCommandParam param, AgentContext ctx, List<String> shellCommand) {
         return execute(param, ctx, shellCommand, param.getCommand());
@@ -36,6 +46,11 @@ public class ShellCommandExecutor {
             Object cwdObj = ctx.getVariables().get("cwd");
             if (cwdObj instanceof String cwd && !cwd.isBlank()) {
                 pb.directory(new File(cwd));
+            }
+            Object agentId = ctx.getVariables().get("agentId");
+            if (agentId instanceof Long id) {
+                Map<String, String> environment = agentService.getEnvironmentVariables(id);
+                pb.environment().putAll(environment);
             }
             Process process = pb.start();
             Charset charset = resolveCharset();

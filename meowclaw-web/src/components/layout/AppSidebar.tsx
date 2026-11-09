@@ -1,5 +1,5 @@
 import { Link, useLocation } from "react-router-dom";
-import { MessageSquare, Cpu, Database, Sparkles, Clock, Plug, Package, BarChart3, FolderTree, History, Brain, Activity, Shield } from "lucide-react";
+import { MessageSquare, Cpu, Database, Sparkles, Clock, Plug, Package, BarChart3, FolderTree, History, Brain, Activity, Shield, KeyRound } from "lucide-react";
 import {
   Sidebar,
   SidebarContent,
@@ -120,6 +120,14 @@ export function AppSidebar() {
                   <Link to="/guardrail-policy">
                     <Shield />
                     <span>安全护栏策略</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              <SidebarMenuItem>
+                <SidebarMenuButton tooltip="环境变量" asChild isActive={location.pathname === "/environment-variable"}>
+                  <Link to="/environment-variable">
+                    <KeyRound />
+                    <span>环境变量</span>
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>

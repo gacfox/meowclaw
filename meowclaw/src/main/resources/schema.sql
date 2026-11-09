@@ -53,6 +53,7 @@ CREATE TABLE IF NOT EXISTS mc_agent
     secondary_llm_id         BIGINT       NOT NULL COMMENT '辅助LLM配置ID（标题生成、消息压缩使用）',
     embedding_model_id       BIGINT COMMENT '可选的向量嵌入模型配置ID',
     workspace_folder         VARCHAR(500) COMMENT '工作区目录路径',
+    environment_variables_json TEXT COMMENT 'Shell环境变量JSON对象',
     aggressive_memory_recall BOOLEAN      NOT NULL DEFAULT FALSE COMMENT '激进记忆召回：每次用户输入自动召回记忆注入提示词',
     created_at               BIGINT       NOT NULL COMMENT '创建时间(时间戳毫秒)',
     updated_at               BIGINT       NOT NULL COMMENT '更新时间(时间戳毫秒)',

@@ -66,6 +66,11 @@ export interface AgentDTO {
   updatedAt: number;
 }
 
+export interface AgentEnvironmentVariablesDTO {
+  agentId: number;
+  variables: Record<string, string>;
+}
+
 export interface ConversationDTO {
   id: number;
   agentId: number;

@@ -1,4 +1,4 @@
-import type { AgentDTO } from "@/types";
+import type { AgentDTO, AgentEnvironmentVariablesDTO } from "@/types";
 import { request, uploadRequest } from "./request";
 
 export async function listAgents(): Promise<AgentDTO[]> {
@@ -50,4 +50,20 @@ export async function deleteAgent(id: number) {
 
 export async function uploadAgentAvatar(id: number, file: File): Promise<string> {
   return uploadRequest(`/api/agent/${id}/avatar`, file);
+}
+
+export async function getAgentEnvironmentVariables(id: number): Promise<AgentEnvironmentVariablesDTO> {
+  const res = await request<AgentEnvironmentVariablesDTO>(`/api/agent/${id}/environment-variables`);
+  return res.data;
+}
+
+export async function updateAgentEnvironmentVariables(
+  id: number,
+  variables: Record<string, string>,
+): Promise<AgentEnvironmentVariablesDTO> {
+  const res = await request<AgentEnvironmentVariablesDTO>(`/api/agent/${id}/environment-variables`, {
+    method: "PUT",
+    body: JSON.stringify({ variables }),
+  });
+  return res.data;
 }

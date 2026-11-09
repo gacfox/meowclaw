@@ -27,6 +27,7 @@ const ROUTE_LABELS: Record<string, string> = {
   "/llm": "大语言模型",
   "/embedding-model": "向量嵌入模型",
   "/guardrail-policy": "安全护栏策略",
+  "/environment-variable": "环境变量",
   "/agent": "智能体",
   "/scheduled-task": "定时任务",
   "/mcp-service": "MCP 服务",

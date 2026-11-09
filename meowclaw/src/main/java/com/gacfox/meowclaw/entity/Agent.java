@@ -44,6 +44,9 @@ public class Agent {
     @Column(name = "workspace_folder", length = 500)
     private String workspaceFolder;
 
+    @Column(name = "environment_variables_json", columnDefinition = "TEXT")
+    private String environmentVariablesJson;
+
     @Column(name = "aggressive_memory_recall", nullable = false)
     private Boolean aggressiveMemoryRecall;
 

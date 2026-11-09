@@ -1,11 +1,15 @@
 package com.gacfox.meowclaw.service;
 
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.gacfox.meowclaw.converter.AgentConverter;
 import com.gacfox.meowclaw.dto.AgentDTO;
+import com.gacfox.meowclaw.dto.AgentEnvironmentDTO;
 import com.gacfox.meowclaw.dto.CreateAgentRequest;
+import com.gacfox.meowclaw.dto.UpdateAgentEnvironmentRequest;
 import com.gacfox.meowclaw.dto.UpdateAgentRequest;
 import com.gacfox.meowclaw.entity.Agent;
 import com.gacfox.meowclaw.repository.AgentRepository;
+import com.gacfox.meowclaw.util.JsonUtil;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -17,13 +21,19 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.regex.Pattern;
 
 @Slf4j
 @Service
 public class AgentService {
+    private static final Pattern ENVIRONMENT_KEY = Pattern.compile("[A-Za-z_][A-Za-z0-9_]*");
+
     private final AgentRepository agentRepository;
     private final AgentConverter agentConverter;
+    private final JsonUtil jsonUtil;
 
     @Value("${meowclaw.workspace-dir}")
     private String workspaceDir;
@@ -32,9 +42,10 @@ public class AgentService {
     private String dataDir;
 
     @Autowired
-    public AgentService(AgentRepository agentRepository, AgentConverter agentConverter) {
+    public AgentService(AgentRepository agentRepository, AgentConverter agentConverter, JsonUtil jsonUtil) {
         this.agentRepository = agentRepository;
         this.agentConverter = agentConverter;
+        this.jsonUtil = jsonUtil;
     }
 
     @Transactional(readOnly = true)
@@ -96,6 +107,44 @@ public class AgentService {
         return agentConverter.toDTO(agentRepository.save(agent));
     }
 
+    @Transactional(readOnly = true)
+    public AgentEnvironmentDTO getEnvironment(Long id) {
+        Agent agent = agentRepository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("智能体不存在"));
+        return new AgentEnvironmentDTO(id, readEnvironmentVariables(agent));
+    }
+
+    @Transactional(readOnly = true)
+    public Map<String, String> getEnvironmentVariables(Long id) {
+        Agent agent = agentRepository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("智能体不存在"));
+        return readEnvironmentVariables(agent);
+    }
+
+    @Transactional
+    public AgentEnvironmentDTO updateEnvironment(Long id, UpdateAgentEnvironmentRequest req) {
+        Agent agent = agentRepository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("智能体不存在"));
+        Map<String, String> variables = new LinkedHashMap<>();
+        for (Map.Entry<String, String> entry : req.getVariables().entrySet()) {
+            String key = entry.getKey() == null ? "" : entry.getKey().trim();
+            if (!ENVIRONMENT_KEY.matcher(key).matches()) {
+                throw new IllegalArgumentException("环境变量名无效：" + key);
+            }
+            if (variables.keySet().stream().anyMatch(existing -> existing.equalsIgnoreCase(key))) {
+                throw new IllegalArgumentException("环境变量名重复：" + key);
+            }
+            if (entry.getValue() == null) {
+                throw new IllegalArgumentException("环境变量值不能为null：" + key);
+            }
+            variables.put(key, entry.getValue());
+        }
+        agent.setEnvironmentVariablesJson(jsonUtil.dump(variables));
+        agent.setUpdatedAt(System.currentTimeMillis());
+        agentRepository.save(agent);
+        return new AgentEnvironmentDTO(id, variables);
+    }
+
     @Transactional
     public String updateAvatar(Long id, MultipartFile file) throws IOException {
         Agent agent = agentRepository.findById(id)
@@ -128,6 +177,13 @@ public class AgentService {
                 .orElseThrow(() -> new IllegalArgumentException("智能体不存在"));
         deleteAvatarFile(agent.getAvatarUrl());
         agentRepository.delete(agent);
+    }
+
+    private Map<String, String> readEnvironmentVariables(Agent agent) {
+        String json = agent.getEnvironmentVariablesJson();
+        if (json == null || json.isBlank()) return new LinkedHashMap<>();
+        return jsonUtil.load(json, new TypeReference<>() {
+        });
     }
 
     private String normalizeWorkspaceFolder(String folder) {

@@ -1,5 +1,6 @@
 package com.gacfox.meowclaw.tool;
 
+import com.gacfox.meowclaw.service.AgentService;
 import com.gacfox.proarc.agentic.agent.AgentContext;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledOnOs;
@@ -25,7 +26,7 @@ class ShellCommandTimeoutTest {
     @Test
     @EnabledOnOs(OS.WINDOWS)
     void powershellTimeoutReturnsPartialOutput() {
-        PowerShellTool tool = new PowerShellTool(new ShellCommandExecutor());
+        PowerShellTool tool = new PowerShellTool(new ShellCommandExecutor(mock(AgentService.class)));
 
         String result = tool.powershell(new ShellCommandParam(
                 "Write-Output 'PARTIAL_OUTPUT_BEFORE_SLEEP'; Start-Sleep -Seconds 10", 1), context());
@@ -36,7 +37,7 @@ class ShellCommandTimeoutTest {
     @Test
     @EnabledOnOs(OS.WINDOWS)
     void powershellTimeoutTerminatesChildProcess() {
-        PowerShellTool tool = new PowerShellTool(new ShellCommandExecutor());
+        PowerShellTool tool = new PowerShellTool(new ShellCommandExecutor(mock(AgentService.class)));
         String command = "$child = Start-Process powershell.exe -ArgumentList "
                 + "'-NoProfile','-Command','Start-Sleep -Seconds 60' -PassThru; "
                 + "Write-Output \"child=$($child.Id)\"; Wait-Process -Id $child.Id";
@@ -50,7 +51,7 @@ class ShellCommandTimeoutTest {
     @Test
     @EnabledOnOs({OS.LINUX, OS.MAC})
     void bashTimeoutTerminatesBackgroundChildAndReturnsOutput() {
-        BashTool tool = new BashTool(new ShellCommandExecutor());
+        BashTool tool = new BashTool(new ShellCommandExecutor(mock(AgentService.class)));
 
         String result = tool.bash(new ShellCommandParam(
                 "echo PARTIAL_OUTPUT_BEFORE_SLEEP; sleep 60 & echo \"child=$!\"; wait", 1), context());
@@ -64,7 +65,7 @@ class ShellCommandTimeoutTest {
     @EnabledOnOs({OS.LINUX, OS.MAC})
     void bashTimeoutAllowsSigtermHandlerToRun() throws Exception {
         Path trapLog = workspace.resolve("trap.log");
-        BashTool tool = new BashTool(new ShellCommandExecutor());
+        BashTool tool = new BashTool(new ShellCommandExecutor(mock(AgentService.class)));
         String command = "trap 'echo TERM >> " + trapLog + "' TERM; "
                 + "echo ready; while true; do sleep 1; done";
 
