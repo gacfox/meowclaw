@@ -1,6 +1,6 @@
 package com.gacfox.meowclaw.tool;
 
-import com.gacfox.meowclaw.service.AgentService;
+import com.gacfox.meowclaw.service.EnvironmentVariableService;
 import com.gacfox.proarc.agentic.agent.AgentContext;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledOnOs;
@@ -22,7 +22,7 @@ class ShellToolTest {
     @EnabledOnOs(OS.WINDOWS)
     void powershellExecutesCommandInCurrentWorkspace() {
         AgentContext ctx = context();
-        PowerShellTool tool = new PowerShellTool(new ShellCommandExecutor(mock(AgentService.class)));
+        PowerShellTool tool = new PowerShellTool(new ShellCommandExecutor(mock(EnvironmentVariableService.class)));
 
         String result = tool.powershell(new ShellCommandParam("Write-Output '你好'; Get-Location", 10), ctx);
 
@@ -32,7 +32,7 @@ class ShellToolTest {
     @Test
     @EnabledOnOs(OS.WINDOWS)
     void powershellPreservesDoubleQuotesAndVariableInterpolation() {
-        PowerShellTool tool = new PowerShellTool(new ShellCommandExecutor(mock(AgentService.class)));
+        PowerShellTool tool = new PowerShellTool(new ShellCommandExecutor(mock(EnvironmentVariableService.class)));
 
         String result = tool.powershell(new ShellCommandParam(
                 "$msg = \"Hello\"; Write-Host \"msg = $msg\"", 10), context());
@@ -43,7 +43,7 @@ class ShellToolTest {
     @Test
     @EnabledOnOs(OS.WINDOWS)
     void powershellReturnsTextWithoutCliXmlNoise() {
-        PowerShellTool tool = new PowerShellTool(new ShellCommandExecutor(mock(AgentService.class)));
+        PowerShellTool tool = new PowerShellTool(new ShellCommandExecutor(mock(EnvironmentVariableService.class)));
         String command = "Write-Error 'bad'; Write-Warning 'warn'; Write-Output 'ok';"
                 + " Write-Progress -Activity 'test' -Status 'working' -PercentComplete 50";
 
@@ -55,7 +55,7 @@ class ShellToolTest {
     @Test
     @EnabledOnOs(OS.WINDOWS)
     void powershellReturnsUnknownCommandErrorAsPlainText() {
-        PowerShellTool tool = new PowerShellTool(new ShellCommandExecutor(mock(AgentService.class)));
+        PowerShellTool tool = new PowerShellTool(new ShellCommandExecutor(mock(EnvironmentVariableService.class)));
 
         String result = tool.powershell(new ShellCommandParam("meowclaw-command-does-not-exist", 10), context());
 
@@ -65,7 +65,7 @@ class ShellToolTest {
     @Test
     @EnabledOnOs(OS.WINDOWS)
     void powershellReturnsSyntaxErrorAsPlainText() {
-        PowerShellTool tool = new PowerShellTool(new ShellCommandExecutor(mock(AgentService.class)));
+        PowerShellTool tool = new PowerShellTool(new ShellCommandExecutor(mock(EnvironmentVariableService.class)));
 
         String result = tool.powershell(new ShellCommandParam("if (", 10), context());
 
@@ -75,7 +75,7 @@ class ShellToolTest {
     @Test
     @EnabledOnOs(OS.WINDOWS)
     void powershellPreservesNativeCommandExitCode() {
-        PowerShellTool tool = new PowerShellTool(new ShellCommandExecutor(mock(AgentService.class)));
+        PowerShellTool tool = new PowerShellTool(new ShellCommandExecutor(mock(EnvironmentVariableService.class)));
 
         String result = tool.powershell(new ShellCommandParam("cmd /c exit 3", 10), context());
 
@@ -85,8 +85,8 @@ class ShellToolTest {
     @Test
     @EnabledOnOs(OS.WINDOWS)
     void powershellInjectsAgentEnvironmentVariables() {
-        AgentService agentService = mock(AgentService.class);
-        when(agentService.getEnvironmentVariables(1L)).thenReturn(Map.of("MEOWCLAW_TEST", "hello"));
+        EnvironmentVariableService agentService = mock(EnvironmentVariableService.class);
+        when(agentService.getMergedEnvironment(1L)).thenReturn(Map.of("MEOWCLAW_TEST", "hello"));
         AgentContext ctx = mock(AgentContext.class);
         when(ctx.getVariables()).thenReturn(Map.of("cwd", workspace.toString(), "agentId", 1L));
         PowerShellTool tool = new PowerShellTool(new ShellCommandExecutor(agentService));
@@ -99,8 +99,8 @@ class ShellToolTest {
     @Test
     @EnabledOnOs({OS.LINUX, OS.MAC})
     void bashInjectsAgentEnvironmentVariables() {
-        AgentService agentService = mock(AgentService.class);
-        when(agentService.getEnvironmentVariables(1L)).thenReturn(Map.of("MEOWCLAW_TEST", "hello"));
+        EnvironmentVariableService agentService = mock(EnvironmentVariableService.class);
+        when(agentService.getMergedEnvironment(1L)).thenReturn(Map.of("MEOWCLAW_TEST", "hello"));
         AgentContext ctx = mock(AgentContext.class);
         when(ctx.getVariables()).thenReturn(Map.of("cwd", workspace.toString(), "agentId", 1L));
         BashTool tool = new BashTool(new ShellCommandExecutor(agentService));
@@ -114,7 +114,7 @@ class ShellToolTest {
     @EnabledOnOs({OS.LINUX, OS.MAC})
     void bashExecutesCommandInCurrentWorkspace() {
         AgentContext ctx = context();
-        BashTool tool = new BashTool(new ShellCommandExecutor(mock(AgentService.class)));
+        BashTool tool = new BashTool(new ShellCommandExecutor(mock(EnvironmentVariableService.class)));
 
         String result = tool.bash(new ShellCommandParam("printf '你好\\n'; pwd", 10), ctx);
 

@@ -1,6 +1,6 @@
 package com.gacfox.meowclaw.tool;
 
-import com.gacfox.meowclaw.service.AgentService;
+import com.gacfox.meowclaw.service.EnvironmentVariableService;
 import com.gacfox.proarc.agentic.agent.AgentContext;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
@@ -25,11 +25,11 @@ public class ShellCommandExecutor {
     private static final ExecutorService OUTPUT_READER = Executors.newCachedThreadPool();
     private static volatile Charset cachedWindowsCharset;
 
-    private final AgentService agentService;
+    private final EnvironmentVariableService environmentVariableService;
 
     @Autowired
-    public ShellCommandExecutor(AgentService agentService) {
-        this.agentService = agentService;
+    public ShellCommandExecutor(EnvironmentVariableService environmentVariableService) {
+        this.environmentVariableService = environmentVariableService;
     }
 
     public String execute(ShellCommandParam param, AgentContext ctx, List<String> shellCommand) {
@@ -49,7 +49,7 @@ public class ShellCommandExecutor {
             }
             Object agentId = ctx.getVariables().get("agentId");
             if (agentId instanceof Long id) {
-                Map<String, String> environment = agentService.getEnvironmentVariables(id);
+                Map<String, String> environment = environmentVariableService.getMergedEnvironment(id);
                 pb.environment().putAll(environment);
             }
             Process process = pb.start();
