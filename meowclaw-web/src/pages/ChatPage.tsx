@@ -4,7 +4,7 @@ import type { AgentDTO, ConversationDTO, ChatEventBatchDTO, ChatEventDTO, PageRe
 import { listAgents } from "@/services/agent";
 import { listLlms } from "@/services/llm";
 import { listConversations, createConversation, getConversation, deleteConversation, renameConversation, listBatches, chatStream, watchStream, listRunningConversations, stopChat, truncateAfterBatch, waitForTitle, listSidebarGroups, pinConversation, moveConversationToProject } from "@/services/conversation";
-import { createProject, renameProject, deleteProject } from "@/services/project";
+import { createProject, updateProject, deleteProject } from "@/services/project";
 import { listGuardrailPolicies, setConversationGuardrailPolicy, decideApproval } from "@/services/guardrail";
 import { readSelectedAgentId, writeSelectedAgentId } from "@/lib/selectedAgent";
 import { useAuthStore } from "@/stores/auth";
@@ -174,8 +174,8 @@ export function ChatPage() {
   });
   const [projectDialogOpen, setProjectDialogOpen] = useState(false);
   const [projectNameDraft, setProjectNameDraft] = useState("");
-  const [renamingProjectId, setRenamingProjectId] = useState<number | null>(null);
-  const [projectRenameDraft, setProjectRenameDraft] = useState("");
+  const [projectPathDraft, setProjectPathDraft] = useState("");
+  const [editingProject, setEditingProject] = useState<ProjectDTO | null>(null);
   const [deleteProjectTarget, setDeleteProjectTarget] = useState<ProjectDTO | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -590,29 +590,37 @@ export function ChatPage() {
     }
   }
 
-  async function handleCreateProject() {
-    if (!selectedAgentId || !projectNameDraft.trim()) return;
-    try {
-      await createProject(selectedAgentId, projectNameDraft.trim());
-      setProjectDialogOpen(false);
-      setProjectNameDraft("");
-      loadGroups(selectedAgentId);
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "新建项目失败");
-    }
+  function openCreateProjectDialog() {
+    setEditingProject(null);
+    setProjectNameDraft("");
+    setProjectPathDraft("");
+    setProjectDialogOpen(true);
   }
 
-  async function commitProjectRename() {
-    const id = renamingProjectId;
-    const name = projectRenameDraft.trim();
-    setRenamingProjectId(null);
-    setProjectRenameDraft("");
-    if (id == null || !name) return;
+  function openEditProjectDialog(project: ProjectDTO) {
+    setEditingProject(project);
+    setProjectNameDraft(project.name);
+    setProjectPathDraft(project.path ?? "");
+    setProjectDialogOpen(true);
+  }
+
+  async function handleSaveProject() {
+    if (!selectedAgentId || !projectNameDraft.trim()) return;
+    const name = projectNameDraft.trim();
+    const path = projectPathDraft.trim() || undefined;
     try {
-      await renameProject(id, name);
-      loadGroups(selectedAgentId!);
+      if (editingProject) {
+        await updateProject(editingProject.id, { name, path });
+      } else {
+        await createProject(selectedAgentId, name, path);
+      }
+      setProjectDialogOpen(false);
+      setProjectNameDraft("");
+      setProjectPathDraft("");
+      setEditingProject(null);
+      loadGroups(selectedAgentId);
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "重命名失败");
+      toast.error(e instanceof Error ? e.message : editingProject ? "保存项目失败" : "新建项目失败");
     }
   }
 
@@ -1281,7 +1289,7 @@ export function ChatPage() {
                 collapsed={!!collapsedGroups.projects}
                 onToggle={() => toggleGroup("projects")}
                 actions={
-                  <Button variant="ghost" size="icon-xs" title="新建项目" onClick={() => { setProjectNameDraft(""); setProjectDialogOpen(true); }}>
+                  <Button variant="ghost" size="icon-xs" title="新建项目" onClick={openCreateProjectDialog}>
                     <Plus className="size-3.5" />
                   </Button>
                 }
@@ -1293,14 +1301,9 @@ export function ChatPage() {
                     <ProjectRow
                       project={project}
                       collapsed={projectCollapsed}
-                      renaming={renamingProjectId === project.id}
-                      renameDraft={projectRenameDraft}
                       onToggle={() => toggleGroup(`project-${project.id}`)}
                       onNewConversation={() => handleNewConvoInProject(project.id)}
-                      onRenameStart={() => { setRenamingProjectId(project.id); setProjectRenameDraft(project.name); }}
-                      onRenameChange={setProjectRenameDraft}
-                      onRenameConfirm={commitProjectRename}
-                      onRenameCancel={() => { setRenamingProjectId(null); setProjectRenameDraft(""); }}
+                      onEdit={() => openEditProjectDialog(project)}
                       onDelete={() => setDeleteProjectTarget(project)}
                     />
                     {!projectCollapsed && (project.conversations ?? []).map((c) => renderConvoItem(c, "project"))}
@@ -1326,7 +1329,7 @@ export function ChatPage() {
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="start">
-                    <DropdownMenuItem onClick={() => { setProjectNameDraft(""); setProjectDialogOpen(true); }}>
+                    <DropdownMenuItem onClick={openCreateProjectDialog}>
                       <FolderPlus className="size-3.5" />
                       新建项目
                     </DropdownMenuItem>
@@ -1673,18 +1676,24 @@ export function ChatPage() {
       <Dialog open={projectDialogOpen} onOpenChange={setProjectDialogOpen}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
-            <DialogTitle>新建项目</DialogTitle>
+            <DialogTitle>{editingProject ? "编辑项目" : "新建项目"}</DialogTitle>
           </DialogHeader>
           <Input
             autoFocus
             value={projectNameDraft}
             onChange={(e) => setProjectNameDraft(e.target.value)}
-            onKeyDown={(e) => { if (e.key === "Enter") handleCreateProject(); }}
+            onKeyDown={(e) => { if (e.key === "Enter") handleSaveProject(); }}
             placeholder="项目名称"
+          />
+          <Input
+            value={projectPathDraft}
+            onChange={(e) => setProjectPathDraft(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter") handleSaveProject(); }}
+            placeholder={editingProject ? "项目路径" : "留空自动使用 projects/<项目ID>"}
           />
           <DialogFooter>
             <Button variant="outline" onClick={() => setProjectDialogOpen(false)}>取消</Button>
-            <Button onClick={handleCreateProject} disabled={!projectNameDraft.trim()}>创建</Button>
+            <Button onClick={handleSaveProject} disabled={!projectNameDraft.trim()}>{editingProject ? "保存" : "创建"}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

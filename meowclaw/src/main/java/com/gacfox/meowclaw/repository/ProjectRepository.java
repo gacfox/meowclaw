@@ -11,4 +11,6 @@ public interface ProjectRepository extends JpaRepository<Project, Long> {
     List<Project> findByAgentIdOrderByCreatedAtAsc(Long agentId);
 
     boolean existsByAgentIdAndName(Long agentId, String name);
+
+    boolean existsByAgentIdAndPath(Long agentId, String path);
 }

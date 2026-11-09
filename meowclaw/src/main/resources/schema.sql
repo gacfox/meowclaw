@@ -297,11 +297,13 @@ CREATE TABLE IF NOT EXISTS mc_project
     id         BIGINT       NOT NULL AUTO_INCREMENT COMMENT '主键ID',
     agent_id   BIGINT       NOT NULL COMMENT '所属智能体ID',
     name       VARCHAR(200) NOT NULL COMMENT '项目名称(同一智能体内唯一)',
+    path       VARCHAR(1000) COMMENT '项目工作目录绝对路径',
     created_at BIGINT       NOT NULL COMMENT '创建时间(时间戳毫秒)',
     updated_at BIGINT       NOT NULL COMMENT '更新时间(时间戳毫秒)',
     PRIMARY KEY (id)
 );
 CREATE UNIQUE INDEX IF NOT EXISTS uk_mc_project_agent_name ON mc_project (agent_id, name);
+CREATE UNIQUE INDEX IF NOT EXISTS uk_mc_project_agent_path ON mc_project (agent_id, path);
 
 CREATE TABLE IF NOT EXISTS mc_memory_node
 (

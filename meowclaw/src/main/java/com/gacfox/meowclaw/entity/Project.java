@@ -23,6 +23,9 @@ public class Project {
     @Column(name = "name", nullable = false, length = 200)
     private String name;
 
+    @Column(name = "path", length = 1000)
+    private String path;
+
     @Column(name = "created_at", nullable = false)
     private Long createdAt;
 

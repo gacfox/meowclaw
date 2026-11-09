@@ -19,6 +19,12 @@ public interface ChatEventBatchRepository extends JpaRepository<ChatEventBatch, 
 
     void deleteByConversationId(Long conversationId);
 
+    boolean existsByConversationIdAndStatus(Long conversationId, String status);
+
+    @Query("select count(b) > 0 from ChatEventBatch b where b.status = 'RUNNING'"
+            + " and b.conversationId in (select c.id from Conversation c where c.projectId = :projectId)")
+    boolean existsRunningByProjectId(@Param("projectId") Long projectId);
+
     @Query("select b from ChatEventBatch b where b.type = 'USER'"
             + " and exists (select l.id from LlmCallLog l where l.batchId = b.id and l.purpose = 'agent')"
             + " and (:conversationId is null or b.conversationId = :conversationId)"

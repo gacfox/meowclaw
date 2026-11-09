@@ -20,6 +20,8 @@ public class ProjectDTO {
     private Long agentId;
     @Schema(description = "项目名称")
     private String name;
+    @Schema(description = "项目工作目录绝对路径")
+    private String path;
     @Schema(description = "创建时间戳")
     private Long createdAt;
     @Schema(description = "更新时间戳")

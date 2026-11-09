@@ -41,78 +41,52 @@ export function ConversationGroupHeader({
 export function ProjectRow({
   project,
   collapsed,
-  renaming,
-  renameDraft,
   onToggle,
   onNewConversation,
-  onRenameStart,
-  onRenameChange,
-  onRenameConfirm,
-  onRenameCancel,
+  onEdit,
   onDelete,
 }: {
   project: ProjectDTO;
   collapsed: boolean;
-  renaming: boolean;
-  renameDraft: string;
   onToggle: () => void;
   onNewConversation: () => void;
-  onRenameStart: () => void;
-  onRenameChange: (value: string) => void;
-  onRenameConfirm: () => void;
-  onRenameCancel: () => void;
+  onEdit: () => void;
   onDelete: () => void;
 }) {
   return (
     <div className="group flex items-center gap-1 px-3 py-1.5 text-sm">
-      {renaming ? (
-        <input
-          autoFocus
-          value={renameDraft}
-          onChange={(e) => onRenameChange(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") onRenameConfirm();
-            if (e.key === "Escape") onRenameCancel();
-          }}
-          onBlur={onRenameConfirm}
-          className="flex-1 rounded bg-background px-1.5 py-0.5 text-sm outline-none ring-1 ring-ring"
-        />
-      ) : (
-        <>
-          <button type="button" className="flex flex-1 items-center gap-1.5 text-left" onClick={onToggle}>
-            <ChevronRight className={cn("size-3 shrink-0 transition-transform", !collapsed && "rotate-90")} />
-            <Folder className="size-3.5 shrink-0 text-muted-foreground" />
-            <span className="truncate">{project.name}</span>
-          </button>
-          <Button
-            variant="ghost"
-            size="icon-xs"
-            className="opacity-0 group-hover:opacity-100"
-            title="在该项目中新建会话"
-            onClick={onNewConversation}
-          >
-            <SquarePen className="size-3.5" />
+      <button type="button" className="flex flex-1 items-center gap-1.5 text-left" onClick={onToggle}>
+        <ChevronRight className={cn("size-3 shrink-0 transition-transform", !collapsed && "rotate-90")} />
+        <Folder className="size-3.5 shrink-0 text-muted-foreground" />
+        <span className="truncate">{project.name}</span>
+      </button>
+      <Button
+        variant="ghost"
+        size="icon-xs"
+        className="opacity-0 group-hover:opacity-100"
+        title="在该项目中新建会话"
+        onClick={onNewConversation}
+      >
+        <SquarePen className="size-3.5" />
+      </Button>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button variant="ghost" size="icon-xs" className="opacity-0 group-hover:opacity-100">
+            <MoreHorizontal className="size-3.5" />
           </Button>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon-xs" className="opacity-0 group-hover:opacity-100">
-                <MoreHorizontal className="size-3.5" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="start">
-              <DropdownMenuItem onClick={onRenameStart}>
-                <Pencil className="size-3.5" />
-                重命名
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem variant="destructive" onClick={onDelete}>
-                <Trash2 className="size-3.5" />
-                删除项目
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </>
-      )}
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="start">
+          <DropdownMenuItem onClick={onEdit}>
+            <Pencil className="size-3.5" />
+            编辑项目
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem variant="destructive" onClick={onDelete}>
+            <Trash2 className="size-3.5" />
+            删除项目
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
     </div>
   );
 }

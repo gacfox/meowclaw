@@ -19,6 +19,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.stream.Stream;
 
 @Service
@@ -160,6 +161,15 @@ public class ConversationService {
 
     @Transactional
     public ConversationDTO create(Long agentId, String type, Long projectId) {
+        String projectCwd = null;
+        if (projectId != null) {
+            Project project = projectRepository.findById(projectId)
+                    .orElseThrow(() -> new IllegalArgumentException("项目不存在"));
+            if (!project.getAgentId().equals(agentId)) {
+                throw new IllegalArgumentException("项目与会话不属于同一智能体");
+            }
+            projectCwd = project.getPath();
+        }
         Conversation conv = new Conversation();
         conv.setAgentId(agentId);
         conv.setType(type);
@@ -167,7 +177,9 @@ public class ConversationService {
         long now = System.currentTimeMillis();
         conv.setCreatedAt(now);
         conv.setUpdatedAt(now);
-        return toDTO(conversationRepository.save(conv));
+        conv = conversationRepository.save(conv);
+        if (projectCwd != null) updateCwd(conv.getId(), projectCwd);
+        return toDTO(conv);
     }
 
     @Transactional
@@ -182,15 +194,27 @@ public class ConversationService {
     public ConversationDTO moveToProject(Long id, Long projectId) {
         Conversation conv = conversationRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("会话不存在"));
+        if (Objects.equals(conv.getProjectId(), projectId)) return toDTO(conv);
+        if (chatEventBatchRepository.existsByConversationIdAndStatus(id, "RUNNING")) {
+            throw new IllegalArgumentException("运行中的会话不能移动项目");
+        }
+        String cwd;
         if (projectId != null) {
             Project project = projectRepository.findById(projectId)
                     .orElseThrow(() -> new IllegalArgumentException("项目不存在"));
             if (!project.getAgentId().equals(conv.getAgentId())) {
                 throw new IllegalArgumentException("项目与会话不属于同一智能体");
             }
+            cwd = project.getPath();
+        } else {
+            Agent agent = agentRepository.findById(conv.getAgentId())
+                    .orElseThrow(() -> new IllegalArgumentException("智能体不存在"));
+            cwd = agent.getWorkspaceFolder();
         }
         conv.setProjectId(projectId);
-        return toDTO(conversationRepository.save(conv));
+        conv = conversationRepository.save(conv);
+        updateCwd(id, cwd);
+        return toDTO(conv);
     }
 
     /**
