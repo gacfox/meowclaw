@@ -52,6 +52,7 @@ public class ChatService {
     private final JsonUtil jsonUtil;
     private final GuardrailPolicyEngine guardrailPolicyEngine;
     private final ImageToolResult imageToolResult;
+    private final ImagePreprocessingService imagePreprocessingService;
     private final ConversationService conversationService;
     private final ChatPersistenceService chatPersistenceService;
     private final AgentRepository agentRepository;
@@ -91,11 +92,13 @@ public class ChatService {
                        ObjectMapper objectMapper,
                        JsonUtil jsonUtil,
                        GuardrailPolicyEngine guardrailPolicyEngine,
-                       ImageToolResult imageToolResult) {
+                       ImageToolResult imageToolResult,
+                       ImagePreprocessingService imagePreprocessingService) {
         this.objectMapper = objectMapper;
         this.jsonUtil = jsonUtil;
         this.guardrailPolicyEngine = guardrailPolicyEngine;
         this.imageToolResult = imageToolResult;
+        this.imagePreprocessingService = imagePreprocessingService;
         this.conversationService = conversationService;
         this.chatPersistenceService = chatPersistenceService;
         this.agentRepository = agentRepository;
@@ -426,7 +429,7 @@ public class ChatService {
             ReActAgentExecutor executor = buildExecutor(llmClient, toolNames, run, batchId, conversationId);
 
             AgentContext context = buildAgentContext(batchId, agent, conv, llm, userContent,
-                    images, toolNames, llmClient, reasoningEffort);
+                    attachments, toolNames, llmClient, reasoningEffort);
             run.context = context;
             if (run.stopRequested.get()) {
                 context.requestStop();
@@ -471,7 +474,7 @@ public class ChatService {
                 .httpClient(httpClient)
                 .interceptors(List.of(llmLoggingInterceptor,
                         new LlmCallRecordInterceptor(tokenAccum, llmCallLogService, tokenUsageService, tokenUsageContext, jsonUtil),
-                        new MultimodalToolResultInterceptor(imageToolResult),
+                        new MultimodalToolResultInterceptor(imageToolResult, imagePreprocessingService),
                         new RetryInterceptor()))
                 .build();
     }
@@ -506,8 +509,8 @@ public class ChatService {
     }
 
     private AgentContext buildAgentContext(Long batchId, Agent agent, Conversation conv, Llm llm, String userContent,
-                                           List<String> images, List<String> toolNames, LlmClient llmClient,
-                                           String reasoningEffort) {
+                                           List<ChatAttachmentDTO> attachments, List<String> toolNames,
+                                           LlmClient llmClient, String reasoningEffort) {
         String workspaceFolder = agent.getWorkspaceFolder();
         Map<String, Object> variables = new HashMap<>();
         if (workspaceFolder != null && !workspaceFolder.isBlank()) {
@@ -565,10 +568,10 @@ public class ChatService {
         String renderedUserContent = SystemPromptService.renderUserMessage(
                 promptContext, userContent == null ? "" : userContent);
         Object userMessageContent = renderedUserContent;
-        if (images != null && !images.isEmpty()) {
+        if (attachments != null && !attachments.isEmpty()) {
             List<Map<String, Object>> parts = new ArrayList<>();
             parts.add(Map.of("type", "text", "text", renderedUserContent));
-            parts.addAll(chatAttachmentService.toImageParts(images));
+            parts.addAll(chatAttachmentService.loadImageParts(attachments));
             userMessageContent = parts;
         }
         messages.add(Message.builder()

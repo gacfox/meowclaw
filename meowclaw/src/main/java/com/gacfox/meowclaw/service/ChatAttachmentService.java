@@ -1,6 +1,7 @@
 package com.gacfox.meowclaw.service;
 
 import com.gacfox.meowclaw.dto.ChatAttachmentDTO;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
@@ -27,9 +28,13 @@ public class ChatAttachmentService {
     private static final String UPLOAD_SUB_DIR = "chat";
 
     private final Path uploadDir;
+    private final ImagePreprocessingService imagePreprocessingService;
 
-    public ChatAttachmentService(@Value("${meowclaw.data-dir}") String dataDir) {
+    @Autowired
+    public ChatAttachmentService(@Value("${meowclaw.data-dir}") String dataDir,
+                                 ImagePreprocessingService imagePreprocessingService) {
         this.uploadDir = Paths.get(dataDir, "upload", UPLOAD_SUB_DIR);
+        this.imagePreprocessingService = imagePreprocessingService;
     }
 
     /**
@@ -73,25 +78,15 @@ public class ChatAttachmentService {
                 continue;
             }
             try {
-                String base64 = Base64.getEncoder().encodeToString(Files.readAllBytes(file));
+                ImagePreprocessingService.ProcessedImage image = imagePreprocessingService.process(
+                        file, attachment.getMimeType());
                 parts.add(Map.of(
                         "type", "image_url",
-                        "image_url", Map.of("url", "data:" + attachment.getMimeType() + ";base64," + base64)
+                        "image_url", Map.of("url", image.toDataUrl())
                 ));
             } catch (IOException e) {
                 throw new UncheckedIOException("读取图片失败: " + attachment.getName(), e);
             }
-        }
-        return parts;
-    }
-
-    /**
-     * 从请求内存中的 data URL 直接构建 image_url 部件（当前轮免读盘）
-     */
-    public List<Map<String, Object>> toImageParts(List<String> dataUrls) {
-        List<Map<String, Object>> parts = new ArrayList<>();
-        for (String dataUrl : dataUrls) {
-            parts.add(Map.of("type", "image_url", "image_url", Map.of("url", dataUrl)));
         }
         return parts;
     }

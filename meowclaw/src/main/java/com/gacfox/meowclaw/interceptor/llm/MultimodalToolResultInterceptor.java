@@ -1,5 +1,6 @@
 package com.gacfox.meowclaw.interceptor.llm;
 
+import com.gacfox.meowclaw.service.ImagePreprocessingService;
 import com.gacfox.meowclaw.tool.ImageToolResult;
 import com.gacfox.proarc.agentic.client.interceptor.LlmInterceptor;
 import com.gacfox.proarc.agentic.client.interceptor.LlmInterceptorChain;
@@ -10,10 +11,8 @@ import com.gacfox.proarc.agentic.model.openai.ModelResponse;
 import lombok.extern.slf4j.Slf4j;
 import reactor.core.publisher.Flux;
 
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
-import java.util.Base64;
 import java.util.List;
 import java.util.Map;
 
@@ -24,9 +23,12 @@ import java.util.Map;
 @Slf4j
 public class MultimodalToolResultInterceptor implements LlmInterceptor {
     private final ImageToolResult imageToolResult;
+    private final ImagePreprocessingService imagePreprocessingService;
 
-    public MultimodalToolResultInterceptor(ImageToolResult imageToolResult) {
+    public MultimodalToolResultInterceptor(ImageToolResult imageToolResult,
+                                           ImagePreprocessingService imagePreprocessingService) {
         this.imageToolResult = imageToolResult;
+        this.imagePreprocessingService = imagePreprocessingService;
     }
 
     @Override
@@ -59,8 +61,9 @@ public class MultimodalToolResultInterceptor implements LlmInterceptor {
                 continue;
             }
             try {
-                byte[] bytes = Files.readAllBytes(Path.of(ref.path()));
-                String dataUrl = "data:" + ref.mimeType() + ";base64," + Base64.getEncoder().encodeToString(bytes);
+                ImagePreprocessingService.ProcessedImage image = imagePreprocessingService.process(
+                        Path.of(ref.path()), ref.mimeType());
+                String dataUrl = image.toDataUrl();
                 expanded.add(toolText(message, ref.note()));
                 expanded.add(Message.builder()
                         .role(Message.ROLE_USER)

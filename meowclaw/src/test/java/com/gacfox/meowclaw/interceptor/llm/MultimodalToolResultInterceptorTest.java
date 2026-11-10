@@ -1,6 +1,7 @@
 package com.gacfox.meowclaw.interceptor.llm;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.gacfox.meowclaw.service.ImagePreprocessingService;
 import com.gacfox.meowclaw.tool.ImageToolResult;
 import com.gacfox.meowclaw.util.JsonUtil;
 import com.gacfox.proarc.agentic.client.interceptor.LlmInterceptorChain;
@@ -12,6 +13,8 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import reactor.core.publisher.Flux;
 
+import javax.imageio.ImageIO;
+import java.awt.image.BufferedImage;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -27,7 +30,7 @@ class MultimodalToolResultInterceptorTest {
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final ImageToolResult imageToolResult = new ImageToolResult(objectMapper, new JsonUtil(objectMapper));
     private final MultimodalToolResultInterceptor interceptor =
-            new MultimodalToolResultInterceptor(imageToolResult);
+            new MultimodalToolResultInterceptor(imageToolResult, new ImagePreprocessingService());
 
     private static ModelRequest requestWith(Message... messages) {
         return ModelRequest.builder().messages(new ArrayList<>(List.of(messages))).build();
@@ -74,8 +77,8 @@ class MultimodalToolResultInterceptorTest {
     @Test
     void expandsMarkerIntoImagePartsForVisionModel() throws Exception {
         Path image = tempDir.resolve("cat.png");
-        Files.write(image, new byte[]{1, 2, 3});
-        String marked = imageToolResult.build(image, "image/png", 3);
+        writePng(image);
+        String marked = imageToolResult.build(image, "image/png", Files.size(image));
         CapturingChain chain = new CapturingChain();
 
         interceptor.interceptBlocking(requestWith(toolMessage(marked)), modelInfo(true), chain);
@@ -95,8 +98,8 @@ class MultimodalToolResultInterceptorTest {
     @Test
     void degradesToNoteForNonVisionModel() throws Exception {
         Path image = tempDir.resolve("cat.png");
-        Files.write(image, new byte[]{1, 2, 3});
-        String marked = imageToolResult.build(image, "image/png", 3);
+        writePng(image);
+        String marked = imageToolResult.build(image, "image/png", Files.size(image));
         CapturingChain chain = new CapturingChain();
 
         interceptor.interceptBlocking(requestWith(toolMessage(marked)), modelInfo(false), chain);
@@ -119,12 +122,16 @@ class MultimodalToolResultInterceptorTest {
     @Test
     void streamingPathAlsoExpands() throws Exception {
         Path image = tempDir.resolve("cat.png");
-        Files.write(image, new byte[]{1});
-        String marked = imageToolResult.build(image, "image/png", 1);
+        writePng(image);
+        String marked = imageToolResult.build(image, "image/png", Files.size(image));
         CapturingChain chain = new CapturingChain();
 
         interceptor.interceptStreaming(requestWith(toolMessage(marked)), modelInfo(true), chain);
 
         assertThat(chain.captured.getMessages()).hasSize(2);
+    }
+
+    private void writePng(Path path) throws Exception {
+        ImageIO.write(new BufferedImage(2, 3, BufferedImage.TYPE_INT_RGB), "png", path.toFile());
     }
 }
