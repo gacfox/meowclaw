@@ -16,7 +16,7 @@ import java.nio.file.Path;
  */
 @Component
 public class SkillTool {
-    @AgenticTool(name = "skill", description = "读取工作区中指定技能的 SKILL.md 完整内容")
+    @AgenticTool(name = "skill", description = "读取工作区中指定技能的 SKILL.md，返回其绝对路径和完整内容")
     public String skill(@AgenticToolParam(name = "param", description = "技能读取参数") SkillParam param,
                         AgentContext ctx) {
         try {
@@ -27,11 +27,14 @@ public class SkillTool {
             if (!(workspacePath instanceof String ws) || ws.isBlank()) {
                 return "Error: workspace not configured for this agent";
             }
-            Path file = Path.of(ws, ".skill", param.getSkillName(), "SKILL.md");
+            Path file = Path.of(ws, ".skill", param.getSkillName(), "SKILL.md")
+                    .toAbsolutePath().normalize();
             if (!Files.exists(file)) {
                 return "Error: skill not found in workspace: " + param.getSkillName();
             }
-            return Files.readString(file, StandardCharsets.UTF_8);
+            return "Skill: " + param.getSkillName() + "\n"
+                    + "SKILL.md: " + file + "\n\n"
+                    + Files.readString(file, StandardCharsets.UTF_8);
         } catch (Exception e) {
             return "Error: " + e.getMessage();
         }
