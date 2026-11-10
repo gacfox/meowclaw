@@ -15,7 +15,8 @@ import java.util.Set;
  * 安全护栏规则引擎：解析策略配置JSON并对工具调用求值
  * <p>
  * 规则自上而下首个命中生效，未命中时使用defaultDecision；tools支持*通配，
- * paths为Ant风格路径模式且支持${cwd}占位符，路径匹配统一忽略大小写
+ * paths为Ant风格路径模式且支持${cwd}占位符，路径匹配统一忽略大小写；
+ * 不以分隔符开头的相对风格模式会同时匹配绝对路径与相对cwd的路径，避免平台差异导致规则失效
  */
 @Component
 public class GuardrailPolicyEngine {
@@ -102,15 +103,41 @@ public class GuardrailPolicyEngine {
         if (rawPath == null || rawPath.isBlank() || cwd == null || cwd.isBlank()) {
             return false;
         }
-        String path = normalizePath(ToolPathUtil.resolve(cwd, rawPath).toString());
-        String normalizedCwd = normalizePath(cwd);
+        String absolutePath = normalizePath(ToolPathUtil.resolve(cwd, rawPath).toString());
+        String absoluteCwd = normalizePath(ToolPathUtil.resolve(cwd, ".").toString());
+        // 拼接前缀时根目录（如 / 或 C:/）不能重复分隔符，否则 ${cwd}/** 会变成 //**
+        String patternCwd = absoluteCwd.endsWith("/") ? absoluteCwd.substring(0, absoluteCwd.length() - 1) : absoluteCwd;
+        // AntPathMatcher要求pattern与path的前导分隔符一致，绝对路径无法直接匹配相对风格模式，
+        // 故额外提供去掉前导分隔符的绝对路径与相对cwd路径两种候选，避免平台差异导致规则失效
+        String unanchoredPath = absolutePath.startsWith("/") ? absolutePath.substring(1) : absolutePath;
+        String cwdRelativePath = relativize(absoluteCwd, absolutePath);
         for (String pattern : rule.paths()) {
-            String normalizedPattern = normalizePath(pattern.replace(CWD_PLACEHOLDER, normalizedCwd));
-            if (PATH_MATCHER.match(normalizedPattern, path)) {
+            String normalizedPattern = normalizePath(pattern.replace(CWD_PLACEHOLDER, patternCwd));
+            if (PATH_MATCHER.match(normalizedPattern, absolutePath)) {
+                return true;
+            }
+            if (normalizedPattern.startsWith("/")) {
+                continue;
+            }
+            if (PATH_MATCHER.match(normalizedPattern, unanchoredPath)) {
+                return true;
+            }
+            if (cwdRelativePath != null && PATH_MATCHER.match(normalizedPattern, cwdRelativePath)) {
                 return true;
             }
         }
         return false;
+    }
+
+    private static String relativize(String absoluteCwd, String absolutePath) {
+        if (absolutePath.equals(absoluteCwd)) {
+            return "";
+        }
+        String prefix = absoluteCwd.endsWith("/") ? absoluteCwd : absoluteCwd + "/";
+        if (absolutePath.startsWith(prefix)) {
+            return absolutePath.substring(prefix.length());
+        }
+        return null;
     }
 
     private static String normalizePath(String path) {
