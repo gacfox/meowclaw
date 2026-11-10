@@ -1,0 +1,141 @@
+name: Snapshot Build
+
+on:
+  push:
+    branches:
+      - master
+    paths-ignore:
+      - "**.md"
+      - "LICENSE"
+      - ".gitignore"
+      - ".gitattributes"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: snapshot-release-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  JAVA_VERSION: "21"
+  NODE_VERSION: "24"
+  JAR_NAME: meowclaw-0.0.1-SNAPSHOT.jar
+  RELEASE_TAG: snapshot
+  PROARC_REPO: https://github.com/gacfox/proarc-agentic.git
+  PROARC_REF: master
+
+jobs:
+  build-and-publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up JDK ${{ env.JAVA_VERSION }}
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: ${{ env.JAVA_VERSION }}
+          cache: maven
+
+      - name: Install proarc-agentic snapshot dependency
+        run: |
+          set -euo pipefail
+          git clone --depth 1 --branch "$PROARC_REF" "$PROARC_REPO" "$RUNNER_TEMP/proarc-agentic"
+          cd "$RUNNER_TEMP/proarc-agentic"
+          mvn -B -DskipTests install
+
+      - name: Set up Node.js ${{ env.NODE_VERSION }}
+        uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: meowclaw-web/package-lock.json
+
+      - name: Build frontend
+        working-directory: meowclaw-web
+        run: |
+          npm ci
+          npm run build
+
+      - name: Build backend jar
+        working-directory: meowclaw
+        run: mvn -B clean package
+
+      - name: Verify jar
+        run: |
+          set -euo pipefail
+          JAR="meowclaw/target/$JAR_NAME"
+          if [ ! -f "$JAR" ]; then
+            echo "::error::未找到 $JAR，请检查 pom.xml 中的 version 是否仍是 0.0.1-SNAPSHOT"
+            exit 1
+          fi
+          ls -lh "$JAR"
+
+      - name: Generate release notes
+        run: |
+          set -euo pipefail
+          JAR="meowclaw/target/$JAR_NAME"
+          SHORT_SHA="${GITHUB_SHA::7}"
+          SUBJECT="$(git log -1 --pretty=%s | tr -d '\r' | sed 's/|/\\|/g')"
+          BUILD_TIME="$(date -u '+%Y-%m-%d %H:%M:%S')"
+          SHA256="$(sha256sum "$JAR" | cut -d' ' -f1)"
+          SIZE="$(du -h "$JAR" | cut -f1)"
+          COMMIT_URL="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/commit/${GITHUB_SHA}"
+          README_URL="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}#构建部署"
+
+          {
+            echo "> 本 Release 由 CI 自动维护。"
+            echo
+            echo "| 项目 | 内容 |"
+            echo "| --- | --- |"
+            echo "| 分支 | \`${GITHUB_REF_NAME}\` |"
+            echo "| 提交 | [\`${SHORT_SHA}\`](${COMMIT_URL}) ${SUBJECT} |"
+            echo "| 构建时间 | ${BUILD_TIME} UTC |"
+            echo "| 制品 | \`${JAR_NAME}\` (${SIZE}) |"
+            echo "| SHA-256 | \`${SHA256}\` |"
+            echo
+            echo '```bash'
+            echo "java -jar ${JAR_NAME}"
+            echo '```'
+            echo
+            echo "构建方式见 [README](${README_URL})。"
+          } > release-notes.md
+
+          cat release-notes.md
+
+      - name: Publish / update snapshot release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          TAG="$RELEASE_TAG"
+          TITLE="MeowClaw Snapshot (0.0.1-SNAPSHOT)"
+
+          # 让 snapshot tag 始终指向本次构建的提交；失败也不阻塞制品更新
+          git tag -f "$TAG" "$GITHUB_SHA"
+          git push -f origin "refs/tags/$TAG" \
+            || echo "::warning::无法强制推送 tag $TAG（可能受保护），将继续更新现有 Release"
+
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Release $TAG 已存在，更新标题与说明"
+            gh release edit "$TAG" --title "$TITLE" --notes-file release-notes.md --prerelease
+          else
+            echo "创建 Release $TAG"
+            gh release create "$TAG" --title "$TITLE" --notes-file release-notes.md \
+              --target "$GITHUB_SHA" --prerelease --latest=false
+          fi
+
+          # 同名制品会被原地替换，因此 Release 里始终只有一个 jar
+          gh release upload "$TAG" "meowclaw/target/$JAR_NAME" --clobber
+
+          {
+            echo "### Snapshot 制品已更新"
+            echo
+            echo "- 制品：\`$JAR_NAME\`"
+            echo "- 提交：\`${GITHUB_SHA::7}\`"
+            echo "- Release：$(gh release view "$TAG" --json url --jq '.url')"
+          } >> "$GITHUB_STEP_SUMMARY"

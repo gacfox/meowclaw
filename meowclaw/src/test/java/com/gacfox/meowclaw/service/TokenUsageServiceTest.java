@@ -7,6 +7,7 @@ import com.gacfox.meowclaw.interceptor.llm.TokenUsageContext;
 import com.gacfox.meowclaw.repository.LlmRepository;
 import com.gacfox.meowclaw.repository.TokenUsageRepository;
 import com.gacfox.proarc.agentic.model.openai.ModelResponse;
+import com.gacfox.proarc.agentic.model.openai.PromptTokensDetails;
 import com.gacfox.proarc.agentic.model.openai.Usage;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -71,7 +72,7 @@ class TokenUsageServiceTest {
                         .promptTokens(100)
                         .completionTokens(20)
                         .totalTokens(120)
-                        .promptTokensDetails(Usage.PromptTokensDetails.builder()
+                        .promptTokensDetails(PromptTokensDetails.builder()
                                 .cachedTokens(cachedTokens)
                                 .build())
                         .build())

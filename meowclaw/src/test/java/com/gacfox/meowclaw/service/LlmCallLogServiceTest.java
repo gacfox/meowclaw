@@ -6,6 +6,7 @@ import com.gacfox.meowclaw.interceptor.llm.TokenUsageContext;
 import com.gacfox.meowclaw.repository.LlmCallLogRepository;
 import com.gacfox.meowclaw.util.JsonUtil;
 import com.gacfox.proarc.agentic.model.openai.ModelResponse;
+import com.gacfox.proarc.agentic.model.openai.PromptTokensDetails;
 import com.gacfox.proarc.agentic.model.openai.Usage;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -26,7 +27,7 @@ class LlmCallLogServiceTest {
                         .promptTokens(100)
                         .completionTokens(20)
                         .totalTokens(120)
-                        .promptTokensDetails(Usage.PromptTokensDetails.builder().cachedTokens(64).build())
+                        .promptTokensDetails(PromptTokensDetails.builder().cachedTokens(64).build())
                         .build())
                 .build();
 
