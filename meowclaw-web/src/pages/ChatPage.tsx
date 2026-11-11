@@ -38,6 +38,8 @@ import { ConversationItem, ConversationGroupHeader, ProjectRow } from "@/compone
 import type { ConversationLocation } from "@/components/chat/ConversationItem";
 import { toast } from "sonner";
 
+const DELTA_FLUSH_INTERVAL_MS = 200;
+
 interface StreamStep {
   type: "thinking" | "content" | "tool_call" | "approval";
   content?: string;
@@ -47,6 +49,11 @@ interface StreamStep {
   result?: string;
   approval?: ApprovalContent | null;
   subagent?: SubagentContent | null;
+}
+
+interface PendingDelta {
+  type: "thinking" | "content";
+  content: string;
 }
 
 interface PendingApproval {
@@ -146,8 +153,7 @@ export function ChatPage() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const followOutputRef = useRef(true);
-  const pendingContentDeltaRef = useRef("");
-  const pendingThinkingDeltaRef = useRef("");
+  const pendingDeltasRef = useRef<PendingDelta[]>([]);
   const deltaFlushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const convoListRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
@@ -246,8 +252,7 @@ export function ChatPage() {
       clearTimeout(deltaFlushTimerRef.current);
       deltaFlushTimerRef.current = null;
     }
-    pendingContentDeltaRef.current = "";
-    pendingThinkingDeltaRef.current = "";
+    pendingDeltasRef.current = [];
   }
 
   function flushStreamDeltas() {
@@ -255,29 +260,28 @@ export function ChatPage() {
       clearTimeout(deltaFlushTimerRef.current);
     }
     deltaFlushTimerRef.current = null;
-    const contentDelta = pendingContentDeltaRef.current;
-    const thinkingDelta = pendingThinkingDeltaRef.current;
-    pendingContentDeltaRef.current = "";
-    pendingThinkingDeltaRef.current = "";
-    if (contentDelta) {
-      setStreamContent((prev) => prev + contentDelta);
-    }
-    if (thinkingDelta) {
-      setStreamSteps((prev) => {
-        const last = prev[prev.length - 1];
-        if (last && last.type === "thinking") {
-          const updated = [...prev];
-          updated[updated.length - 1] = { ...last, content: (last.content ?? "") + thinkingDelta };
-          return updated;
+    const deltas = pendingDeltasRef.current;
+    pendingDeltasRef.current = [];
+    if (deltas.length === 0) return;
+    setStreamSteps((prev) => {
+      let next = prev;
+      for (const delta of deltas) {
+        const last = next[next.length - 1];
+        if (last?.type === delta.type) {
+          const updated = [...next];
+          updated[updated.length - 1] = { ...last, content: (last.content ?? "") + delta.content };
+          next = updated;
+        } else {
+          next = [...next, { type: delta.type, content: delta.content }];
         }
-        return [...prev, { type: "thinking", content: thinkingDelta }];
-      });
-    }
+      }
+      return next;
+    });
   }
 
   function scheduleDeltaFlush() {
     if (deltaFlushTimerRef.current == null) {
-      deltaFlushTimerRef.current = setTimeout(flushStreamDeltas, 50);
+      deltaFlushTimerRef.current = setTimeout(flushStreamDeltas, DELTA_FLUSH_INTERVAL_MS);
     }
   }
 
@@ -923,11 +927,11 @@ export function ChatPage() {
         if (event.content) setStreamSteps((prev) => [...prev, { type: "thinking", content: event.content! }]);
         break;
       case "thinking_delta":
-        pendingThinkingDeltaRef.current += event.content ?? "";
+        pendingDeltasRef.current.push({ type: "thinking", content: event.content ?? "" });
         scheduleDeltaFlush();
         break;
       case "content_delta":
-        pendingContentDeltaRef.current += event.content ?? "";
+        pendingDeltasRef.current.push({ type: "content", content: event.content ?? "" });
         scheduleDeltaFlush();
         break;
       case "tool_call":
