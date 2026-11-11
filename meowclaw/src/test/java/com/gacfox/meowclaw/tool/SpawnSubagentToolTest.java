@@ -54,17 +54,6 @@ class SpawnSubagentToolTest {
     }
 
     @Test
-    void silentlyDropsFinalAnswerFromAllowedTools() {
-        when(subagentService.spawn(any(), any(), anyString(), anyString(), anyList())).thenReturn("ok");
-
-        String result = tool.spawn(param("任务", List.of("read", "final_answer")), parentContext(List.of("read")));
-
-        assertThat(result).isEqualTo("ok");
-        verify(subagentService).spawn(any(), any(), any(), any(),
-                org.mockito.ArgumentMatchers.eq(List.of("read")));
-    }
-
-    @Test
     void rejectsToolOutsideParentList() {
         String result = tool.spawn(param("任务", List.of("bash")), parentContext(List.of("read")));
 

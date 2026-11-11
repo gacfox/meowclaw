@@ -4,7 +4,9 @@ import type { ChatEventDTO } from "@/types";
 import { Table, TableBody, TableCell, TableRow } from "@/components/ui/table";
 import { MarkdownRenderer } from "@/components/markdown/MarkdownRenderer";
 import { parseApprovalContent } from "@/lib/approval";
+import type { ApprovalContent } from "@/lib/approval";
 import { parseSubagentContent } from "@/lib/subagent";
+import type { SubagentContent } from "@/lib/subagent";
 import { cn } from "@/lib/utils";
 import { Bot, Brain, Check, ChevronDown, ChevronRight, CircleStop, Image as ImageIcon, Loader2, ShieldCheck, ShieldX, Wrench, X } from "lucide-react";
 function parseToolArgs(json: string | null | undefined): Record<string, unknown> | null {
@@ -223,28 +225,144 @@ export function ExecutionProcess({
   );
 }
 
-export function ConversationResponse({
-  process,
-  answer,
-  thinking,
-  children,
+interface ConversationTimelineEntry {
+  id?: number;
+  type: string;
+  content?: string | null;
+  toolCallId?: string | null;
+  toolName?: string | null;
+  toolArguments?: string | null;
+  name?: string;
+  args?: string;
+  result?: string;
+  approval?: ApprovalContent | null;
+  subagent?: SubagentContent | null;
+}
+
+interface TimelineGroup {
+  type: "content" | "process" | "terminal";
+  entries: ConversationTimelineEntry[];
+}
+
+export function ConversationTimeline({
+  entries,
+  running = false,
+  thinking = false,
+  onOpenSubagent,
 }: {
-  process?: ReactNode;
-  answer?: string | null;
+  entries: ConversationTimelineEntry[];
+  running?: boolean;
   thinking?: boolean;
-  children?: ReactNode;
+  onOpenSubagent?: (childConversationId: number, description?: string) => void;
 }) {
+  const groups: TimelineGroup[] = [];
+  const toolResults = entries.filter((entry) => entry.type === "tool_result");
+  let resultCursor = 0;
+  for (const entry of entries) {
+    if (entry.type === "tool_result" || entry.type === "subagent") continue;
+    if (entry.type === "content") {
+      groups.push({ type: "content", entries: [entry] });
+      continue;
+    }
+    if (entry.type === "thinking" || entry.type === "tool_call" || entry.type === "approval") {
+      let group = groups[groups.length - 1];
+      if (group?.type !== "process") {
+        group = { type: "process", entries: [] };
+        groups.push(group);
+      }
+      if (entry.type === "tool_call") {
+        const result = entry.result ?? toolResults[resultCursor++]?.content ?? undefined;
+        group.entries.push({ ...entry, result });
+      } else {
+        group.entries.push(entry);
+      }
+      continue;
+    }
+    if (entry.type === "error" || entry.type === "stopped") {
+      groups.push({ type: "terminal", entries: [entry] });
+    }
+  }
+
   return (
     <div className="w-full min-w-0 space-y-3 text-sm">
-      {process}
+      {groups.map((group, groupIndex) => {
+        if (group.type === "content") {
+          return <div key={groupIndex} className="min-w-0"><MarkdownRenderer content={group.entries[0].content ?? ""} /></div>;
+        }
+        if (group.type === "terminal") {
+          const event = group.entries[0];
+          if (event.type === "error") {
+            return <div key={groupIndex} className="text-destructive">{event.content}</div>;
+          }
+          return (
+            <div key={groupIndex} className="flex items-center gap-1 text-xs text-muted-foreground">
+              <CircleStop className="size-3" />
+              <span>已手动停止</span>
+            </div>
+          );
+        }
+        return (
+          <ExecutionProcess
+            key={groupIndex}
+            thinkingCount={group.entries.filter((entry) => entry.type === "thinking").length}
+            toolCount={group.entries.filter((entry) => entry.type === "tool_call").length}
+            defaultOpen={running}
+            running={running && groupIndex === groups.length - 1}
+          >
+            {group.entries.map((entry, entryIndex) => {
+              const key = entry.id ?? entryIndex;
+              const name = entry.toolName ?? entry.name ?? "tool";
+              const args = entry.toolArguments ?? entry.args;
+              if (entry.type === "thinking") {
+                return <ThinkingPreview key={key} content={entry.content} streaming={running} />;
+              }
+              if (entry.type === "approval") {
+                const info = entry.approval ?? parseApprovalContent(entry.content);
+                return (
+                  <ApprovalDetails
+                    key={key}
+                    name={name}
+                    args={args}
+                    decision={info?.decision ?? "pending"}
+                    policyName={info?.policyName}
+                    matchedRuleIndex={info?.matchedRuleIndex}
+                  />
+                );
+              }
+              if (name === "spawn_subagent") {
+                const subEvent = entries.find((item) => item.type === "subagent" && item.toolCallId === entry.toolCallId);
+                const info = entry.subagent ?? parseSubagentContent(subEvent?.content);
+                return (
+                  <SubagentDetails
+                    key={key}
+                    args={args}
+                    description={info?.description}
+                    status={info?.status ?? (running ? "running" : "completed")}
+                    onOpen={info?.childConversationId != null && onOpenSubagent != null
+                      ? () => onOpenSubagent(info.childConversationId, info.description)
+                      : undefined}
+                  />
+                );
+              }
+              return (
+                <ConversationToolCall
+                  key={key}
+                  name={name}
+                  args={args}
+                  result={entry.result}
+                  pending={running && entry.result === undefined}
+                />
+              );
+            })}
+          </ExecutionProcess>
+        );
+      })}
       {thinking && (
         <div className="flex items-center gap-2 text-muted-foreground">
           <Loader2 className="size-3 animate-spin" />
           思考中...
         </div>
       )}
-      {answer && <div className="min-w-0"><MarkdownRenderer content={answer} /></div>}
-      {children}
     </div>
   );
 }
@@ -368,88 +486,5 @@ export const BatchBubble = memo(function BatchBubble({
   events: ChatEventDTO[];
   onOpenSubagent?: (childConversationId: number, description?: string) => void;
 }) {
-  // 执行器保证 tool_result 与 tool_call 严格同序同数；部分模型端点返回空 toolCallId，无法按 id 匹配，故按序配对
-  const toolResults = events.filter((e) => e.type === "tool_result");
-  let resultCursor = 0;
-  const finalAnswer = events.find((e) => e.type === "final_answer");
-  const hasProcess = events.some((event) =>
-    event.type === "thinking"
-    || event.type === "approval"
-    || (event.type === "tool_call" && event.toolName !== "final_answer")
-  );
-  const thinkingCount = events.filter((event) => event.type === "thinking").length;
-  const toolCount = events.filter((event) => event.type === "tool_call" && event.toolName !== "final_answer").length;
-  const processNodes = events.map((event, i) => {
-    if (event.type === "thinking") {
-      return <ThinkingPreview key={event.id ?? i} content={event.content} />;
-    }
-    if (event.type === "tool_call") {
-      const result = toolResults[resultCursor]?.content ?? undefined;
-      resultCursor++;
-      if (event.toolName === "final_answer") return null;
-      if (event.toolName === "spawn_subagent") {
-        const subEvent = events.find((e) => e.type === "subagent" && e.toolCallId === event.toolCallId);
-        const info = parseSubagentContent(subEvent?.content);
-        return (
-          <SubagentDetails
-            key={event.id ?? i}
-            args={event.toolArguments ?? undefined}
-            description={info?.description}
-            status={info?.status ?? "completed"}
-            onOpen={info?.childConversationId != null && onOpenSubagent != null
-              ? () => onOpenSubagent(info.childConversationId, info.description)
-              : undefined}
-          />
-        );
-      }
-      return (
-        <ConversationToolCall
-          key={event.id ?? i}
-          name={event.toolName ?? "tool"}
-          args={event.toolArguments ?? undefined}
-          result={result}
-        />
-      );
-    }
-    if (event.type === "approval") {
-      const info = parseApprovalContent(event.content);
-      return (
-        <ApprovalDetails
-          key={event.id ?? i}
-          name={event.toolName ?? "tool"}
-          args={event.toolArguments ?? undefined}
-          decision={info?.decision ?? "pending"}
-          policyName={info?.policyName}
-          matchedRuleIndex={info?.matchedRuleIndex}
-        />
-      );
-    }
-    return null;
-  });
-  const terminalNodes = events.map((event, i) => {
-    if (event.type === "error") {
-      return <div key={event.id ?? i} className="text-destructive">{event.content}</div>;
-    }
-    if (event.type === "stopped") {
-      return (
-        <div key={event.id ?? i} className="flex items-center gap-1 text-xs text-muted-foreground">
-          <CircleStop className="size-3" />
-          <span>已手动停止</span>
-        </div>
-      );
-    }
-    return null;
-  });
-  return (
-    <ConversationResponse
-      answer={finalAnswer?.content}
-      process={hasProcess ? (
-        <ExecutionProcess thinkingCount={thinkingCount} toolCount={toolCount} defaultOpen={false}>
-          {processNodes}
-        </ExecutionProcess>
-      ) : undefined}
-    >
-      {terminalNodes}
-    </ConversationResponse>
-  );
+  return <ConversationTimeline entries={events} onOpenSubagent={onOpenSubagent} />;
 });

@@ -1,8 +1,6 @@
 package com.gacfox.meowclaw.service;
 
 import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.gacfox.meowclaw.dto.ChatAttachmentDTO;
 import com.gacfox.meowclaw.entity.ChatEventBatch;
 import com.gacfox.meowclaw.entity.ContextRecap;
@@ -40,7 +38,6 @@ import java.util.*;
 @Service
 public class ContextCompressionService {
     private static final String TRUNCATED = "... [此处因上下文压缩已截断]";
-    private final ObjectMapper objectMapper;
     private final JsonUtil jsonUtil;
     private final ChatEventBatchRepository batchRepository;
     private final ContextRecapRepository recapRepository;
@@ -62,9 +59,7 @@ public class ContextCompressionService {
                                      MessageRepository messageRepository, ChatPersistenceService persistenceService,
                                      LlmCallLogService llmCallLogService, TokenUsageService tokenUsageService,
                                      LlmLoggingInterceptor llmLoggingInterceptor, ChatAttachmentService chatAttachmentService,
-                                     reactor.netty.http.client.HttpClient httpClient,
-                                     ObjectMapper objectMapper, JsonUtil jsonUtil) {
-        this.objectMapper = objectMapper;
+                                     reactor.netty.http.client.HttpClient httpClient, JsonUtil jsonUtil) {
         this.jsonUtil = jsonUtil;
         this.batchRepository = batchRepository;
         this.recapRepository = recapRepository;
@@ -112,19 +107,10 @@ public class ContextCompressionService {
             result.add(com.gacfox.proarc.agentic.model.openai.Message.builder()
                     .role(com.gacfox.proarc.agentic.model.openai.Message.ROLE_USER).content(userMessageContent).build());
             for (Message message : messagesByBatch.getOrDefault(batch.getId(), List.of())) {
-                if (age >= 15) {
-                    if (shouldFoldToolMessage(message)) continue;
-                    String finalAnswer = extractFinalAnswerContent(message);
-                    if (finalAnswer != null) {
-                        result.add(com.gacfox.proarc.agentic.model.openai.Message.builder()
-                                .role(com.gacfox.proarc.agentic.model.openai.Message.ROLE_ASSISTANT)
-                                .content(finalAnswer).build());
-                        continue;
-                    }
-                }
-                boolean truncate = age >= 5;
+                if (age >= 15 && shouldFoldToolMessage(message)) continue;
+                boolean truncateToolResult = age >= 5 && "tool".equals(message.getRole());
                 var builder = com.gacfox.proarc.agentic.model.openai.Message.builder().role(message.getRole())
-                        .content(truncate ? truncateContent(message.getContent()) : message.getContent())
+                        .content(truncateToolResult ? truncateContent(message.getContent()) : message.getContent())
                         .reasoningContent(message.getReasoningContent())
                         .toolCallId(message.getToolCallId());
                 if (message.getToolCallsJson() != null) {
@@ -272,7 +258,7 @@ public class ContextCompressionService {
         for (Message message : messages) {
             if ("assistant".equals(message.getRole())) {
                 if (message.getContent() != null && !message.getContent().isBlank()) {
-                    text.append("助手思考：").append(message.getContent()).append("\n");
+                    text.append("助手正文：").append(message.getContent()).append("\n");
                 }
                 if (message.getToolCallsJson() != null) {
                     try {
@@ -323,36 +309,10 @@ public class ContextCompressionService {
         try {
             List<ToolCall> calls = jsonUtil.load(message.getToolCallsJson(), new TypeReference<>() {
             });
-            return calls.stream().noneMatch(call -> "final_answer".equals(call.getFunction().getName()));
+            return !calls.isEmpty();
         } catch (Exception ignored) {
             return true;
         }
-    }
-
-    /**
-     * 提取final_answer工具调用中的最终答复文本，消息不含final_answer调用时返回null
-     */
-    private String extractFinalAnswerContent(Message message) {
-        if (message.getToolCallsJson() == null) {
-            return null;
-        }
-        try {
-            List<ToolCall> calls = jsonUtil.load(message.getToolCallsJson(), new TypeReference<>() {
-            });
-            for (ToolCall call : calls) {
-                if (!"final_answer".equals(call.getFunction().getName())) continue;
-                try {
-                    JsonNode messageNode = objectMapper.readTree(call.getFunction().getArguments()).get("message");
-                    if (messageNode != null && messageNode.isTextual()) {
-                        return messageNode.asText();
-                    }
-                } catch (Exception ignored) {
-                }
-                return message.getContent();
-            }
-        } catch (Exception ignored) {
-        }
-        return null;
     }
 
     private Set<Long> proactivelyCompressedBatchIds(List<ContextRecap> recaps, List<ChatEventBatch> batches) {

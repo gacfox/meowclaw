@@ -130,7 +130,7 @@ CREATE TABLE IF NOT EXISTS mc_chat_event
     id             BIGINT      NOT NULL AUTO_INCREMENT COMMENT '主键ID',
     batch_id       BIGINT      NOT NULL COMMENT '关联批次ID',
     event_order    INT         NOT NULL COMMENT '事件顺序(从0开始)',
-    type           VARCHAR(20) NOT NULL COMMENT '事件类型(THINKING=思考,TOOL_CALL=工具调用,TOOL_RESULT=工具结果,FINAL_ANSWER=最终回答,ERROR=错误)',
+    type           VARCHAR(20) NOT NULL COMMENT '事件类型(THINKING=思考,CONTENT=模型正文,TOOL_CALL=工具调用,TOOL_RESULT=工具结果,ERROR=错误)',
     content        TEXT COMMENT '事件内容',
     tool_name      VARCHAR(200) COMMENT '工具名称(仅TOOL_CALL/TOOL_RESULT)',
     tool_call_id   VARCHAR(100) COMMENT '工具调用ID(仅TOOL_CALL/TOOL_RESULT)',

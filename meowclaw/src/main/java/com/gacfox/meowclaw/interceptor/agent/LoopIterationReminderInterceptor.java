@@ -26,8 +26,8 @@ public class LoopIterationReminderInterceptor implements AgentInterceptor {
                             Pause and reassess before continuing:
                             - Review what has been accomplished and what remains.
                             - Do not repeat the same reasoning or identical tool calls.
-                            - If the task is complete, call final_answer now.
-                            - If stuck, change strategy or explain the blocker in final_answer.
+                            - If the task is complete, provide the final answer as plain content without calling tools.
+                            - If stuck, change strategy or explain the blocker in your final response.
                             Continue only when there is useful work left.
                             """.formatted(completedIterations))
                     .build());

@@ -86,7 +86,7 @@ class TraceManagementServiceTest {
         ChatEvent event = new ChatEvent();
         event.setBatchId(batch.getId());
         event.setEventOrder(0);
-        event.setType("final_answer");
+        event.setType("content");
         event.setContent("回答");
         event.setCreatedAt(System.currentTimeMillis());
         chatEventRepository.save(event);

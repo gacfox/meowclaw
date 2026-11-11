@@ -17,6 +17,7 @@ import com.gacfox.meowclaw.tool.ImageToolResult;
 import com.gacfox.meowclaw.util.CapabilityUtil;
 import com.gacfox.meowclaw.util.JsonUtil;
 import com.gacfox.proarc.agentic.agent.AgentContext;
+import com.gacfox.proarc.agentic.agent.ConvergenceMode;
 import com.gacfox.proarc.agentic.agent.ReActAgentExecutor;
 import com.gacfox.proarc.agentic.agent.ToolInvocation;
 import com.gacfox.proarc.agentic.client.LlmClient;
@@ -505,6 +506,7 @@ public class ChatService {
                         new LoopIterationReminderInterceptor(), agentLoggingInterceptor))
                 .toolCallInterceptors(List.of(new ToolCallIdStashInterceptor(), guardrailInterceptor))
                 .maxIterations(Integer.MAX_VALUE)
+                .convergenceMode(ConvergenceMode.NO_TOOL_CALL)
                 .build();
     }
 
@@ -596,7 +598,7 @@ public class ChatService {
                               ActiveRun run) {
         Sinks.Many<ChatEventDTO> sink = run.sink;
         int messageCountBefore = context.getMessages().size();
-        AtomicReference<String> firstFinalAnswer = new AtomicReference<>();
+        AtomicReference<String> completedContent = new AtomicReference<>();
 
         executor.execute(context)
                 .map(response -> switch (response.getType()) {
@@ -616,8 +618,12 @@ public class ChatService {
                             .toolName(response.getToolName())
                             .content(response.getContent())
                             .build();
-                    case FINAL_ANSWER -> ChatEventDTO.builder()
-                            .type("final_answer")
+                    case CONTENT -> ChatEventDTO.builder()
+                            .type("content")
+                            .content(response.getContent())
+                            .build();
+                    case COMPLETED -> ChatEventDTO.builder()
+                            .type("completed")
                             .content(response.getContent())
                             .build();
                     case ERROR -> ChatEventDTO.builder()
@@ -628,8 +634,8 @@ public class ChatService {
                             .type("thinking_delta")
                             .content(response.getContent())
                             .build();
-                    case FINAL_ANSWER_DELTA -> ChatEventDTO.builder()
-                            .type("final_answer_delta")
+                    case CONTENT_DELTA -> ChatEventDTO.builder()
+                            .type("content_delta")
                             .content(response.getContent())
                             .build();
                     case STOPPED -> ChatEventDTO.builder()
@@ -643,18 +649,19 @@ public class ChatService {
                 })
                 .publishOn(Schedulers.boundedElastic())
                 .doOnNext(event -> {
-                    if ("thinking_delta".equals(event.getType()) || "final_answer_delta".equals(event.getType())) {
+                    if ("completed".equals(event.getType()) && isFirstBatch
+                            && completedContent.get() == null && event.getContent() != null) {
+                        completedContent.set(event.getContent());
+                    }
+                    if ("thinking_delta".equals(event.getType()) || "content_delta".equals(event.getType())
+                            || "completed".equals(event.getType())) {
                         return;
                     }
                     chatPersistenceService.saveChatEvent(
                             batchId, run.eventOrder.getAndIncrement(), event.getType(),
                             event.getContent(), event.getToolName(), event.getToolCallId(), event.getToolArguments());
-                    if ("final_answer".equals(event.getType()) && isFirstBatch
-                            && firstFinalAnswer.get() == null && event.getContent() != null) {
-                        firstFinalAnswer.set(event.getContent());
-                    }
                 })
-                .filter(event -> !"thinking".equals(event.getType()) && !"final_answer".equals(event.getType()))
+                .filter(event -> !"thinking".equals(event.getType()))
                 .doOnComplete(() -> {
                     List<Message> newMessages =
                             context.getMessages().subList(messageCountBefore, context.getMessages().size());
@@ -699,9 +706,9 @@ public class ChatService {
                         } catch (Exception ignored) {
                         }
                     }
-                    if (isFirstBatch && firstFinalAnswer.get() != null) {
+                    if (isFirstBatch && completedContent.get() != null) {
                         CompletableFuture<String> ignored = titleGenerationRegistryService.register(conversationId);
-                        Mono.fromRunnable(() -> generateTitle(conversationId, userContent, firstFinalAnswer.get(), secondaryLlmClient))
+                        Mono.fromRunnable(() -> generateTitle(conversationId, userContent, completedContent.get(), secondaryLlmClient))
                                 .subscribeOn(Schedulers.boundedElastic())
                                 .subscribe();
                     }
@@ -739,11 +746,11 @@ public class ChatService {
         return CapabilityUtil.parse(llm.getCapabilities()).contains("vision");
     }
 
-    private void generateTitle(Long conversationId, String userContent, String finalAnswer, LlmClient llmClient) {
+    private void generateTitle(Long conversationId, String userContent, String answer, LlmClient llmClient) {
         String title;
         try {
             String prompt = "根据以下用户问题和AI回答，生成一个简短的对话标题（不超过20个字，不要加引号，直接输出标题文本）：\n\n"
-                    + "用户：" + userContent + "\n\nAI：" + finalAnswer;
+                    + "用户：" + userContent + "\n\nAI：" + answer;
             ChatRequest request = ChatRequest.builder()
                     .messages(List.of(
                             Message.builder()

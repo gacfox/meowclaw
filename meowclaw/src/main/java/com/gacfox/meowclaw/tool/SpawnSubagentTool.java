@@ -18,7 +18,6 @@ import java.util.Objects;
 @Component
 public class SpawnSubagentTool {
     public static final String TOOL_NAME = "spawn_subagent";
-    private static final String FINAL_ANSWER_TOOL = "final_answer";
 
     private final SubagentService subagentService;
 
@@ -41,8 +40,6 @@ public class SpawnSubagentTool {
         }
         List<String> parentTools = context.getToolNames() == null ? List.of() : context.getToolNames();
         List<String> allowed = param.getAllowedTools() == null ? new ArrayList<>() : new ArrayList<>(param.getAllowedTools());
-        // final_answer是框架内置的循环收口工具，子智能体天然具备，模型常会将其一并列入白名单，静默忽略
-        allowed.removeIf(FINAL_ANSWER_TOOL::equals);
         for (String tool : allowed) {
             if (TOOL_NAME.equals(tool)) {
                 return "Error: spawn_subagent cannot be used inside a subagent";

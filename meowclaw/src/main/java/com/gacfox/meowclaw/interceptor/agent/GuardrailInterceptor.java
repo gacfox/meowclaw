@@ -16,8 +16,6 @@ import lombok.extern.slf4j.Slf4j;
  */
 @Slf4j
 public class GuardrailInterceptor implements ToolCallInterceptor {
-    private static final String FINAL_ANSWER_TOOL = "final_answer";
-
     /**
      * 审批结果
      */
@@ -49,9 +47,6 @@ public class GuardrailInterceptor implements ToolCallInterceptor {
     @Override
     public String intercept(ToolInvocation invocation, ToolCallChain chain) throws Exception {
         String toolName = invocation.getToolName();
-        if (FINAL_ANSWER_TOOL.equals(toolName)) {
-            return chain.proceed(invocation);
-        }
         Object conversationId = invocation.getAgentContext().getVariables().get("conversationId");
         Object cwd = invocation.getAgentContext().getVariables().get("cwd");
         GuardrailPolicy policy = guardrailPolicyService.resolvePolicy(((Number) conversationId).longValue());

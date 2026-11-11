@@ -1,7 +1,5 @@
 package com.gacfox.meowclaw.service;
 
-import com.gacfox.meowclaw.dto.ChatEventBatchDTO;
-import com.gacfox.meowclaw.dto.ChatEventDTO;
 import com.gacfox.meowclaw.entity.Conversation;
 import com.gacfox.meowclaw.repository.ConversationRepository;
 import com.gacfox.meowclaw.util.JsonUtil;
@@ -24,19 +22,16 @@ public class SubagentService {
     public static final String TYPE_SUBAGENT = "SUBAGENT";
 
     private final ConversationRepository conversationRepository;
-    private final ConversationService conversationService;
     private final SubagentRegistry subagentRegistry;
     private final ObjectProvider<ChatService> chatServiceProvider;
     private final JsonUtil jsonUtil;
 
     @Autowired
     public SubagentService(ConversationRepository conversationRepository,
-                           ConversationService conversationService,
                            SubagentRegistry subagentRegistry,
                            ObjectProvider<ChatService> chatServiceProvider,
                            JsonUtil jsonUtil) {
         this.conversationRepository = conversationRepository;
-        this.conversationService = conversationService;
         this.subagentRegistry = subagentRegistry;
         this.chatServiceProvider = chatServiceProvider;
         this.jsonUtil = jsonUtil;
@@ -72,6 +67,7 @@ public class SubagentService {
 
         CompletableFuture<String> future = new CompletableFuture<>();
         AtomicReference<String> error = new AtomicReference<>();
+        AtomicReference<String> completedContent = new AtomicReference<>();
         AtomicBoolean stopped = new AtomicBoolean();
         Long finalEventId = eventId;
         chatService.chat(childConversationId, prompt, List.of())
@@ -81,6 +77,8 @@ public class SubagentService {
                                 error.set(event.getContent());
                             } else if ("stopped".equals(event.getType())) {
                                 stopped.set(true);
+                            } else if ("completed".equals(event.getType())) {
+                                completedContent.set(event.getContent());
                             }
                         },
                         e -> completeChild(chatService, parentConversationId, toolCallId, finalEventId,
@@ -92,13 +90,13 @@ public class SubagentService {
                                 status = "failed";
                                 text = "子任务执行失败: " + error.get();
                             } else {
-                                String finalAnswer = readFinalAnswer(childConversationId);
+                                String answer = completedContent.get();
                                 if (stopped.get()) {
                                     status = "stopped";
-                                    text = finalAnswer != null ? finalAnswer : "子任务已被手动停止";
+                                    text = answer != null ? answer : "子任务已被手动停止";
                                 } else {
                                     status = "completed";
-                                    text = finalAnswer != null ? finalAnswer : "(子任务未产生输出)";
+                                    text = answer != null ? answer : "(子任务未产生输出)";
                                 }
                             }
                             completeChild(chatService, parentConversationId, toolCallId, finalEventId,
@@ -109,30 +107,6 @@ public class SubagentService {
         log.info("子智能体已启动: parent={}, child={}, description={}", parentConversationId, childConversationId, description);
         return "子智能体已启动（子会话ID: " + childConversationId + "）。子任务并发执行中，"
                 + "所有子任务完成后其结果会自动汇总提供，无需轮询或重复调用本工具。";
-    }
-
-    /**
-     * 从子会话持久化的事件中读取最终回答（final_answer完整事件只落库不进事件流，不能依赖订阅收集）
-     */
-    private String readFinalAnswer(Long childConversationId) {
-        try {
-            List<ChatEventBatchDTO> batches = conversationService.listBatches(childConversationId);
-            for (int i = batches.size() - 1; i >= 0; i--) {
-                List<ChatEventDTO> events = batches.get(i).getEvents();
-                if (events == null) {
-                    continue;
-                }
-                for (int j = events.size() - 1; j >= 0; j--) {
-                    ChatEventDTO event = events.get(j);
-                    if ("final_answer".equals(event.getType()) && event.getContent() != null) {
-                        return event.getContent();
-                    }
-                }
-            }
-        } catch (Exception e) {
-            log.warn("读取子任务输出失败: childConversationId={}", childConversationId, e);
-        }
-        return null;
     }
 
     private void completeChild(ChatService chatService, Long parentConversationId, String toolCallId, Long eventId,

@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
+import type { Dispatch, SetStateAction } from "react";
 import { useSearchParams } from "react-router-dom";
 import type { AgentDTO, ConversationDTO, ChatEventBatchDTO, ChatEventDTO, PageResult, LlmDTO, GuardrailPolicyDTO, ProjectDTO } from "@/types";
 import { listAgents } from "@/services/agent";
@@ -22,7 +23,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Alert, AlertTitle, AlertDescription, AlertAction } from "@/components/ui/alert";
 import { motion, AnimatePresence } from "framer-motion";
-import { ApprovalDetails, BatchBubble, ConversationResponse, ConversationToolCall, ExecutionProcess, SubagentDetails, ThinkingPreview } from "@/components/chat/ChatEventBubble";
+import { BatchBubble, ConversationTimeline } from "@/components/chat/ChatEventBubble";
 import { parseApprovalContent } from "@/lib/approval";
 import type { ApprovalContent } from "@/lib/approval";
 import { parseSubagentContent } from "@/lib/subagent";
@@ -30,7 +31,6 @@ import type { SubagentContent } from "@/lib/subagent";
 import { SubagentDrawer } from "@/components/chat/SubagentDrawer";
 import { ConversationSearchDialog } from "@/components/chat/ConversationSearchDialog";
 import { ContextUsageGauge } from "@/components/chat/ContextUsageGauge";
-import { useThrottledValue } from "@/lib/useThrottledValue";
 import { defaultReasoningEffort, parseReasoningEffortOptions } from "@/lib/reasoningEffort";
 import { readAgentPreferences, writeAgentPreferences } from "@/lib/agentPreferences";
 import type { AgentPreferences } from "@/lib/agentPreferences";
@@ -39,7 +39,7 @@ import type { ConversationLocation } from "@/components/chat/ConversationItem";
 import { toast } from "sonner";
 
 interface StreamStep {
-  type: "thinking" | "tool_call" | "approval";
+  type: "thinking" | "content" | "tool_call" | "approval";
   content?: string;
   toolCallId?: string;
   name?: string;
@@ -68,56 +68,8 @@ function approvalArgsPreview(toolArguments: string): string {
   }
 }
 
-function StreamBubble({ steps, content, thinking, onOpenSubagent }: { steps: StreamStep[]; content: string; thinking?: boolean; onOpenSubagent?: (childConversationId: number, description?: string) => void }) {
-  const hasProcess = steps.some((step) =>
-    step.type === "thinking"
-    || step.type === "approval"
-    || (step.type === "tool_call" && step.name !== "final_answer")
-  );
-  const thinkingCount = steps.filter((step) => step.type === "thinking").length;
-  const toolCount = steps.filter((step) => step.type === "tool_call" && step.name !== "final_answer").length;
-  return (
-    <ConversationResponse
-      answer={content}
-      thinking={thinking}
-      process={hasProcess ? (
-        <ExecutionProcess thinkingCount={thinkingCount} toolCount={toolCount} running>
-          {steps.map((step, i) =>
-            step.type === "thinking" ? (
-              <ThinkingPreview key={i} content={step.content} streaming />
-            ) : step.type === "approval" ? (
-              <ApprovalDetails
-                key={i}
-                name={step.name ?? "tool"}
-                args={step.args}
-                decision={step.approval?.decision ?? "pending"}
-                policyName={step.approval?.policyName}
-                matchedRuleIndex={step.approval?.matchedRuleIndex}
-              />
-            ) : step.name === "spawn_subagent" ? (
-              <SubagentDetails
-                key={i}
-                args={step.args}
-                description={step.subagent?.description}
-                status={step.subagent?.status ?? "running"}
-                onOpen={step.subagent?.childConversationId != null && onOpenSubagent != null
-                  ? () => onOpenSubagent(step.subagent!.childConversationId, step.subagent?.description)
-                  : undefined}
-              />
-            ) : step.name === "final_answer" ? null : (
-              <ConversationToolCall
-                key={i}
-                name={step.name ?? "tool"}
-                args={step.args}
-                result={step.result}
-                pending={step.result === undefined}
-              />
-            )
-          )}
-        </ExecutionProcess>
-      ) : undefined}
-    />
-  );
+function StreamBubble({ steps, thinking, onOpenSubagent }: { steps: StreamStep[]; thinking?: boolean; onOpenSubagent?: (childConversationId: number, description?: string) => void }) {
+  return <ConversationTimeline entries={steps} running thinking={thinking} onOpenSubagent={onOpenSubagent} />;
 }
 
 export function ChatPage() {
@@ -142,8 +94,21 @@ export function ChatPage() {
   const [pendingImages, setPendingImages] = useState<{ dataUrl: string; name: string }[]>([]);
   const [llms, setLlms] = useState<LlmDTO[]>([]);
   const [agentPreferencesMap, setAgentPreferencesMap] = useState<Record<number, AgentPreferences>>({});
-  const [streamContent, setStreamContent] = useState("");
   const [streamSteps, setStreamSteps] = useState<StreamStep[]>([]);
+  const streamContent = streamSteps.filter((step) => step.type === "content").at(-1)?.content ?? "";
+  const setStreamContent: Dispatch<SetStateAction<string>> = (update) => {
+    setStreamSteps((prev) => {
+      const last = prev[prev.length - 1];
+      const current = last?.type === "content" ? last.content ?? "" : "";
+      const content = typeof update === "function" ? update(current) : update;
+      if (last?.type === "content") {
+        const updated = [...prev];
+        updated[updated.length - 1] = { ...last, content };
+        return updated;
+      }
+      return content ? [...prev, { type: "content", content }] : prev;
+    });
+  };
   const [streamError, setStreamError] = useState<string | null>(null);
   const [showJumpToLatest, setShowJumpToLatest] = useState(false);
   const [mobileConvoOpen, setMobileConvoOpen] = useState(false);
@@ -181,7 +146,7 @@ export function ChatPage() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const followOutputRef = useRef(true);
-  const pendingFinalDeltaRef = useRef("");
+  const pendingContentDeltaRef = useRef("");
   const pendingThinkingDeltaRef = useRef("");
   const deltaFlushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const convoListRef = useRef<HTMLDivElement>(null);
@@ -281,7 +246,7 @@ export function ChatPage() {
       clearTimeout(deltaFlushTimerRef.current);
       deltaFlushTimerRef.current = null;
     }
-    pendingFinalDeltaRef.current = "";
+    pendingContentDeltaRef.current = "";
     pendingThinkingDeltaRef.current = "";
   }
 
@@ -290,12 +255,12 @@ export function ChatPage() {
       clearTimeout(deltaFlushTimerRef.current);
     }
     deltaFlushTimerRef.current = null;
-    const finalDelta = pendingFinalDeltaRef.current;
+    const contentDelta = pendingContentDeltaRef.current;
     const thinkingDelta = pendingThinkingDeltaRef.current;
-    pendingFinalDeltaRef.current = "";
+    pendingContentDeltaRef.current = "";
     pendingThinkingDeltaRef.current = "";
-    if (finalDelta) {
-      setStreamContent((prev) => prev + finalDelta);
+    if (contentDelta) {
+      setStreamContent((prev) => prev + contentDelta);
     }
     if (thinkingDelta) {
       setStreamSteps((prev) => {
@@ -961,11 +926,12 @@ export function ChatPage() {
         pendingThinkingDeltaRef.current += event.content ?? "";
         scheduleDeltaFlush();
         break;
-      case "final_answer_delta":
-        pendingFinalDeltaRef.current += event.content ?? "";
+      case "content_delta":
+        pendingContentDeltaRef.current += event.content ?? "";
         scheduleDeltaFlush();
         break;
       case "tool_call":
+        flushStreamDeltas();
         setStreamSteps((prev) => [...prev, {
           type: "tool_call",
           toolCallId: event.toolCallId ?? undefined,
@@ -985,9 +951,12 @@ export function ChatPage() {
           return updated;
         });
         break;
-      case "final_answer":
+      case "content":
         flushStreamDeltas();
-        setStreamContent((prev) => prev + (event.content ?? ""));
+        setStreamContent(event.content ?? "");
+        break;
+      case "completed":
+        flushStreamDeltas();
         break;
       case "error":
         setStreamError(event.content ?? "未知错误");
@@ -1078,7 +1047,6 @@ export function ChatPage() {
     }
   };
 
-  const throttledStreamContent = useThrottledValue(streamContent, 200);
   const showHero = !loadingBatches && batches.length === 0 && !isCurrentConvoRunning && optimisticContent === null;
   const liveContextUsage = selectedConvoId != null ? contextUsageMap[selectedConvoId] : undefined;
   const contextPromptTokens = liveContextUsage?.promptTokens ?? currentConvo?.contextPromptTokens ?? 0;
@@ -1419,7 +1387,8 @@ export function ChatPage() {
                         </div>
                       );
                     }
-                    const finalAnswer = batch.events.find((e) => e.type === "final_answer");
+                    const contentEvents = batch.events.filter((event) => event.type === "content");
+                    const answerEvent = contentEvents[contentEvents.length - 1];
                     return (
                     <div key={batch.id} className="space-y-2">
                       {/* User bubble */}
@@ -1503,7 +1472,7 @@ export function ChatPage() {
                           <div className="mt-1 flex flex-wrap items-center gap-1">
                             <Tooltip>
                               <TooltipTrigger asChild>
-                                <Button variant="ghost" size="icon-xs" onClick={() => finalAnswer?.content && handleCopy(finalAnswer.content, `agent-${batch.id}`)}>
+                                <Button variant="ghost" size="icon-xs" onClick={() => answerEvent?.content && handleCopy(answerEvent.content, `agent-${batch.id}`)}>
                                   {copiedId === `agent-${batch.id}` ? <Check className="size-3 text-green-500" /> : <Copy className="size-3" />}
                                 </Button>
                               </TooltipTrigger>
@@ -1581,7 +1550,7 @@ export function ChatPage() {
                         <span className="truncate text-sm font-medium">{currentAgent?.name ?? "AI"}</span>
                         <span className="shrink-0 text-xs text-muted-foreground">正在生成</span>
                       </div>
-                      <StreamBubble steps={streamSteps} content={throttledStreamContent} thinking={!streamContent && !streamError && streamSteps.length === 0} onOpenSubagent={openSubagent} />
+                      <StreamBubble steps={streamSteps} thinking={!streamContent && !streamError && streamSteps.length === 0} onOpenSubagent={openSubagent} />
                       {streamError && <div className="mt-2 text-destructive">{streamError}</div>}
                     </div>
                   )}
