@@ -200,6 +200,7 @@ export function HistorySessionsPage() {
   const pageSelectedPartial = pageIds.some((id) => selectedIds.has(id)) && !pageSelectedAll;
 
   const totalPages = Math.max(1, Math.ceil(data.total / data.pageSize));
+  const { current } = data;
   const pageNumbers = useMemo(() => {
     const pages: (number | "ellipsis")[] = [];
     const maxVisible = 7;
@@ -208,14 +209,14 @@ export function HistorySessionsPage() {
       return pages;
     }
     pages.push(1);
-    const start = Math.max(2, data.current - 2);
-    const end = Math.min(totalPages - 1, data.current + 2);
+    const start = Math.max(2, current - 2);
+    const end = Math.min(totalPages - 1, current + 2);
     if (start > 2) pages.push("ellipsis");
     for (let i = start; i <= end; i++) pages.push(i);
     if (end < totalPages - 1) pages.push("ellipsis");
     pages.push(totalPages);
     return pages;
-  }, [data.current, totalPages]);
+  }, [current, totalPages]);
 
   return (
     <div className="flex flex-col gap-6">

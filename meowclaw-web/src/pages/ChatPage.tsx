@@ -101,6 +101,7 @@ export function ChatPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
   const initialHandledRef = useRef(false);
+  const initialSearchParamsRef = useRef(searchParams);
   const [agents, setAgents] = useState<AgentDTO[]>([]);
   const [selectedAgentId, setSelectedAgentId] = useState<number | null>(null);
   const [conversations, setConversations] = useState<ConversationDTO[]>([]);
@@ -219,7 +220,7 @@ export function ChatPage() {
   useEffect(() => {
     listAgents().then((list) => {
       setAgents(list);
-      const agentIdParam = searchParams.get("agentId");
+      const agentIdParam = initialSearchParamsRef.current.get("agentId");
       const urlAgentId = agentIdParam ? Number(agentIdParam) : null;
       const cachedAgentId = readSelectedAgentId();
       const validAgentId = urlAgentId != null && list.some((a) => a.id === urlAgentId)
@@ -259,11 +260,12 @@ export function ChatPage() {
     refreshRunningConversations();
   }, [refreshRunningConversations]);
 
+  const hasRunningConvos = runningConvoIds.size > 0;
   useEffect(() => {
-    if (runningConvoIds.size === 0) return;
+    if (!hasRunningConvos) return;
     const timer = setInterval(refreshRunningConversations, 3000);
     return () => clearInterval(timer);
-  }, [runningConvoIds.size > 0, refreshRunningConversations]);
+  }, [hasRunningConvos, refreshRunningConversations]);
 
   function clearPendingStreamDeltas() {
     if (deltaFlushTimerRef.current != null) {
@@ -457,6 +459,7 @@ export function ChatPage() {
       setSearchParams({}, { replace: true });
     };
     handleUrlConversation();
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- 仅在切换智能体时初始化会话列表，URL 参数只读取首次值
   }, [selectedAgentId]);
 
   useEffect(() => {
@@ -487,6 +490,7 @@ export function ChatPage() {
         }
       })
       .finally(() => setLoadingBatches(false));
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- 仅在切换会话时连接一次 watch，重建回调会导致重复连接流
   }, [selectedConvoId]);
 
   useEffect(() => {

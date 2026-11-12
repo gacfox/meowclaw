@@ -94,7 +94,10 @@ function MemoryGraphView({ graph, onMemoryClick }: { graph: MemoryGraph; onMemor
   const chartRef = useRef<echarts.ECharts | null>(null);
   const onMemoryClickRef = useRef(onMemoryClick);
   const { resolvedTheme } = useTheme();
-  onMemoryClickRef.current = onMemoryClick;
+
+  useEffect(() => {
+    onMemoryClickRef.current = onMemoryClick;
+  }, [onMemoryClick]);
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -199,7 +202,10 @@ export function MemoryPage() {
   const [keyword, setKeyword] = useState("");
   const [appliedType, setAppliedType] = useState<string>(ALL_VALUE);
   const [appliedKeyword, setAppliedKeyword] = useState("");
-  const [selectedEntityId, setSelectedEntityId] = useState<number | null>(null);
+  const [selectedEntity, setSelectedEntity] = useState<{ agentId: string; id: number | null } | null>(null);
+  // 切换智能体时，上一智能体残留的实体筛选立即失效，避免用旧实体发起一次请求
+  const selectedEntityId = selectedEntity?.agentId === agentId ? selectedEntity.id : null;
+  const selectEntity = (id: number | null) => setSelectedEntity({ agentId, id });
   const [data, setData] = useState<PageResult<MemoryNodeDTO>>({ list: [], total: 0, current: 1, pageSize: DEFAULT_SIZE });
   const [entities, setEntities] = useState<MemoryEntityWithCount[]>([]);
   const [graph, setGraph] = useState<MemoryGraph | null>(null);
@@ -259,7 +265,6 @@ export function MemoryPage() {
   }, []);
 
   useEffect(() => {
-    setSelectedEntityId(null);
     loadEntities(agentId);
   }, [agentId, loadEntities]);
 
@@ -279,6 +284,11 @@ export function MemoryPage() {
     if (view === "graph") loadGraph(agentId);
   };
 
+  const handleAgentChange = (id: string) => {
+    setAgentId(id);
+    setSelectedEntity(null);
+  };
+
   const handleQuery = () => {
     setAppliedType(type);
     setAppliedKeyword(keyword);
@@ -289,7 +299,7 @@ export function MemoryPage() {
     setKeyword("");
     setAppliedType(ALL_VALUE);
     setAppliedKeyword("");
-    setSelectedEntityId(null);
+    setSelectedEntity(null);
   };
 
   const openCreate = () => {
@@ -378,6 +388,7 @@ export function MemoryPage() {
   };
 
   const totalPages = Math.max(1, Math.ceil(data.total / data.pageSize));
+  const { current } = data;
   const pageNumbers = useMemo(() => {
     const pages: (number | "ellipsis")[] = [];
     const maxVisible = 7;
@@ -386,14 +397,14 @@ export function MemoryPage() {
       return pages;
     }
     pages.push(1);
-    const start = Math.max(2, data.current - 2);
-    const end = Math.min(totalPages - 1, data.current + 2);
+    const start = Math.max(2, current - 2);
+    const end = Math.min(totalPages - 1, current + 2);
     if (start > 2) pages.push("ellipsis");
     for (let i = start; i <= end; i++) pages.push(i);
     if (end < totalPages - 1) pages.push("ellipsis");
     pages.push(totalPages);
     return pages;
-  }, [data.current, totalPages]);
+  }, [current, totalPages]);
 
   const formOpen = createOpen || editTarget !== null;
 
@@ -432,7 +443,7 @@ export function MemoryPage() {
       <div className="flex flex-wrap items-end gap-3 rounded-lg border bg-card p-3 sm:p-4">
         <div className="flex w-full min-w-0 flex-col gap-1.5 sm:w-auto sm:min-w-[160px]">
           <Label className="text-xs text-muted-foreground">智能体</Label>
-          <Select value={agentId} onValueChange={setAgentId}>
+          <Select value={agentId} onValueChange={handleAgentChange}>
             <SelectTrigger className="w-full sm:w-[160px]">
               <SelectValue placeholder="选择智能体" />
             </SelectTrigger>
@@ -494,7 +505,7 @@ export function MemoryPage() {
             <CardContent className="max-h-48 overflow-y-auto p-2 lg:max-h-[640px]">
               <button
                 className={`flex w-full items-center justify-between rounded px-2 py-1.5 text-sm hover:bg-accent ${selectedEntityId === null ? "bg-accent font-medium" : ""}`}
-                onClick={() => setSelectedEntityId(null)}
+                onClick={() => selectEntity(null)}
               >
                 全部
               </button>
@@ -502,7 +513,7 @@ export function MemoryPage() {
                 <button
                   key={entity.id}
                   className={`flex w-full items-center justify-between gap-2 rounded px-2 py-1.5 text-sm hover:bg-accent ${selectedEntityId === entity.id ? "bg-accent font-medium" : ""}`}
-                  onClick={() => setSelectedEntityId(selectedEntityId === entity.id ? null : entity.id)}
+                  onClick={() => selectEntity(selectedEntityId === entity.id ? null : entity.id)}
                   title={entity.name}
                 >
                   <span className="truncate">{entity.name}</span>

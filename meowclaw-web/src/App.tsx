@@ -44,11 +44,7 @@ function InitGuard({ children }: { children: React.ReactNode }) {
   const [needsInit, setNeedsInit] = useState<boolean | null>(null);
 
   useEffect(() => {
-    if (loading) return;
-    if (user) {
-      setNeedsInit(false);
-      return;
-    }
+    if (loading || user) return;
     checkInit().then((needInit) => {
       if (!needInit) {
         setNeedsInit(false);
@@ -59,9 +55,9 @@ function InitGuard({ children }: { children: React.ReactNode }) {
     });
   }, [user, loading, navigate]);
 
-  if (loading || needsInit === null) return null;
-  if (needsInit) return null;
-  return <>{children}</>;
+  if (loading) return null;
+  if (user || needsInit === false) return <>{children}</>;
+  return null;
 }
 
 function InitRoute() {
