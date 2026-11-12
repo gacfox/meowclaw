@@ -1,4 +1,5 @@
 import { Fragment, useCallback, useEffect, useRef, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import type { AgentDTO, CreateEntryType, FileContent, FileEntry } from "@/types";
 import { listAgents } from "@/services/agent";
 import { readSelectedAgentId, writeSelectedAgentId } from "@/lib/selectedAgent";
@@ -106,15 +107,23 @@ function parentOf(path: string): string {
   return segs.join("/");
 }
 
+/**
+ * 统一工作区相对路径：反斜杠转正斜杠并去掉首尾斜杠。
+ */
+function normalizeRelativePath(path: string | null): string {
+  return (path ?? "").replace(/\\/g, "/").replace(/^\/+|\/+$/g, "");
+}
+
 function segmentsOf(path: string): { name: string; path: string }[] {
   const segs = path.split("/").filter(Boolean);
   return segs.map((seg, i) => ({ name: seg, path: segs.slice(0, i + 1).join("/") }));
 }
 
 export function WorkspacePage() {
+  const [searchParams] = useSearchParams();
   const [agents, setAgents] = useState<AgentDTO[]>([]);
   const [selectedAgentId, setSelectedAgentId] = useState<number | null>(null);
-  const [currentPath, setCurrentPath] = useState("");
+  const [currentPath, setCurrentPath] = useState(() => normalizeRelativePath(searchParams.get("path")));
   const [entries, setEntries] = useState<FileEntry[]>([]);
   const [loading, setLoading] = useState(false);
 
@@ -122,16 +131,19 @@ export function WorkspacePage() {
     try {
       const list = await listAgents();
       setAgents(list);
+      const urlAgentId = Number(searchParams.get("agentId"));
       const cachedAgentId = readSelectedAgentId();
-      const validAgentId = cachedAgentId != null && list.some((agent) => agent.id === cachedAgentId)
-        ? cachedAgentId
-        : list[0]?.id ?? null;
-      setSelectedAgentId((prev) => prev ?? validAgentId);
+      const validAgentId = list.some((agent) => agent.id === urlAgentId)
+        ? urlAgentId
+        : cachedAgentId != null && list.some((agent) => agent.id === cachedAgentId)
+          ? cachedAgentId
+          : list[0]?.id ?? null;
+      setSelectedAgentId(validAgentId);
       if (validAgentId != null) writeSelectedAgentId(validAgentId);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "加载智能体失败");
     }
-  }, []);
+  }, [searchParams]);
 
   const fetchEntries = useCallback(async () => {
     if (selectedAgentId == null) {

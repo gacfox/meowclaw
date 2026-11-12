@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import type { Dispatch, SetStateAction } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import type { AgentDTO, ConversationDTO, ChatEventBatchDTO, ChatEventDTO, PageResult, LlmDTO, GuardrailPolicyDTO, ProjectDTO } from "@/types";
 import { listAgents } from "@/services/agent";
 import { listLlms } from "@/services/llm";
@@ -39,6 +39,23 @@ import type { ConversationLocation } from "@/components/chat/ConversationItem";
 import { toast } from "sonner";
 
 const DELTA_FLUSH_INTERVAL_MS = 200;
+
+/**
+ * 将项目绝对路径转换为工作区内的相对路径。
+ * 项目路径不在工作区内或为绝对路径越界时返回空字符串，由工作区页面回退到根目录。
+ */
+function toWorkspaceRelativePath(workspaceFolder: string | null | undefined, path: string | null): string {
+  const target = (path ?? "").trim().replace(/\\/g, "/").replace(/\/+$/, "");
+  const root = (workspaceFolder ?? "").trim().replace(/\\/g, "/").replace(/\/+$/, "");
+  if (!target) return "";
+  const absolute = /^[a-zA-Z]:\//.test(target) || target.startsWith("/");
+  if (!root) return absolute ? "" : target;
+  const lowerRoot = root.toLowerCase();
+  const lowerTarget = target.toLowerCase();
+  if (lowerTarget === lowerRoot) return "";
+  if (lowerTarget.startsWith(lowerRoot + "/")) return target.slice(root.length + 1);
+  return absolute ? "" : target;
+}
 
 interface StreamStep {
   type: "thinking" | "content" | "tool_call" | "approval";
@@ -82,6 +99,7 @@ function StreamBubble({ steps, thinking, onOpenSubagent }: { steps: StreamStep[]
 export function ChatPage() {
   const { user } = useAuthStore();
   const [searchParams, setSearchParams] = useSearchParams();
+  const navigate = useNavigate();
   const initialHandledRef = useRef(false);
   const [agents, setAgents] = useState<AgentDTO[]>([]);
   const [selectedAgentId, setSelectedAgentId] = useState<number | null>(null);
@@ -658,6 +676,16 @@ export function ChatPage() {
 
   async function handleNewConvoInProject(projectId: number) {
     await createNewConversation(projectId);
+  }
+
+  function viewProjectFiles(project: ProjectDTO) {
+    const agent = agents.find((item) => item.id === project.agentId);
+    const relativePath = toWorkspaceRelativePath(agent?.workspaceFolder, project.path);
+    const params = new URLSearchParams({ agentId: String(project.agentId) });
+    if (relativePath) {
+      params.set("path", relativePath);
+    }
+    navigate(`/workspace?${params.toString()}`);
   }
 
   const handleConvoScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
@@ -1275,6 +1303,7 @@ export function ChatPage() {
                       collapsed={projectCollapsed}
                       onToggle={() => toggleGroup(`project-${project.id}`)}
                       onNewConversation={() => handleNewConvoInProject(project.id)}
+                      onViewFiles={() => viewProjectFiles(project)}
                       onEdit={() => openEditProjectDialog(project)}
                       onDelete={() => setDeleteProjectTarget(project)}
                     />

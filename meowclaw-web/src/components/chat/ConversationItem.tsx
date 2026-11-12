@@ -11,7 +11,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
-import { ChevronRight, Folder, FolderInput, FolderMinus, Loader2, MoreHorizontal, Pencil, Pin, PinOff, SquarePen, Trash2 } from "lucide-react";
+import { ChevronRight, Folder, FolderInput, FolderMinus, FolderOpen, Loader2, MoreHorizontal, Pencil, Pin, PinOff, SquarePen, Trash2 } from "lucide-react";
 import type { ReactNode } from "react";
 
 export type ConversationLocation = "pinned" | "project" | "other";
@@ -43,6 +43,7 @@ export function ProjectRow({
   collapsed,
   onToggle,
   onNewConversation,
+  onViewFiles,
   onEdit,
   onDelete,
 }: {
@@ -50,6 +51,7 @@ export function ProjectRow({
   collapsed: boolean;
   onToggle: () => void;
   onNewConversation: () => void;
+  onViewFiles: () => void;
   onEdit: () => void;
   onDelete: () => void;
 }) {
@@ -76,6 +78,10 @@ export function ProjectRow({
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="start">
+          <DropdownMenuItem onClick={onViewFiles}>
+            <FolderOpen className="size-3.5" />
+            查看文件
+          </DropdownMenuItem>
           <DropdownMenuItem onClick={onEdit}>
             <Pencil className="size-3.5" />
             编辑项目
