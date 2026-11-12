@@ -19,6 +19,7 @@ import { McpServicePage } from "@/pages/McpServicePage";
 import { SkillPage } from "@/pages/SkillPage";
 import { TokensStatisticsPage } from "@/pages/TokensStatisticsPage";
 import { TracePage } from "@/pages/TracePage";
+import { SystemConfigPage } from "@/pages/SystemConfigPage";
 import { WorkspacePage } from "@/pages/WorkspacePage";
 import { HistorySessionsPage } from "@/pages/HistorySessionsPage";
 import { MemoryPage } from "@/pages/MemoryPage";
@@ -128,6 +129,7 @@ function AppRoutes() {
         <Route path="skill" element={<SkillPage />} />
         <Route path="tokens" element={<TokensStatisticsPage />} />
         <Route path="trace" element={<TracePage />} />
+        <Route path="system-config" element={<SystemConfigPage />} />
         <Route path="workspace" element={<WorkspacePage />} />
         <Route path="history-sessions" element={<HistorySessionsPage />} />
       </Route>

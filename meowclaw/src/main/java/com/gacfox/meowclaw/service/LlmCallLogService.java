@@ -15,13 +15,16 @@ public class LlmCallLogService {
     private final LlmCallLogRepository llmCallLogRepository;
     private final JsonUtil jsonUtil;
     private final TraceDeletionRegistry traceDeletionRegistry;
+    private final TraceObservationService traceObservationService;
 
     @Autowired
     public LlmCallLogService(LlmCallLogRepository llmCallLogRepository, JsonUtil jsonUtil,
-                             TraceDeletionRegistry traceDeletionRegistry) {
+                             TraceDeletionRegistry traceDeletionRegistry,
+                             TraceObservationService traceObservationService) {
         this.llmCallLogRepository = llmCallLogRepository;
         this.jsonUtil = jsonUtil;
         this.traceDeletionRegistry = traceDeletionRegistry;
+        this.traceObservationService = traceObservationService;
     }
 
     /**
@@ -30,6 +33,9 @@ public class LlmCallLogService {
     @Transactional
     public void recordCall(TokenUsageContext ctx, String requestMessages, ModelResponse response,
                            long durationMs, String status, String errorMessage) {
+        if (!traceObservationService.isEnabled()) {
+            return;
+        }
         Usage usage = response != null ? response.getUsage() : null;
         long input = usage != null && usage.getPromptTokens() != null ? usage.getPromptTokens() : 0L;
         long output = usage != null && usage.getCompletionTokens() != null ? usage.getCompletionTokens() : 0L;

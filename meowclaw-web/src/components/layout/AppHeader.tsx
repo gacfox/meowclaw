@@ -33,6 +33,8 @@ const ROUTE_LABELS: Record<string, string> = {
   "/mcp-service": "MCP 服务",
   "/skill": "SKILL",
   "/tokens": "tokens 统计",
+  "/trace": "追踪观测",
+  "/system-config": "系统配置",
   "/settings": "用户设置",
   "/history-sessions": "历史会话",
 };

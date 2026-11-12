@@ -46,6 +46,18 @@ export async function deleteAllTraces() {
   return request("/api/trace/all", { method: "DELETE" });
 }
 
+export async function getTraceObservationEnabled(): Promise<boolean> {
+  const res = await request<boolean>("/api/trace/enabled");
+  return res.data;
+}
+
+export async function updateTraceObservationEnabled(enabled: boolean) {
+  return request<boolean>("/api/trace/enabled", {
+    method: "PUT",
+    body: JSON.stringify({ enabled }),
+  });
+}
+
 export async function getTraceRetentionPolicy(): Promise<TraceRetentionPolicy> {
   const res = await request<TraceRetentionPolicy>("/api/trace/retention-policy");
   return res.data;

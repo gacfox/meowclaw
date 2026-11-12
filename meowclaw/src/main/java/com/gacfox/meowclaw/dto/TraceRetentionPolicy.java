@@ -6,6 +6,8 @@ import io.swagger.v3.oas.annotations.media.Schema;
 public enum TraceRetentionPolicy {
     @Schema(description = "全部留存")
     ALL,
+    @Schema(description = "最近一天")
+    DAYS_1,
     @Schema(description = "最近三天")
     DAYS_3,
     @Schema(description = "最近七天")

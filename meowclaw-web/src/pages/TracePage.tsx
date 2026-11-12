@@ -9,12 +9,10 @@ import {
   deleteAllTraces,
   deleteTrace,
   getTraceDetail,
-  getTraceRetentionPolicy,
   listTraces,
-  updateTraceRetentionPolicy,
   type TraceQuery,
 } from "@/services/trace";
-import type { AgentDTO, LlmCallLogItem, PageResult, TraceDetail, TraceItem, TraceRetentionPolicy } from "@/types";
+import type { AgentDTO, LlmCallLogItem, PageResult, TraceDetail, TraceItem } from "@/types";
 import { BatchBubble } from "@/components/chat/ChatEventBubble";
 import { JsonViewer } from "@/components/json-viewer/JsonViewer";
 import { Button } from "@/components/ui/button";
@@ -28,9 +26,6 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import {
-  DropdownMenu, DropdownMenuContent, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
 import {
@@ -38,7 +33,7 @@ import {
 } from "@/components/ui/pagination";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Badge } from "@/components/ui/badge";
-import { ArrowDown, ArrowUp, CalendarIcon, ChevronDown, ChevronRight, RefreshCw, RotateCcw, Search, Trash2 } from "lucide-react";
+import { ArrowDown, ArrowUp, CalendarIcon, ChevronRight, RefreshCw, RotateCcw, Search, Trash2 } from "lucide-react";
 
 const DEFAULT_SIZE = 20;
 const ALL_VALUE = "ALL";
@@ -48,14 +43,6 @@ const STATUS_OPTIONS = [
   { value: "COMPLETED", label: "已完成" },
   { value: "RUNNING", label: "运行中" },
   { value: "ERROR", label: "错误" },
-];
-
-const RETENTION_OPTIONS: { value: TraceRetentionPolicy; label: string }[] = [
-  { value: "DAYS_3", label: "最近 3 天" },
-  { value: "DAYS_7", label: "最近 7 天" },
-  { value: "MONTH_1", label: "最近一个月" },
-  { value: "YEAR_1", label: "最近一年" },
-  { value: "ALL", label: "全部留存（默认）" },
 ];
 
 const PURPOSE_LABELS: Record<string, string> = {
@@ -170,15 +157,9 @@ export function TracePage() {
   const [batchDeleteOpen, setBatchDeleteOpen] = useState(false);
   const [clearAllOpen, setClearAllOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
-  const [retentionPolicy, setRetentionPolicy] = useState<TraceRetentionPolicy>("ALL");
-  const [pendingRetentionPolicy, setPendingRetentionPolicy] = useState<TraceRetentionPolicy | null>(null);
-  const [retentionSaving, setRetentionSaving] = useState(false);
 
   useEffect(() => {
     listAgents().then(setAgents).catch(() => {});
-    getTraceRetentionPolicy()
-      .then(setRetentionPolicy)
-      .catch((err) => toast.error(err instanceof Error ? err.message : "加载数据留存策略失败"));
   }, []);
 
   const load = useCallback(async (page: number, currentFilters: Filters) => {
@@ -302,26 +283,6 @@ export function TracePage() {
     }
   };
 
-  const saveRetentionPolicy = async (policy: TraceRetentionPolicy) => {
-    setRetentionSaving(true);
-    try {
-      await updateTraceRetentionPolicy(policy);
-      setRetentionPolicy(policy);
-      setPendingRetentionPolicy(null);
-      toast.success("数据留存策略已保存");
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "保存数据留存策略失败");
-    } finally {
-      setRetentionSaving(false);
-    }
-  };
-
-  const handleRetentionPolicyChange = (policy: TraceRetentionPolicy) => {
-    if (policy === retentionPolicy || retentionSaving) return;
-    if (policy === "ALL") void saveRetentionPolicy(policy);
-    else setPendingRetentionPolicy(policy);
-  };
-
   const openDetail = async (batchId: number) => {
     setDetailLoading(true);
     try {
@@ -364,26 +325,6 @@ export function TracePage() {
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold">追踪观测</h1>
         <div className="flex items-center gap-2">
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" disabled={retentionSaving}>
-                数据留存策略
-                <ChevronDown className="ml-1 size-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-48">
-              <DropdownMenuRadioGroup
-                value={retentionPolicy}
-                onValueChange={(value) => handleRetentionPolicyChange(value as TraceRetentionPolicy)}
-              >
-                {RETENTION_OPTIONS.map((option) => (
-                  <DropdownMenuRadioItem key={option.value} value={option.value} disabled={retentionSaving}>
-                    {option.label}
-                  </DropdownMenuRadioItem>
-                ))}
-              </DropdownMenuRadioGroup>
-            </DropdownMenuContent>
-          </DropdownMenu>
           <Button
             variant="outline"
             size="icon"
@@ -675,32 +616,6 @@ export function TracePage() {
               }}
             >
               {deleting ? "清空中..." : "确认清空"}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
-      <AlertDialog
-        open={pendingRetentionPolicy !== null}
-        onOpenChange={(open) => { if (!open && !retentionSaving) setPendingRetentionPolicy(null); }}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>确认修改数据留存策略</AlertDialogTitle>
-            <AlertDialogDescription>
-              选择“{RETENTION_OPTIONS.find((option) => option.value === pendingRetentionPolicy)?.label}”后，后台将异步清理超出保留期限的追踪记录，清理后不可恢复。确定继续吗？
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={retentionSaving}>取消</AlertDialogCancel>
-            <AlertDialogAction
-              disabled={retentionSaving}
-              onClick={(event) => {
-                event.preventDefault();
-                if (pendingRetentionPolicy) void saveRetentionPolicy(pendingRetentionPolicy);
-              }}
-            >
-              {retentionSaving ? "保存中..." : "确认修改"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

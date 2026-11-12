@@ -51,6 +51,7 @@ public class TraceRetentionService {
     long cutoff(TraceRetentionPolicy policy, long now, ZoneId zone) {
         ZonedDateTime current = Instant.ofEpochMilli(now).atZone(zone);
         ZonedDateTime cutoff = switch (policy) {
+            case DAYS_1 -> current.minusDays(1);
             case DAYS_3 -> current.minusDays(3);
             case DAYS_7 -> current.minusDays(7);
             case MONTH_1 -> current.minusMonths(1);

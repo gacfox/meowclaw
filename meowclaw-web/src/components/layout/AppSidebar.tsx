@@ -1,5 +1,5 @@
 import { Link, useLocation } from "react-router-dom";
-import { MessageSquare, Cpu, Database, Sparkles, Clock, Plug, Package, BarChart3, FolderTree, History, Brain, Activity, Shield, KeyRound } from "lucide-react";
+import { MessageSquare, Cpu, Database, Sparkles, Clock, Plug, Package, BarChart3, FolderTree, History, Brain, Activity, Shield, KeyRound, Settings } from "lucide-react";
 import {
   Sidebar,
   SidebarContent,
@@ -144,6 +144,14 @@ export function AppSidebar() {
                   <Link to="/trace">
                     <Activity />
                     <span>追踪观测</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              <SidebarMenuItem>
+                <SidebarMenuButton tooltip="系统配置" asChild isActive={location.pathname === "/system-config"}>
+                  <Link to="/system-config">
+                    <Settings />
+                    <span>系统配置</span>
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>

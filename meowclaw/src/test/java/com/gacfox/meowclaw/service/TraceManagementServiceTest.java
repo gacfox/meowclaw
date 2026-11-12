@@ -132,8 +132,10 @@ class TraceManagementServiceTest {
         log(batch.getId(), "agent", batch.getCreatedAt());
         assertThat(traceService.delete(batch.getId())).isEqualTo(1);
 
+        TraceObservationService observationService = new TraceObservationService(
+                new SystemConfigService(sysConfigRepository));
         LlmCallLogService logService = new LlmCallLogService(llmCallLogRepository,
-                new JsonUtil(new ObjectMapper()), traceDeletionRegistry);
+                new JsonUtil(new ObjectMapper()), traceDeletionRegistry, observationService);
         TokenUsageContext context = new TokenUsageContext(null, null, batch.getConversationId(),
                 batch.getId(), "test-model", "agent");
         logService.recordCall(context, "[]", null, 1, "SUCCESS", null);
@@ -181,6 +183,22 @@ class TraceManagementServiceTest {
     }
 
     @Test
+    void traceObservationDefaultsToEnabledAndPersistsSelection() {
+        TraceObservationService observationService = new TraceObservationService(
+                new SystemConfigService(sysConfigRepository));
+
+        assertThat(observationService.isEnabled()).isTrue();
+        observationService.updateEnabled(false);
+        entityManager.flush();
+        entityManager.clear();
+        assertThat(observationService.isEnabled()).isFalse();
+        observationService.updateEnabled(true);
+        entityManager.flush();
+        entityManager.clear();
+        assertThat(observationService.isEnabled()).isTrue();
+    }
+
+    @Test
     void retentionPolicyDefaultsToAllAndPersistsSelection() {
         SystemConfigService configService = new SystemConfigService(sysConfigRepository);
         TraceRetentionService retentionService = new TraceRetentionService(configService, traceService);
@@ -191,6 +209,8 @@ class TraceManagementServiceTest {
         assertThat(retentionService.getPolicy()).isEqualTo(TraceRetentionPolicy.DAYS_7);
 
         long now = Instant.parse("2026-11-08T00:00:00Z").toEpochMilli();
+        assertThat(retentionService.cutoff(TraceRetentionPolicy.DAYS_1, now, ZoneId.of("UTC")))
+                .isEqualTo(Instant.parse("2026-11-07T00:00:00Z").toEpochMilli());
         assertThat(retentionService.cutoff(TraceRetentionPolicy.DAYS_3, now, ZoneId.of("UTC")))
                 .isEqualTo(Instant.parse("2026-11-05T00:00:00Z").toEpochMilli());
         assertThat(retentionService.cutoff(TraceRetentionPolicy.MONTH_1, now, ZoneId.of("UTC")))

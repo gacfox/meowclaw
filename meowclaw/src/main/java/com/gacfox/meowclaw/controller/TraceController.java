@@ -4,9 +4,11 @@ import com.gacfox.meowclaw.dto.ApiResult;
 import com.gacfox.meowclaw.dto.Pagination;
 import com.gacfox.meowclaw.dto.TraceDetailDTO;
 import com.gacfox.meowclaw.dto.TraceItemDTO;
+import com.gacfox.meowclaw.dto.TraceObservationEnabledRequest;
 import com.gacfox.meowclaw.dto.TraceRetentionPolicy;
 import com.gacfox.meowclaw.dto.TraceRetentionPolicyRequest;
 import com.gacfox.meowclaw.scheduler.TraceRetentionScheduler;
+import com.gacfox.meowclaw.service.TraceObservationService;
 import com.gacfox.meowclaw.service.TraceRetentionService;
 import com.gacfox.meowclaw.service.TraceService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -26,13 +28,16 @@ import java.util.List;
 @RequestMapping("/api/trace")
 public class TraceController {
     private final TraceService traceService;
+    private final TraceObservationService traceObservationService;
     private final TraceRetentionService traceRetentionService;
     private final TraceRetentionScheduler traceRetentionScheduler;
 
     @Autowired
-    public TraceController(TraceService traceService, TraceRetentionService traceRetentionService,
+    public TraceController(TraceService traceService, TraceObservationService traceObservationService,
+                           TraceRetentionService traceRetentionService,
                            TraceRetentionScheduler traceRetentionScheduler) {
         this.traceService = traceService;
+        this.traceObservationService = traceObservationService;
         this.traceRetentionService = traceRetentionService;
         this.traceRetentionScheduler = traceRetentionScheduler;
     }
@@ -74,6 +79,18 @@ public class TraceController {
     public ApiResult<?> deleteAll() {
         traceService.deleteAll();
         return ApiResult.success();
+    }
+
+    @Operation(summary = "查询追踪观测开关")
+    @GetMapping("/enabled")
+    public ApiResult<Boolean> getObservationEnabled() {
+        return ApiResult.success(traceObservationService.isEnabled());
+    }
+
+    @Operation(summary = "修改追踪观测开关")
+    @PutMapping("/enabled")
+    public ApiResult<Boolean> updateObservationEnabled(@Valid @RequestBody TraceObservationEnabledRequest request) {
+        return ApiResult.success(traceObservationService.updateEnabled(request.getEnabled()));
     }
 
     @Operation(summary = "查询追踪留存策略")
