@@ -64,25 +64,34 @@ public class ScheduledTaskService {
 
     @Transactional
     public ScheduledTaskDTO create(CreateScheduledTaskRequest req) {
-        validateCron(req.getCronExpression());
+        ScheduledTask task = createTask(req, true);
+        Long taskId = task.getId();
+        schedulerManager.schedule(taskId, task.getCronExpression(),
+                () -> scheduledTaskExecutor.execute(taskId));
+        return scheduledTaskConverter.toDTO(task);
+    }
 
+    /**
+     * 导入配置时仅创建禁用的任务，不注册调度
+     */
+    @Transactional
+    public ScheduledTaskDTO createImported(CreateScheduledTaskRequest req) {
+        return scheduledTaskConverter.toDTO(createTask(req, false));
+    }
+
+    private ScheduledTask createTask(CreateScheduledTaskRequest req, boolean enabled) {
+        validateCron(req.getCronExpression());
         ScheduledTask task = new ScheduledTask();
         task.setName(req.getName());
         task.setAgentId(req.getAgentId());
         task.setUserPrompt(req.getUserPrompt());
         task.setCronExpression(req.getCronExpression());
         task.setCreateNewSession(Boolean.TRUE.equals(req.getCreateNewSession()));
-        task.setEnabled(true);
+        task.setEnabled(enabled);
         long now = System.currentTimeMillis();
         task.setCreatedAt(now);
         task.setUpdatedAt(now);
-        task = scheduledTaskRepository.save(task);
-
-        Long taskId = task.getId();
-        schedulerManager.schedule(taskId, task.getCronExpression(),
-                () -> scheduledTaskExecutor.execute(taskId));
-
-        return scheduledTaskConverter.toDTO(task);
+        return scheduledTaskRepository.save(task);
     }
 
     @Transactional

@@ -193,11 +193,11 @@ export function GuardrailPolicyPage() {
           ) : (
             <CardContent className="flex flex-col gap-3 p-3 sm:p-4">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <div className="flex w-full items-center gap-2">
+                <div className="flex min-w-0 flex-1 items-center gap-2">
                   <Label className="shrink-0">策略名</Label>
                   <Input value={name} onChange={(e) => setName(e.target.value)} disabled={readOnly} className="w-full max-w-none sm:max-w-64" />
                 </div>
-                <div className="flex flex-wrap gap-2">
+                <div className="flex shrink-0 flex-wrap items-center gap-2">
                   {readOnly && (
                     <Button variant="outline" onClick={copyAsCustom}>
                       <Copy className="mr-1 size-4" />

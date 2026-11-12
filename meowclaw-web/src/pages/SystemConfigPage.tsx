@@ -1,16 +1,31 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState, type ChangeEvent } from "react";
 import { toast } from "sonner";
+import { Download, Loader2, Upload } from "lucide-react";
 import {
   getTraceObservationEnabled,
   getTraceRetentionPolicy,
   updateTraceObservationEnabled,
   updateTraceRetentionPolicy,
 } from "@/services/trace";
+import {
+  exportAgentConfig,
+  importAgentConfig,
+  type ConfigImportResult,
+} from "@/services/systemConfig";
 import type { TraceRetentionPolicy } from "@/types";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -31,6 +46,36 @@ const RETENTION_OPTIONS: { value: TraceRetentionPolicy; label: string }[] = [
   { value: "ALL", label: "全部留存" },
 ];
 
+const CONFIG_TYPE_LABELS: Record<string, string> = {
+  LLM: "大语言模型",
+  EMBEDDING_MODEL: "向量嵌入模型",
+  MCP_SERVICE: "MCP 服务",
+  GUARDRAIL_POLICY: "护栏策略",
+  AGENT: "智能体",
+  ENVIRONMENT_VARIABLE: "环境变量",
+  SCHEDULED_TASK: "定时任务",
+};
+
+const IMPORT_STATUS_LABELS = {
+  IMPORTED: "已导入",
+  SKIPPED: "已跳过",
+  FAILED: "失败",
+} as const;
+
+const IMPORT_STATUS_VARIANTS = {
+  IMPORTED: "default",
+  SKIPPED: "secondary",
+  FAILED: "destructive",
+} as const;
+
+function createExportFileName() {
+  const now = new Date();
+  const pad = (value: number) => String(value).padStart(2, "0");
+  const date = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}`;
+  const time = `${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
+  return `meowclaw-agent-config-${date}-${time}.json`;
+}
+
 export function SystemConfigPage() {
   const [traceEnabled, setTraceEnabled] = useState(true);
   const [retentionPolicy, setRetentionPolicy] = useState<TraceRetentionPolicy>("ALL");
@@ -38,6 +83,11 @@ export function SystemConfigPage() {
   const [loading, setLoading] = useState(true);
   const [enabledSaving, setEnabledSaving] = useState(false);
   const [retentionSaving, setRetentionSaving] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const [pendingImportFile, setPendingImportFile] = useState<File | null>(null);
+  const [importResult, setImportResult] = useState<ConfigImportResult | null>(null);
+  const importFileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     const loadConfig = async () => {
@@ -89,6 +139,49 @@ export function SystemConfigPage() {
     if (policy === retentionPolicy || retentionSaving) return;
     if (policy === "ALL") void saveRetentionPolicy(policy);
     else setPendingRetentionPolicy(policy);
+  };
+
+  const handleExport = async () => {
+    if (exporting) return;
+    setExporting(true);
+    try {
+      const blob = await exportAgentConfig();
+      const objectUrl = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = objectUrl;
+      link.download = createExportFileName();
+      link.style.display = "none";
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+      toast.success("配置导出已开始");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "导出智能体配置失败");
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const handleImportFileChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file || importing) return;
+    setPendingImportFile(file);
+  };
+
+  const handleImport = async (file: File) => {
+    if (importing) return;
+    setImporting(true);
+    try {
+      const result = await importAgentConfig(file);
+      setPendingImportFile(null);
+      setImportResult(result);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "导入智能体配置失败");
+    } finally {
+      setImporting(false);
+    }
   };
 
   return (
@@ -147,6 +240,38 @@ export function SystemConfigPage() {
         </CardContent>
       </Card>
 
+      <Card>
+        <CardHeader>
+          <CardTitle>智能体配置</CardTitle>
+          <CardDescription>
+            导出智能体、MCP、定时任务、大语言模型、向量嵌入模型、护栏策略和环境变量；不包含会话、工作区及运行数据。
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <p className="max-w-xl text-sm text-muted-foreground">
+            导出文件包含明文密钥等敏感信息，请妥善保管，避免泄露。
+          </p>
+          <div className="flex shrink-0 flex-wrap gap-2">
+            <Button type="button" variant="outline" onClick={() => void handleExport()} disabled={exporting}>
+              {exporting ? <Loader2 className="animate-spin" /> : <Download />}
+              {exporting ? "导出中..." : "导出"}
+            </Button>
+            <Button type="button" onClick={() => importFileRef.current?.click()} disabled={importing}>
+              {importing ? <Loader2 className="animate-spin" /> : <Upload />}
+              {importing ? "导入中..." : "导入"}
+            </Button>
+            <input
+              ref={importFileRef}
+              type="file"
+              accept=".json,application/json"
+              className="hidden"
+              onChange={handleImportFileChange}
+              disabled={importing}
+            />
+          </div>
+        </CardContent>
+      </Card>
+
       <AlertDialog
         open={pendingRetentionPolicy !== null}
         onOpenChange={(open) => {
@@ -174,6 +299,133 @@ export function SystemConfigPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <AlertDialog
+        open={pendingImportFile !== null}
+        onOpenChange={(open) => {
+          if (!open && !importing) setPendingImportFile(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>确认导入智能体配置</AlertDialogTitle>
+            <AlertDialogDescription>
+              即将导入“{pendingImportFile?.name}”。导入不会覆盖已有配置；MCP 和护栏策略重名时自动改名，同作用域环境变量冲突时跳过；单项失败后仍会继续处理其他配置；MCP 和定时任务导入后保持禁用。确定继续吗？
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={importing}>取消</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={importing}
+              onClick={(event) => {
+                event.preventDefault();
+                if (pendingImportFile) void handleImport(pendingImportFile);
+              }}
+            >
+              {importing ? "导入中..." : "确认导入"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <Dialog
+        open={importResult !== null}
+        onOpenChange={(open) => {
+          if (!open) setImportResult(null);
+        }}
+      >
+        <DialogContent className="flex max-h-[90vh] flex-col overflow-hidden sm:max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>智能体配置导入结果</DialogTitle>
+            <DialogDescription>
+              仅展示配置名称、状态与结果消息，不展示密钥等敏感配置值。
+            </DialogDescription>
+          </DialogHeader>
+          {importResult && (
+            <div className="min-h-0 flex-1 space-y-4 overflow-y-auto pr-1">
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
+                {[
+                  { label: "总计", value: importResult.totalCount },
+                  { label: "已导入", value: importResult.importedCount },
+                  { label: "已跳过", value: importResult.skippedCount },
+                  { label: "失败", value: importResult.failedCount },
+                  { label: "自动改名", value: importResult.renamedCount },
+                ].map((summary) => (
+                  <div key={summary.label} className="rounded-lg border p-3">
+                    <div className="text-xs text-muted-foreground">{summary.label}</div>
+                    <div className="mt-1 text-lg font-semibold">{summary.value}</div>
+                  </div>
+                ))}
+              </div>
+
+              <section>
+                <h3 className="text-sm font-medium">分类统计</h3>
+                {importResult.categories.length === 0 ? (
+                  <p className="mt-2 text-sm text-muted-foreground">暂无分类统计</p>
+                ) : (
+                  <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                    {importResult.categories.map((category) => (
+                      <div key={category.type} className="rounded-lg border p-3">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-sm font-medium">
+                            {CONFIG_TYPE_LABELS[category.type] ?? category.type}
+                          </span>
+                          <span className="text-xs text-muted-foreground">共 {category.totalCount} 项</span>
+                        </div>
+                        <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                          <span>导入 {category.importedCount}</span>
+                          <span>跳过 {category.skippedCount}</span>
+                          <span>失败 {category.failedCount}</span>
+                          <span>改名 {category.renamedCount}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </section>
+
+              <section>
+                <h3 className="text-sm font-medium">逐项消息</h3>
+                {importResult.items.length === 0 ? (
+                  <p className="mt-2 text-sm text-muted-foreground">暂无逐项消息</p>
+                ) : (
+                  <div className="mt-2 max-h-72 space-y-2 overflow-y-auto pr-1">
+                    {importResult.items.map((item, index) => (
+                      <div key={`${item.type}-${item.sourceId ?? "none"}-${index}`} className="rounded-lg border p-3">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Badge variant={IMPORT_STATUS_VARIANTS[item.status]}>
+                            {IMPORT_STATUS_LABELS[item.status]}
+                          </Badge>
+                          <span className="text-xs text-muted-foreground">
+                            {CONFIG_TYPE_LABELS[item.type] ?? item.type}
+                          </span>
+                          <span className="min-w-0 break-all text-sm font-medium">
+                            {item.finalName ?? item.originalName ?? "未命名配置"}
+                          </span>
+                        </div>
+                        {item.originalName && item.finalName && item.originalName !== item.finalName && (
+                          <p className="mt-2 break-all text-xs text-muted-foreground">
+                            名称：{item.originalName} → {item.finalName}
+                          </p>
+                        )}
+                        {(item.sourceId !== null || item.newId !== null) && (
+                          <div className="mt-1 flex flex-wrap gap-x-3 text-xs text-muted-foreground">
+                            {item.sourceId !== null && <span>源 ID：{item.sourceId}</span>}
+                            {item.newId !== null && <span>新 ID：{item.newId}</span>}
+                          </div>
+                        )}
+                        <p className="mt-2 whitespace-pre-wrap break-words text-xs text-muted-foreground">
+                          {item.message ?? "无附加消息"}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </section>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
