@@ -226,9 +226,6 @@ export function SystemConfigPage() {
           <div className="flex items-start justify-between gap-6 border-b pb-6">
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="trace-enabled" className="text-sm font-medium">启用追踪观测</Label>
-              <p className="max-w-xl text-sm text-muted-foreground">
-                关闭后不再记录新的 LLM 调用追踪，已有记录仍可查看和清理，不影响会话及 Tokens 统计。
-              </p>
             </div>
             <Switch
               id="trace-enabled"
@@ -242,9 +239,6 @@ export function SystemConfigPage() {
           <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="trace-retention-policy" className="text-sm font-medium">数据留存策略</Label>
-              <p className="max-w-xl text-sm text-muted-foreground">
-                超出保留期限的追踪明细将由后台任务自动清理，不影响会话及 Tokens 统计。
-              </p>
             </div>
             <Select
               value={retentionPolicy}
@@ -277,9 +271,6 @@ export function SystemConfigPage() {
               <Label htmlFor="system-resource-monitor-enabled" className="text-sm font-medium">
                 启用系统资源监控
               </Label>
-              <p className="max-w-xl text-sm text-muted-foreground">
-                开启后，可点击顶部图标查看 CPU 和内存占用；弹出层打开时每 10 秒刷新，关闭后停止刷新。
-              </p>
             </div>
             <Switch
               id="system-resource-monitor-enabled"
