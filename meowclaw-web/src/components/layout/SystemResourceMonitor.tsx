@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from "react";
 import { Gauge } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { useIsMobile } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
 import {
   getSystemResourceMetrics,
@@ -15,6 +14,13 @@ const POLL_INTERVAL_MS = 10000;
 
 function formatUsage(value: number | null): string {
   return value === null ? "--" : `${value.toFixed(1)}%`;
+}
+
+function getUsageBarClassName(value: number | null): string {
+  if (value === null) return "bg-transparent";
+  if (value < 60) return "bg-emerald-500";
+  if (value < 80) return "bg-amber-500";
+  return "bg-red-500";
 }
 
 function ResourceProgress({
@@ -44,7 +50,10 @@ function ResourceProgress({
         aria-valuetext={formatUsage(normalizedValue)}
       >
         <div
-          className="h-full rounded-full bg-primary transition-[width] duration-300"
+          className={cn(
+            "h-full rounded-full transition-[width,background-color] duration-300",
+            getUsageBarClassName(normalizedValue),
+          )}
           style={{ width: `${normalizedValue ?? 0}%` }}
         />
       </div>
@@ -56,7 +65,6 @@ function ResourceProgress({
 }
 
 export function SystemResourceMonitor() {
-  const isMobile = useIsMobile();
   const [enabled, setEnabled] = useState(false);
   const [metrics, setMetrics] = useState<SystemResourceMetrics | null>(null);
   const [popoverOpen, setPopoverOpen] = useState(false);
@@ -90,7 +98,7 @@ export function SystemResourceMonitor() {
   }, []);
 
   useEffect(() => {
-    if (!enabled || (isMobile && !popoverOpen)) return;
+    if (!enabled || !popoverOpen) return;
 
     let aborted = false;
 
@@ -119,7 +127,7 @@ export function SystemResourceMonitor() {
         timeoutRef.current = null;
       }
     };
-  }, [enabled, isMobile, popoverOpen]);
+  }, [enabled, popoverOpen]);
 
   if (!enabled) return null;
 
@@ -127,31 +135,22 @@ export function SystemResourceMonitor() {
   const memoryUsage = metrics?.memoryUsage ?? null;
 
   return (
-    <>
-      <div className="hidden items-center gap-3 md:flex" aria-label="系统资源占用">
-        <ResourceProgress label="CPU" value={cpuUsage} barClassName="w-14" />
-        <ResourceProgress label="内存" value={memoryUsage} barClassName="w-14" />
-      </div>
-
-      <div className="md:hidden">
-        <Popover open={popoverOpen} onOpenChange={setPopoverOpen}>
-          <PopoverTrigger asChild>
-            <Button variant="ghost" size="icon-sm" aria-label="查看系统资源占用">
-              <Gauge className="size-4" />
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent align="end" className="w-64 gap-4 p-4">
-            <div className="flex items-center gap-2 text-sm font-medium">
-              <Gauge className="size-4 text-muted-foreground" />
-              系统资源占用
-            </div>
-            <div className="flex flex-col gap-3">
-              <ResourceProgress label="CPU" value={cpuUsage} barClassName="min-w-0 flex-1" />
-              <ResourceProgress label="内存" value={memoryUsage} barClassName="min-w-0 flex-1" />
-            </div>
-          </PopoverContent>
-        </Popover>
-      </div>
-    </>
+    <Popover open={popoverOpen} onOpenChange={setPopoverOpen}>
+      <PopoverTrigger asChild>
+        <Button variant="ghost" size="icon-sm" aria-label="查看系统资源占用">
+          <Gauge className="size-4" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent align="end" className="w-64 gap-4 p-4">
+        <div className="flex items-center gap-2 text-sm font-medium">
+          <Gauge className="size-4 text-muted-foreground" />
+          系统资源占用
+        </div>
+        <div className="flex flex-col gap-3">
+          <ResourceProgress label="CPU" value={cpuUsage} barClassName="min-w-0 flex-1" />
+          <ResourceProgress label="内存" value={memoryUsage} barClassName="min-w-0 flex-1" />
+        </div>
+      </PopoverContent>
+    </Popover>
   );
 }

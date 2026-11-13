@@ -278,7 +278,7 @@ export function SystemConfigPage() {
                 启用系统资源监控
               </Label>
               <p className="max-w-xl text-sm text-muted-foreground">
-                开启后，桌面端每 10 秒刷新两个进度条；移动端可点击顶部图标查看，关闭弹出层后停止刷新。
+                开启后，可点击顶部图标查看 CPU 和内存占用；弹出层打开时每 10 秒刷新，关闭后停止刷新。
               </p>
             </div>
             <Switch
