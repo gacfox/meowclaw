@@ -12,6 +12,11 @@ import {
   importAgentConfig,
   type ConfigImportResult,
 } from "@/services/systemConfig";
+import {
+  getSystemResourceMonitorEnabled,
+  SYSTEM_RESOURCE_MONITOR_CHANGED_EVENT,
+  updateSystemResourceMonitorEnabled,
+} from "@/services/systemResource";
 import type { TraceRetentionPolicy } from "@/types";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
@@ -78,10 +83,12 @@ function createExportFileName() {
 
 export function SystemConfigPage() {
   const [traceEnabled, setTraceEnabled] = useState(true);
+  const [resourceMonitorEnabled, setResourceMonitorEnabled] = useState(true);
   const [retentionPolicy, setRetentionPolicy] = useState<TraceRetentionPolicy>("ALL");
   const [pendingRetentionPolicy, setPendingRetentionPolicy] = useState<TraceRetentionPolicy | null>(null);
   const [loading, setLoading] = useState(true);
   const [enabledSaving, setEnabledSaving] = useState(false);
+  const [resourceMonitorSaving, setResourceMonitorSaving] = useState(false);
   const [retentionSaving, setRetentionSaving] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [importing, setImporting] = useState(false);
@@ -92,12 +99,14 @@ export function SystemConfigPage() {
   useEffect(() => {
     const loadConfig = async () => {
       try {
-        const [enabled, policy] = await Promise.all([
+        const [enabled, policy, resourceEnabled] = await Promise.all([
           getTraceObservationEnabled(),
           getTraceRetentionPolicy(),
+          getSystemResourceMonitorEnabled(),
         ]);
         setTraceEnabled(enabled);
         setRetentionPolicy(policy);
+        setResourceMonitorEnabled(resourceEnabled);
       } catch (err) {
         toast.error(err instanceof Error ? err.message : "加载系统配置失败");
       } finally {
@@ -118,6 +127,23 @@ export function SystemConfigPage() {
       toast.error(err instanceof Error ? err.message : "保存追踪观测开关失败");
     } finally {
       setEnabledSaving(false);
+    }
+  };
+
+  const handleResourceMonitorEnabledChange = async (enabled: boolean) => {
+    if (resourceMonitorSaving) return;
+    setResourceMonitorSaving(true);
+    try {
+      await updateSystemResourceMonitorEnabled(enabled);
+      setResourceMonitorEnabled(enabled);
+      window.dispatchEvent(new CustomEvent<boolean>(SYSTEM_RESOURCE_MONITOR_CHANGED_EVENT, {
+        detail: enabled,
+      }));
+      toast.success(enabled ? "已开启系统资源监控" : "已关闭系统资源监控");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "保存系统资源监控开关失败");
+    } finally {
+      setResourceMonitorSaving(false);
     }
   };
 
@@ -236,6 +262,32 @@ export function SystemConfigPage() {
                 ))}
               </SelectContent>
             </Select>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>系统资源监控</CardTitle>
+          <CardDescription>控制页面顶部是否展示服务端 CPU 和内存占用。</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-start justify-between gap-6">
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="system-resource-monitor-enabled" className="text-sm font-medium">
+                启用系统资源监控
+              </Label>
+              <p className="max-w-xl text-sm text-muted-foreground">
+                开启后，桌面端每 10 秒刷新两个进度条；移动端可点击顶部图标查看，关闭弹出层后停止刷新。
+              </p>
+            </div>
+            <Switch
+              id="system-resource-monitor-enabled"
+              checked={resourceMonitorEnabled}
+              onCheckedChange={(enabled) => void handleResourceMonitorEnabledChange(enabled)}
+              disabled={loading || resourceMonitorSaving}
+              aria-label="启用系统资源监控"
+            />
           </div>
         </CardContent>
       </Card>

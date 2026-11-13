@@ -20,6 +20,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { ServiceStatusIndicator } from "./ServiceStatusIndicator";
+import { SystemResourceMonitor } from "./SystemResourceMonitor";
 import { AboutDialog } from "./AboutDialog";
 
 const ROUTE_LABELS: Record<string, string> = {
@@ -78,6 +79,7 @@ export function AppHeader() {
       </Breadcrumb>
       <div className="ml-auto flex items-center gap-1">
         <ServiceStatusIndicator />
+        <SystemResourceMonitor />
         <Button variant="ghost" size="icon-sm" onClick={cycleTheme}>
           {themeIcon}
         </Button>
