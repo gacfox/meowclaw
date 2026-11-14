@@ -7,6 +7,7 @@ import com.gacfox.meowclaw.repository.ChatEventBatchRepository;
 import com.gacfox.meowclaw.repository.ContextRecapRepository;
 import com.gacfox.meowclaw.repository.MessageRepository;
 import com.gacfox.meowclaw.service.SystemPromptService.PromptContext;
+import com.gacfox.meowclaw.tool.ImageToolResult;
 import com.gacfox.meowclaw.util.JsonUtil;
 import com.gacfox.proarc.agentic.model.openai.Message;
 import org.junit.jupiter.api.Test;
@@ -14,6 +15,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import reactor.netty.http.client.HttpClient;
 
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -31,7 +33,8 @@ class ContextCompressionServiceTest {
         ContextCompressionService service = new ContextCompressionService(
                 batchRepository, recapRepository, messageRepository,
                 mock(ChatPersistenceService.class), mock(LlmCallLogService.class), mock(TokenUsageService.class),
-                mock(LlmLoggingInterceptor.class), mock(ChatAttachmentService.class), mock(HttpClient.class), jsonUtil);
+                mock(LlmLoggingInterceptor.class), mock(ChatAttachmentService.class),
+                new ImageToolResult(new ObjectMapper(), jsonUtil), mock(HttpClient.class), jsonUtil);
         PromptContext promptContext = new PromptContext("<runtime_context>fixed</runtime_context>", List.of(3L));
         ChatEventBatch batch = new ChatEventBatch();
         batch.setId(1L);
@@ -62,7 +65,8 @@ class ContextCompressionServiceTest {
         ContextCompressionService service = new ContextCompressionService(
                 batchRepository, recapRepository, messageRepository,
                 mock(ChatPersistenceService.class), mock(LlmCallLogService.class), mock(TokenUsageService.class),
-                mock(LlmLoggingInterceptor.class), mock(ChatAttachmentService.class), mock(HttpClient.class), jsonUtil);
+                mock(LlmLoggingInterceptor.class), mock(ChatAttachmentService.class),
+                new ImageToolResult(new ObjectMapper(), jsonUtil), mock(HttpClient.class), jsonUtil);
         PromptContext promptContext = new PromptContext("<runtime_context>fixed</runtime_context>", List.of());
         List<ChatEventBatch> batches = new ArrayList<>();
         for (int i = 1; i <= batchCount; i++) {
@@ -110,6 +114,53 @@ class ContextCompressionServiceTest {
         } else {
             assertThat(messages).noneMatch(message -> intermediateContent.equals(message.getContent())
                     || Message.ROLE_TOOL.equals(message.getRole()));
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = {4, 5})
+    void imageToolResultsExpireAfterFourHistoricalBatches(int batchCount) {
+        ChatEventBatchRepository batchRepository = mock(ChatEventBatchRepository.class);
+        ContextRecapRepository recapRepository = mock(ContextRecapRepository.class);
+        MessageRepository messageRepository = mock(MessageRepository.class);
+        ObjectMapper objectMapper = new ObjectMapper();
+        JsonUtil jsonUtil = new JsonUtil(objectMapper);
+        ImageToolResult imageToolResult = new ImageToolResult(objectMapper, jsonUtil);
+        ContextCompressionService service = new ContextCompressionService(
+                batchRepository, recapRepository, messageRepository,
+                mock(ChatPersistenceService.class), mock(LlmCallLogService.class), mock(TokenUsageService.class),
+                mock(LlmLoggingInterceptor.class), mock(ChatAttachmentService.class), imageToolResult,
+                mock(HttpClient.class), jsonUtil);
+        PromptContext promptContext = new PromptContext("<runtime_context>fixed</runtime_context>", List.of());
+        List<ChatEventBatch> batches = new ArrayList<>();
+        for (int i = 1; i <= batchCount; i++) {
+            ChatEventBatch batch = new ChatEventBatch();
+            batch.setId((long) i);
+            batch.setType("USER");
+            batch.setStatus("COMPLETED");
+            batch.setCreatedAt((long) i);
+            batch.setUserContent("输入" + i);
+            batch.setPromptContextJson(jsonUtil.dump(promptContext));
+            batches.add(batch);
+        }
+        when(batchRepository.findByConversationIdOrderByCreatedAtAsc(9L)).thenReturn(batches);
+        when(recapRepository.findByConversationIdOrderByCreatedAtAsc(9L)).thenReturn(List.of());
+        com.gacfox.meowclaw.entity.Message tool = new com.gacfox.meowclaw.entity.Message();
+        tool.setBatchId(1L);
+        tool.setRole("tool");
+        tool.setContent(imageToolResult.build(Path.of("old.png"), "image/png", 3));
+        when(messageRepository.findByConversationIdOrderByCreatedAtAsc(9L)).thenReturn(List.of(tool));
+
+        List<Message> messages = service.buildMessages(9L);
+
+        Message toolResult = messages.stream().filter(message -> Message.ROLE_TOOL.equals(message.getRole()))
+                .findFirst().orElseThrow();
+        if (batchCount == 4) {
+            assertThat(toolResult.getContent().toString()).startsWith(ImageToolResult.MARKER_PREFIX);
+        } else {
+            assertThat(toolResult.getContent().toString())
+                    .doesNotContain(ImageToolResult.MARKER_PREFIX)
+                    .contains("历史图片不再随请求携带");
         }
     }
 }

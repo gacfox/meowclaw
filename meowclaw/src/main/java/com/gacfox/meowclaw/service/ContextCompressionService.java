@@ -13,6 +13,7 @@ import com.gacfox.meowclaw.interceptor.llm.TokenUsageContext;
 import com.gacfox.meowclaw.repository.ChatEventBatchRepository;
 import com.gacfox.meowclaw.repository.ContextRecapRepository;
 import com.gacfox.meowclaw.repository.MessageRepository;
+import com.gacfox.meowclaw.tool.ImageToolResult;
 import com.gacfox.meowclaw.util.CapabilityUtil;
 import com.gacfox.meowclaw.util.JsonUtil;
 import com.gacfox.proarc.agentic.client.LlmClient;
@@ -47,6 +48,7 @@ public class ContextCompressionService {
     private final TokenUsageService tokenUsageService;
     private final LlmLoggingInterceptor llmLoggingInterceptor;
     private final ChatAttachmentService chatAttachmentService;
+    private final ImageToolResult imageToolResult;
     private final reactor.netty.http.client.HttpClient httpClient;
 
     @Value("classpath:prompt/context-recap-prompt.md")
@@ -59,7 +61,8 @@ public class ContextCompressionService {
                                      MessageRepository messageRepository, ChatPersistenceService persistenceService,
                                      LlmCallLogService llmCallLogService, TokenUsageService tokenUsageService,
                                      LlmLoggingInterceptor llmLoggingInterceptor, ChatAttachmentService chatAttachmentService,
-                                     reactor.netty.http.client.HttpClient httpClient, JsonUtil jsonUtil) {
+                                     ImageToolResult imageToolResult, reactor.netty.http.client.HttpClient httpClient,
+                                     JsonUtil jsonUtil) {
         this.jsonUtil = jsonUtil;
         this.batchRepository = batchRepository;
         this.recapRepository = recapRepository;
@@ -69,6 +72,7 @@ public class ContextCompressionService {
         this.tokenUsageService = tokenUsageService;
         this.llmLoggingInterceptor = llmLoggingInterceptor;
         this.chatAttachmentService = chatAttachmentService;
+        this.imageToolResult = imageToolResult;
         this.httpClient = httpClient;
     }
 
@@ -108,9 +112,12 @@ public class ContextCompressionService {
                     .role(com.gacfox.proarc.agentic.model.openai.Message.ROLE_USER).content(userMessageContent).build());
             for (Message message : messagesByBatch.getOrDefault(batch.getId(), List.of())) {
                 if (age >= 15 && shouldFoldToolMessage(message)) continue;
-                boolean truncateToolResult = age >= 5 && "tool".equals(message.getRole());
+                boolean oldToolResult = age >= 5 && "tool".equals(message.getRole());
+                String content = oldToolResult
+                        ? truncateContent(imageToolResult.toHistoricalText(message.getContent()))
+                        : message.getContent();
                 var builder = com.gacfox.proarc.agentic.model.openai.Message.builder().role(message.getRole())
-                        .content(truncateToolResult ? truncateContent(message.getContent()) : message.getContent())
+                        .content(content)
                         .reasoningContent(message.getReasoningContent())
                         .toolCallId(message.getToolCallId());
                 if (message.getToolCallsJson() != null) {

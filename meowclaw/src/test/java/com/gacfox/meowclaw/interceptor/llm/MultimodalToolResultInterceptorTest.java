@@ -19,8 +19,12 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 class MultimodalToolResultInterceptorTest {
 
@@ -129,6 +133,82 @@ class MultimodalToolResultInterceptorTest {
         interceptor.interceptStreaming(requestWith(toolMessage(marked)), modelInfo(true), chain);
 
         assertThat(chain.captured.getMessages()).hasSize(2);
+    }
+
+    @Test
+    void limitsUploadedImagesWithoutToolMarkersAndPrefersNewest() {
+        Message oldMessage = Message.builder().role(Message.ROLE_USER)
+                .content(new ArrayList<>(List.of(imagePart(4_500_000)))).build();
+        Message newMessage = Message.builder().role(Message.ROLE_USER)
+                .content(new ArrayList<>(List.of(imagePart(4_500_000)))).build();
+        CapturingChain chain = new CapturingChain();
+
+        interceptor.interceptBlocking(requestWith(oldMessage, newMessage), modelInfo(true), chain);
+
+        assertThat(isImagePart(parts(chain.captured.getMessages().get(0)).get(0))).isFalse();
+        assertThat(parts(chain.captured.getMessages().get(0)).get(0).toString()).contains("超过8MB");
+        assertThat(isImagePart(parts(chain.captured.getMessages().get(1)).get(0))).isTrue();
+        assertThat(isImagePart(parts(oldMessage).get(0))).isTrue();
+    }
+
+    @Test
+    void keepsAllImagesAtExactBudgetBoundary() {
+        Message first = Message.builder().role(Message.ROLE_USER)
+                .content(List.of(imagePart(4_000_000))).build();
+        Message second = Message.builder().role(Message.ROLE_USER)
+                .content(List.of(imagePart(4_000_000))).build();
+        CapturingChain chain = new CapturingChain();
+
+        interceptor.interceptBlocking(requestWith(first, second), modelInfo(true), chain);
+
+        assertThat(isImagePart(parts(chain.captured.getMessages().get(0)).get(0))).isTrue();
+        assertThat(isImagePart(parts(chain.captured.getMessages().get(1)).get(0))).isTrue();
+    }
+
+    @Test
+    void appliesBudgetAcrossUploadedAndReadImages() throws Exception {
+        ImagePreprocessingService preprocessing = mock(ImagePreprocessingService.class);
+        when(preprocessing.process(any(), any())).thenReturn(
+                new ImagePreprocessingService.ProcessedImage(new byte[3_000_000], "image/png"));
+        MultimodalToolResultInterceptor budgetInterceptor =
+                new MultimodalToolResultInterceptor(imageToolResult, preprocessing);
+        Message uploaded = Message.builder().role(Message.ROLE_USER)
+                .content(List.of(imagePart(4_500_000))).build();
+        String readImage = imageToolResult.build(tempDir.resolve("new.png"), "image/png", 3_000_000);
+        CapturingChain chain = new CapturingChain();
+
+        budgetInterceptor.interceptBlocking(requestWith(uploaded, toolMessage(readImage)), modelInfo(true), chain);
+
+        assertThat(isImagePart(parts(chain.captured.getMessages().get(0)).get(0))).isFalse();
+        Message materialized = chain.captured.getMessages().get(2);
+        assertThat(isImagePart(parts(materialized).get(1))).isTrue();
+    }
+
+    @Test
+    void streamingPathAlsoLimitsImagePayload() {
+        Message oldMessage = Message.builder().role(Message.ROLE_USER)
+                .content(List.of(imagePart(4_500_000))).build();
+        Message newMessage = Message.builder().role(Message.ROLE_USER)
+                .content(List.of(imagePart(4_500_000))).build();
+        CapturingChain chain = new CapturingChain();
+
+        interceptor.interceptStreaming(requestWith(oldMessage, newMessage), modelInfo(true), chain);
+
+        assertThat(isImagePart(parts(chain.captured.getMessages().get(0)).get(0))).isFalse();
+        assertThat(isImagePart(parts(chain.captured.getMessages().get(1)).get(0))).isTrue();
+    }
+
+    private static Map<String, Object> imagePart(int base64Length) {
+        return Map.of("type", "image_url", "image_url",
+                Map.of("url", "data:image/png;base64," + "a".repeat(base64Length)));
+    }
+
+    private static List<?> parts(Message message) {
+        return (List<?>) message.getContent();
+    }
+
+    private static boolean isImagePart(Object part) {
+        return part instanceof Map<?,?> map && "image_url".equals(map.get("type"));
     }
 
     private void writePng(Path path) throws Exception {

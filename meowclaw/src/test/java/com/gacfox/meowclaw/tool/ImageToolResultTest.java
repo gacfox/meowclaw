@@ -40,4 +40,15 @@ class ImageToolResultTest {
         assertThat(imageToolResult.parse("<<<image>>>不是合法json")).isNull();
         assertThat(imageToolResult.parse(null)).isNull();
     }
+
+    @Test
+    void convertsExpiredImageMarkerToHistoricalText() {
+        String content = imageToolResult.build(Path.of("H:\\workspace\\cat.png"), "image/png", 12345);
+
+        assertThat(imageToolResult.toHistoricalText(content))
+                .doesNotContain(ImageToolResult.MARKER_PREFIX)
+                .contains("历史图片不再随请求携带")
+                .contains("cat.png");
+        assertThat(imageToolResult.toHistoricalText("普通文本")).isEqualTo("普通文本");
+    }
 }

@@ -89,4 +89,18 @@ public class ImageToolResult {
             return null;
         }
     }
+
+    /**
+     * 将历史图片标记降级为文字，避免后续请求重新读取并携带图片
+     *
+     * @param content 工具结果内容
+     * @return 非图片标记原样返回，图片标记返回文字说明
+     */
+    public String toHistoricalText(Object content) {
+        ImageRef ref = parse(content);
+        if (ref == null) {
+            return content instanceof String text ? text : "";
+        }
+        return "历史图片不再随请求携带（" + ref.path() + "），如需查看请重新使用 read 工具读取。";
+    }
 }
