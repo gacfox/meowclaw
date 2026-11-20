@@ -44,6 +44,9 @@ public class ChatEventBatch {
     @Column(name = "output_tokens")
     private Long outputTokens;
 
+    @Column(name = "cached_tokens")
+    private Long cachedTokens;
+
     @Column(name = "output_tokens_per_second")
     private Double outputTokensPerSecond;
 

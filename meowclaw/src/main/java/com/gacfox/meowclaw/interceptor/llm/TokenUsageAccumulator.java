@@ -2,12 +2,15 @@ package com.gacfox.meowclaw.interceptor.llm;
 
 import lombok.Setter;
 
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 
 public class TokenUsageAccumulator {
     private final AtomicLong inputTokens = new AtomicLong(0);
     private final AtomicLong outputTokens = new AtomicLong(0);
+    private final AtomicLong cachedTokens = new AtomicLong(0);
+    private final AtomicBoolean cachedTokensReported = new AtomicBoolean(false);
     private final AtomicLong lastPromptTokens = new AtomicLong(0);
     private final AtomicLong speedOutputTokens = new AtomicLong(0);
     private final AtomicLong speedDurationMs = new AtomicLong(0);
@@ -32,6 +35,21 @@ public class TokenUsageAccumulator {
 
     public long getOutputTokens() {
         return outputTokens.get();
+    }
+
+    /**
+     * 累计Provider上报的缓存输入tokens；上报0与未上报的语义不同
+     */
+    public void addCachedTokens(long tokens) {
+        if (tokens < 0) {
+            return;
+        }
+        cachedTokens.addAndGet(tokens);
+        cachedTokensReported.set(true);
+    }
+
+    public Long getCachedTokens() {
+        return cachedTokensReported.get() ? cachedTokens.get() : null;
     }
 
     /**

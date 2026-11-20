@@ -52,4 +52,20 @@ class TokenUsageAccumulatorTest {
 
         assertThat(accumulator.getOutputTokensPerSecond()).isNull();
     }
+
+    @Test
+    void distinguishesUnreportedCachedTokensFromReportedZeroAndSumsReports() {
+        TokenUsageAccumulator accumulator = new TokenUsageAccumulator();
+        assertThat(accumulator.getCachedTokens()).isNull();
+
+        accumulator.addCachedTokens(-1);
+        assertThat(accumulator.getCachedTokens()).isNull();
+
+        accumulator.addCachedTokens(0);
+        assertThat(accumulator.getCachedTokens()).isEqualTo(0);
+
+        accumulator.addCachedTokens(300);
+        accumulator.addCachedTokens(500);
+        assertThat(accumulator.getCachedTokens()).isEqualTo(800);
+    }
 }

@@ -78,6 +78,9 @@ public class LlmCallRecordInterceptor implements LlmInterceptor {
                     accumulator.addOutputSpeedSample(usage.getCompletionTokens(), durationMs);
                 }
             }
+            if (usage.getCachedTokens() != null) {
+                accumulator.addCachedTokens(usage.getCachedTokens().longValue());
+            }
         }
         String requestMessages = serializeMessages(request);
         Schedulers.boundedElastic().schedule(() -> {

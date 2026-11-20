@@ -97,7 +97,8 @@ public class ChatPersistenceService {
     @Transactional
     public void completeBatch(Long batchId, Long conversationId,
                               List<com.gacfox.proarc.agentic.model.openai.Message> newMessages,
-                              long inputTokens, long outputTokens, Double outputTokensPerSecond) {
+                              long inputTokens, long outputTokens, Long cachedTokens,
+                              Double outputTokensPerSecond) {
         for (var msg : newMessages) {
             saveContextMessage(batchId, conversationId, msg);
         }
@@ -106,6 +107,7 @@ public class ChatPersistenceService {
         batch.setCompletedAt(System.currentTimeMillis());
         batch.setInputTokens(inputTokens);
         batch.setOutputTokens(outputTokens);
+        batch.setCachedTokens(cachedTokens);
         batch.setOutputTokensPerSecond(outputTokensPerSecond);
         chatEventBatchRepository.save(batch);
         ConversationDTO ignored = conversationService.touch(conversationId);

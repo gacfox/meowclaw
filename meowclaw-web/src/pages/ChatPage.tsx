@@ -18,7 +18,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, SquarePen, Loader2, Copy, Pencil, RefreshCw, ArrowUp, ArrowDown, Check, Clock, TriangleAlert, X, Square, Shield, ShieldAlert, MoreHorizontal, FolderPlus, Brain, MessagesSquare, Zap } from "lucide-react";
+import { Plus, SquarePen, Loader2, Copy, Pencil, RefreshCw, ArrowUp, ArrowDown, Check, Clock, TriangleAlert, X, Square, Shield, ShieldAlert, MoreHorizontal, FolderPlus, Brain, MessagesSquare, Zap, Database } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Alert, AlertTitle, AlertDescription, AlertAction } from "@/components/ui/alert";
@@ -1525,9 +1525,30 @@ export function ChatPage() {
                             </Tooltip>
                             {batch.inputTokens != null && batch.outputTokens != null && (
                               <span className="ml-2 flex items-center gap-2 text-xs text-muted-foreground">
-                                <span className="inline-flex items-center gap-0.5"><ArrowUp className="size-3" />{batch.inputTokens}</span>
-                                <span className="inline-flex items-center gap-0.5"><ArrowDown className="size-3" />{batch.outputTokens}</span>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <span className="inline-flex items-center gap-0.5"><ArrowUp className="size-3" />{batch.inputTokens}</span>
+                                  </TooltipTrigger>
+                                  <TooltipContent>输入 tokens</TooltipContent>
+                                </Tooltip>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <span className="inline-flex items-center gap-0.5"><ArrowDown className="size-3" />{batch.outputTokens}</span>
+                                  </TooltipTrigger>
+                                  <TooltipContent>输出 tokens</TooltipContent>
+                                </Tooltip>
                               </span>
+                            )}
+                            {batch.cachedTokens != null && batch.cachedTokens > 0 && (
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <span className="ml-2 inline-flex items-center gap-0.5 text-xs text-muted-foreground">
+                                    <Database className="size-3" />
+                                    {batch.cachedTokens}
+                                  </span>
+                                </TooltipTrigger>
+                                <TooltipContent>缓存输入 tokens</TooltipContent>
+                              </Tooltip>
                             )}
                             {batch.outputTokensPerSecond != null && (
                               <Tooltip>
@@ -1537,7 +1558,7 @@ export function ChatPage() {
                                     {batch.outputTokensPerSecond.toFixed(1)} tok/s
                                   </span>
                                 </TooltipTrigger>
-                                <TooltipContent>平均输出速度：LLM 输出 tokens ÷ 调用总耗时</TooltipContent>
+                                <TooltipContent>平均输出速度</TooltipContent>
                               </Tooltip>
                             )}
                             {batch.completedAt && (() => {

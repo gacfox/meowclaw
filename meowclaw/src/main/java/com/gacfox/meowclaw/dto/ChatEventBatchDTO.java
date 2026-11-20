@@ -32,6 +32,8 @@ public class ChatEventBatchDTO {
     private Long inputTokens;
     @Schema(description = "输出 Token 数")
     private Long outputTokens;
+    @Schema(description = "缓存输入 Token 数，未上报时为 null")
+    private Long cachedTokens;
     @Schema(description = "平均输出速度（tokens/秒），无有效样本时为 null")
     private Double outputTokensPerSecond;
     @Schema(description = "批次创建时间戳")

@@ -32,15 +32,16 @@ class ChatPersistenceServiceTest {
     }
 
     @Test
-    void completeBatchPersistsAverageOutputSpeed() {
+    void completeBatchPersistsCachedTokensAndAverageOutputSpeed() {
         ChatEventBatch batch = new ChatEventBatch();
         when(chatEventBatchRepository.findById(1L)).thenReturn(Optional.of(batch));
 
-        service.completeBatch(1L, 2L, List.of(), 1200, 356, 28.6);
+        service.completeBatch(1L, 2L, List.of(), 1200, 356, 800L, 28.6);
 
         assertThat(batch.getStatus()).isEqualTo("COMPLETED");
         assertThat(batch.getInputTokens()).isEqualTo(1200);
         assertThat(batch.getOutputTokens()).isEqualTo(356);
+        assertThat(batch.getCachedTokens()).isEqualTo(800);
         assertThat(batch.getOutputTokensPerSecond()).isEqualTo(28.6);
         assertThat(batch.getCompletedAt()).isNotNull();
         verify(chatEventBatchRepository).save(batch);
