@@ -1,7 +1,10 @@
 package com.gacfox.meowclaw.tool;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.gacfox.meowclaw.service.SubagentService;
 import com.gacfox.proarc.agentic.agent.AgentContext;
+import com.gacfox.proarc.agentic.tool.ToolRegistry;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
@@ -35,6 +38,21 @@ class SpawnSubagentToolTest {
     }
 
     @Test
+    void schemaRequiresOnlyPrompt() throws Exception {
+        ToolRegistry registry = new ToolRegistry();
+        registry.register(tool);
+
+        JsonNode schema = new ObjectMapper().readTree(
+                registry.getAgenticTool(SpawnSubagentTool.TOOL_NAME).getJsonSchema());
+        List<String> required = new ArrayList<>();
+        schema.at("/function/parameters/required").forEach(node -> required.add(node.asText()));
+
+        assertThat(required).containsExactly("prompt");
+        assertThat(schema.at("/function/parameters/properties").has("agent_id")).isTrue();
+        assertThat(schema.at("/function/parameters/properties").has("allowed_tools")).isTrue();
+    }
+
+    @Test
     void spawnsWithValidToolSubset() {
         when(subagentService.spawn(any(), any(), anyString(), anyString(), anyList())).thenReturn("ok");
 
@@ -59,6 +77,41 @@ class SpawnSubagentToolTest {
 
         assertThat(result).contains("not in the parent agent's tool list");
         verify(subagentService, never()).spawn(any(), any(), any(), any(), anyList());
+    }
+
+    @Test
+    void spawnsProfessionalSubagentWithoutParentToolSubsetRestriction() {
+        SpawnSubagentParam param = param("审查代码", null);
+        param.setAgentId(8L);
+        when(subagentService.spawnProfessional(any(), any(), anyString(), anyString(), eq(8L))).thenReturn("ok");
+
+        String result = tool.spawn(param, parentContext(List.of("spawn_subagent")));
+
+        assertThat(result).isEqualTo("ok");
+        verify(subagentService).spawnProfessional(eq(1L), any(), eq("审查代码"), eq("测试子任务"), eq(8L));
+        verify(subagentService, never()).spawn(any(), any(), any(), any(), anyList());
+    }
+
+    @Test
+    void rejectsAllowedToolsForProfessionalSubagent() {
+        SpawnSubagentParam param = param("审查代码", List.of("read"));
+        param.setAgentId(8L);
+
+        String result = tool.spawn(param, parentContext(List.of("read", "spawn_subagent")));
+
+        assertThat(result).contains("only available for general subagents");
+        verify(subagentService, never()).spawnProfessional(any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void rejectsEmptyAllowedToolsForProfessionalSubagent() {
+        SpawnSubagentParam param = param("审查代码", List.of());
+        param.setAgentId(8L);
+
+        String result = tool.spawn(param, parentContext(List.of("spawn_subagent")));
+
+        assertThat(result).contains("only available for general subagents");
+        verify(subagentService, never()).spawnProfessional(any(), any(), any(), any(), any());
     }
 
     @Test

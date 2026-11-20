@@ -45,8 +45,8 @@ function parseJsonArray(raw: string | null): string[] {
   }
 }
 
-function toJsonArray(arr: string[]): string | undefined {
-  return arr.length > 0 ? JSON.stringify(arr) : undefined;
+function toJsonArray(arr: string[]): string {
+  return JSON.stringify(arr);
 }
 
 interface AgentFormData {
@@ -59,6 +59,8 @@ interface AgentFormData {
   embeddingModelId: string;
   workspaceFolder: string;
   aggressiveMemoryRecall: boolean;
+  allowAsSubagent: boolean;
+  professionalSubagentIds: string[];
 }
 
 const emptyForm: AgentFormData = {
@@ -71,6 +73,8 @@ const emptyForm: AgentFormData = {
   embeddingModelId: "none",
   workspaceFolder: "",
   aggressiveMemoryRecall: false,
+  allowAsSubagent: false,
+  professionalSubagentIds: [],
 };
 
 export function AgentConfigPage() {
@@ -134,6 +138,8 @@ export function AgentConfigPage() {
       embeddingModelId: agent.embeddingModelId?.toString() ?? "none",
       workspaceFolder: agent.workspaceFolder ?? "",
       aggressiveMemoryRecall: agent.aggressiveMemoryRecall ?? false,
+      allowAsSubagent: agent.allowAsSubagent ?? false,
+      professionalSubagentIds: agent.professionalSubagentIds?.map(String) ?? [],
     });
     setDialogOpen(true);
   };
@@ -159,6 +165,8 @@ export function AgentConfigPage() {
         embeddingModelId: form.embeddingModelId !== "none" ? parseInt(form.embeddingModelId) : undefined,
         workspaceFolder: form.workspaceFolder || undefined,
         aggressiveMemoryRecall: form.aggressiveMemoryRecall,
+        allowAsSubagent: form.allowAsSubagent,
+        professionalSubagentIds: form.professionalSubagentIds.map(Number),
       };
       if (editing) {
         await updateAgent(editing.id, data);
@@ -223,6 +231,8 @@ export function AgentConfigPage() {
         embeddingModelId: copyingAgent.embeddingModelId ?? undefined,
         workspaceFolder: copyIndependentWorkspace ? undefined : (copyingAgent.workspaceFolder ?? undefined),
         aggressiveMemoryRecall: copyingAgent.aggressiveMemoryRecall ?? false,
+        allowAsSubagent: copyingAgent.allowAsSubagent ?? false,
+        professionalSubagentIds: copyingAgent.professionalSubagentIds ?? [],
       });
       await fetchData();
       setCopyDialogOpen(false);
@@ -456,6 +466,27 @@ export function AgentConfigPage() {
               <p className="text-xs text-muted-foreground">
                 开启后，每次对话都会自动用您的输入召回相关记忆并注入提示词，无需智能体主动调用 memory_recall 工具
               </p>
+            </div>
+            <div className="flex items-center justify-between">
+              <Label htmlFor="allow-as-subagent">允许作为子智能体</Label>
+              <Switch
+                id="allow-as-subagent"
+                checked={form.allowAsSubagent}
+                onCheckedChange={(checked) => setForm({ ...form, allowAsSubagent: checked })}
+              />
+            </div>
+            <div className="flex flex-col gap-2">
+              <Label>专业子智能体</Label>
+              <MultiSelect
+                options={agents
+                  .filter((agent) => agent.allowAsSubagent && agent.id !== editing?.id)
+                  .map((agent) => ({ value: agent.id.toString(), label: agent.name }))}
+                selected={form.professionalSubagentIds}
+                onChange={(selected) => setForm((prev) => ({ ...prev, professionalSubagentIds: selected }))}
+                placeholder="选择专业子智能体"
+                searchPlaceholder="搜索专业子智能体"
+                emptyText="无可用专业子智能体"
+              />
             </div>
             <div className="flex flex-col gap-2">
               <Label>工作区路径</Label>

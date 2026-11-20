@@ -1,10 +1,12 @@
 package com.gacfox.meowclaw.service;
 
 import com.gacfox.meowclaw.converter.AgentConverter;
+import com.gacfox.meowclaw.dto.AgentDTO;
 import com.gacfox.meowclaw.dto.CreateAgentRequest;
 import com.gacfox.meowclaw.dto.UpdateAgentRequest;
 import com.gacfox.meowclaw.entity.Agent;
 import com.gacfox.meowclaw.repository.AgentRepository;
+import com.gacfox.meowclaw.repository.AgentSubagentRelationRepository;
 import com.gacfox.meowclaw.repository.EnvironmentVariableRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -26,13 +28,24 @@ import static org.mockito.Mockito.when;
 class AgentServiceTest {
     private AgentRepository agentRepository;
     private EnvironmentVariableRepository environmentVariableRepository;
+    private AgentSubagentRelationRepository agentSubagentRelationRepository;
     private AgentService service;
 
     @BeforeEach
     void setUp() {
         agentRepository = mock(AgentRepository.class);
         environmentVariableRepository = mock(EnvironmentVariableRepository.class);
-        service = new AgentService(agentRepository, mock(AgentConverter.class), environmentVariableRepository);
+        agentSubagentRelationRepository = mock(AgentSubagentRelationRepository.class);
+        AgentConverter agentConverter = mock(AgentConverter.class);
+        when(agentConverter.toDTO(any(Agent.class))).thenAnswer(invocation -> {
+            Agent agent = invocation.getArgument(0);
+            AgentDTO dto = new AgentDTO();
+            dto.setId(agent.getId());
+            dto.setAllowAsSubagent(agent.getAllowAsSubagent());
+            return dto;
+        });
+        service = new AgentService(agentRepository, agentConverter, environmentVariableRepository,
+                agentSubagentRelationRepository);
         when(agentRepository.save(any(Agent.class))).thenAnswer(invocation -> {
             Agent agent = invocation.getArgument(0);
             if (agent.getId() == null) agent.setId(1L);

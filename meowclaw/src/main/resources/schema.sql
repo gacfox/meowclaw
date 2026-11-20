@@ -54,10 +54,24 @@ CREATE TABLE IF NOT EXISTS mc_agent
     embedding_model_id       BIGINT COMMENT '可选的向量嵌入模型配置ID',
     workspace_folder         VARCHAR(500) COMMENT '工作区目录路径',
     aggressive_memory_recall BOOLEAN      NOT NULL DEFAULT FALSE COMMENT '激进记忆召回：每次用户输入自动召回记忆注入提示词',
+    allow_as_subagent       BOOLEAN      NOT NULL DEFAULT FALSE COMMENT '是否允许作为专业子智能体',
     created_at               BIGINT       NOT NULL COMMENT '创建时间(时间戳毫秒)',
     updated_at               BIGINT       NOT NULL COMMENT '更新时间(时间戳毫秒)',
     PRIMARY KEY (id)
 );
+
+CREATE TABLE IF NOT EXISTS mc_agent_subagent
+(
+    id              BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+    parent_agent_id BIGINT NOT NULL COMMENT '父智能体ID',
+    subagent_id     BIGINT NOT NULL COMMENT '专业子智能体ID',
+    PRIMARY KEY (id)
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS uk_agent_subagent_parent_subagent
+    ON mc_agent_subagent (parent_agent_id, subagent_id);
+
+CREATE INDEX IF NOT EXISTS idx_mc_agent_subagent_subagent_id ON mc_agent_subagent (subagent_id);
 
 CREATE TABLE IF NOT EXISTS mc_environment_variable
 (

@@ -22,6 +22,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -94,8 +95,14 @@ public class AgentConfigImportItemService {
                                 Long embeddingModelId, String enabledTools, String enabledMcpTools) {
         CreateAgentRequest request = new CreateAgentRequest(data.getName(), null, data.getPersona(), enabledTools,
                 enabledMcpTools, llmId, secondaryLlmId, embeddingModelId, null, data.getAggressiveMemoryRecall());
+        request.setAllowAsSubagent(data.getAllowAsSubagent());
         validate(request);
         return agentService.create(request);
+    }
+
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public AgentDTO updateProfessionalSubagents(Long agentId, List<Long> professionalSubagentIds) {
+        return agentService.updateProfessionalSubagents(agentId, professionalSubagentIds);
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)

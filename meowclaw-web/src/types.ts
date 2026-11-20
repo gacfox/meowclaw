@@ -62,6 +62,8 @@ export interface AgentDTO {
   embeddingModelId: number | null;
   workspaceFolder: string | null;
   aggressiveMemoryRecall: boolean | null;
+  allowAsSubagent: boolean;
+  professionalSubagentIds: number[];
   createdAt: number;
   updatedAt: number;
 }

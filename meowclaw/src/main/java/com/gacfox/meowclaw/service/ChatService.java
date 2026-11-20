@@ -253,12 +253,7 @@ public class ChatService {
                 .id(eventId).type("approval").toolCallId(pending.toolCallId)
                 .toolName(pending.toolName).toolArguments(pending.toolArguments).content(content).build();
         emitRunEvent(run, dto);
-        if (parentConversationId != null) {
-            ActiveRun parentRun = activeRuns.get(parentConversationId);
-            if (parentRun != null) {
-                emitRunEvent(parentRun, dto);
-            }
-        }
+        broadcastApprovalToAncestors(conversationId, dto);
         try {
             return pending.future.get();
         } catch (InterruptedException e) {
@@ -288,11 +283,21 @@ public class ChatService {
                 .id(pending.eventId).type("approval").toolCallId(pending.toolCallId)
                 .toolName(pending.toolName).toolArguments(pending.toolArguments).content(content).build();
         emitRunEvent(run, dto);
-        if (pending.parentConversationId != null) {
-            ActiveRun parentRun = activeRuns.get(pending.parentConversationId);
-            if (parentRun != null) {
-                emitRunEvent(parentRun, dto);
+        broadcastApprovalToAncestors(pending.conversationId, dto);
+    }
+
+    /**
+     * 将任意深度的子任务审批广播到全部祖先会话，确保根会话可以处理嵌套审批
+     */
+    private void broadcastApprovalToAncestors(Long conversationId, ChatEventDTO dto) {
+        Set<Long> visited = new HashSet<>();
+        Long ancestorId = conversationService.getParentConversationId(conversationId);
+        while (ancestorId != null && visited.add(ancestorId)) {
+            ActiveRun ancestorRun = activeRuns.get(ancestorId);
+            if (ancestorRun != null) {
+                emitRunEvent(ancestorRun, dto);
             }
+            ancestorId = conversationService.getParentConversationId(ancestorId);
         }
     }
 
@@ -316,12 +321,13 @@ public class ChatService {
     /**
      * 创建子任务事件（running状态）并广播到父会话事件流，返回事件ID
      */
-    public Long createSubagentEvent(Long parentConversationId, String toolCallId, Long childConversationId, String description) {
+    public Long createSubagentEvent(Long parentConversationId, String toolCallId, Long childConversationId,
+                                    String description, Agent professionalAgent) {
         ActiveRun run = activeRuns.get(parentConversationId);
         if (run == null || run.batchId == null) {
             return null;
         }
-        String content = subagentContent(childConversationId, description, "running");
+        String content = subagentContent(childConversationId, description, "running", professionalAgent);
         Long eventId = chatPersistenceService.saveChatEvent(run.batchId, run.eventOrder.getAndIncrement(),
                 "subagent", content, null, toolCallId, null);
         emitRunEvent(run, ChatEventDTO.builder()
@@ -333,12 +339,12 @@ public class ChatService {
      * 子任务落定：更新事件内容并广播最终状态到父会话事件流
      */
     public void settleSubagentEvent(Long parentConversationId, Long eventId, String toolCallId, Long childConversationId,
-                                    String description, String status) {
+                                    String description, String status, Agent professionalAgent) {
         ActiveRun run = activeRuns.get(parentConversationId);
         if (run == null || eventId == null) {
             return;
         }
-        String content = subagentContent(childConversationId, description, status);
+        String content = subagentContent(childConversationId, description, status, professionalAgent);
         try {
             chatPersistenceService.updateChatEventContent(eventId, content);
         } catch (Exception e) {
@@ -348,12 +354,17 @@ public class ChatService {
                 .id(eventId).type("subagent").toolCallId(toolCallId).content(content).build());
     }
 
-    private String subagentContent(Long childConversationId, String description, String status) {
+    private String subagentContent(Long childConversationId, String description, String status,
+                                   Agent professionalAgent) {
         try {
             Map<String, Object> map = new LinkedHashMap<>();
             map.put("childConversationId", childConversationId);
             map.put("description", description);
             map.put("status", status);
+            if (professionalAgent != null) {
+                map.put("agentId", professionalAgent.getId());
+                map.put("agentName", professionalAgent.getName());
+            }
             return jsonUtil.dump(map);
         } catch (Exception e) {
             return "{\"status\":\"" + status + "\"}";
@@ -565,7 +576,7 @@ public class ChatService {
 
         List<Message> messages = new ArrayList<>();
         messages.add(Message.builder()
-                .role(Message.ROLE_SYSTEM).content(systemPromptService.buildSystemPrompt(agent)).build());
+                .role(Message.ROLE_SYSTEM).content(systemPromptService.buildSystemPrompt(agent, toolNames)).build());
         messages.addAll(contextCompressionService.buildMessages(conv.getId()));
         String renderedUserContent = SystemPromptService.renderUserMessage(
                 promptContext, userContent == null ? "" : userContent);

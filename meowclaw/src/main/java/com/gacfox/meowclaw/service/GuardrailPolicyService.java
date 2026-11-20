@@ -12,9 +12,11 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 @Service
 public class GuardrailPolicyService {
@@ -157,15 +159,21 @@ public class GuardrailPolicyService {
     }
 
     /**
-     * 解析会话当前生效的策略：子智能体会话继承父会话策略；显式指定的策略优先；
+     * 解析会话当前生效的策略：任意深度的子智能体会话继承根会话策略；显式指定的策略优先；
      * 未指定时定时任务会话回退无限制模式（无人值守，审批会导致任务卡死），其余回退默认策略
      */
     @Transactional(readOnly = true)
     public GuardrailPolicy resolvePolicy(Long conversationId) {
         Conversation conv = conversationRepository.findById(conversationId)
                 .orElseThrow(() -> new IllegalArgumentException("会话不存在"));
-        if (conv.getParentConversationId() != null) {
-            conv = conversationRepository.findById(conv.getParentConversationId()).orElse(conv);
+        Set<Long> visited = new HashSet<>();
+        visited.add(conv.getId());
+        while (conv.getParentConversationId() != null) {
+            Conversation parent = conversationRepository.findById(conv.getParentConversationId()).orElse(null);
+            if (parent == null || !visited.add(parent.getId())) {
+                break;
+            }
+            conv = parent;
         }
         GuardrailPolicy policy = conv.getGuardrailPolicyId() == null ? null
                 : guardrailPolicyRepository.findById(conv.getGuardrailPolicyId()).orElse(null);

@@ -14,6 +14,7 @@ import com.gacfox.meowclaw.dto.LlmDTO;
 import com.gacfox.meowclaw.dto.McpServiceDTO;
 import com.gacfox.meowclaw.dto.ScheduledTaskDTO;
 import com.gacfox.meowclaw.entity.Agent;
+import com.gacfox.meowclaw.entity.AgentSubagentRelation;
 import com.gacfox.meowclaw.entity.EmbeddingModel;
 import com.gacfox.meowclaw.entity.EnvironmentVariable;
 import com.gacfox.meowclaw.entity.GuardrailPolicy;
@@ -21,6 +22,7 @@ import com.gacfox.meowclaw.entity.Llm;
 import com.gacfox.meowclaw.entity.McpServiceConfig;
 import com.gacfox.meowclaw.entity.ScheduledTask;
 import com.gacfox.meowclaw.repository.AgentRepository;
+import com.gacfox.meowclaw.repository.AgentSubagentRelationRepository;
 import com.gacfox.meowclaw.repository.EmbeddingModelRepository;
 import com.gacfox.meowclaw.repository.EnvironmentVariableRepository;
 import com.gacfox.meowclaw.repository.GuardrailPolicyRepository;
@@ -63,6 +65,7 @@ public class AgentConfigTransferService {
     private final McpServiceConfigRepository mcpServiceRepository;
     private final GuardrailPolicyRepository guardrailPolicyRepository;
     private final AgentRepository agentRepository;
+    private final AgentSubagentRelationRepository subagentRelationRepository;
     private final EnvironmentVariableRepository environmentVariableRepository;
     private final ScheduledTaskRepository scheduledTaskRepository;
     private final AgentConfigImportItemService importItemService;
@@ -74,6 +77,7 @@ public class AgentConfigTransferService {
                                       McpServiceConfigRepository mcpServiceRepository,
                                       GuardrailPolicyRepository guardrailPolicyRepository,
                                       AgentRepository agentRepository,
+                                      AgentSubagentRelationRepository subagentRelationRepository,
                                       EnvironmentVariableRepository environmentVariableRepository,
                                       ScheduledTaskRepository scheduledTaskRepository,
                                       AgentConfigImportItemService importItemService,
@@ -83,6 +87,7 @@ public class AgentConfigTransferService {
         this.mcpServiceRepository = mcpServiceRepository;
         this.guardrailPolicyRepository = guardrailPolicyRepository;
         this.agentRepository = agentRepository;
+        this.subagentRelationRepository = subagentRelationRepository;
         this.environmentVariableRepository = environmentVariableRepository;
         this.scheduledTaskRepository = scheduledTaskRepository;
         this.importItemService = importItemService;
@@ -137,6 +142,7 @@ public class AgentConfigTransferService {
                 reservedGuardrailNames, result);
         Map<Long, Long> agentIds = importAgents(bundle.getAgents(), llmIds, embeddingModelIds,
                 exportedMcpNames, mcpNames, result);
+        restoreProfessionalSubagents(bundle.getAgents(), agentIds, result);
         importEnvironmentVariables(bundle.getEnvironmentVariables(), agentIds, result);
         importScheduledTasks(bundle.getScheduledTasks(), agentIds, result);
         return result;
@@ -356,6 +362,50 @@ public class AgentConfigTransferService {
             }
         }
         return idMap;
+    }
+
+    private void restoreProfessionalSubagents(List<AgentConfigBundleDTO.AgentData> items,
+                                               Map<Long, Long> agentIds, ConfigImportResultDTO result) {
+        for (AgentConfigBundleDTO.AgentData data : items) {
+            if (data == null || data.getProfessionalSubagentIds() == null
+                    || data.getProfessionalSubagentIds().isEmpty()) {
+                continue;
+            }
+            Long agentId = agentIds.get(data.getSourceId());
+            if (agentId == null) {
+                continue;
+            }
+            Set<Long> targetIds = new java.util.LinkedHashSet<>();
+            int missing = 0;
+            for (Long sourceSubagentId : data.getProfessionalSubagentIds()) {
+                Long targetId = agentIds.get(sourceSubagentId);
+                if (targetId == null) {
+                    missing++;
+                } else {
+                    targetIds.add(targetId);
+                }
+            }
+            if (missing > 0) {
+                appendAgentResultMessage(result, data.getSourceId(),
+                        missing + " 个专业子智能体未能导入，对应关联已跳过");
+            }
+            if (targetIds.isEmpty()) {
+                continue;
+            }
+            try {
+                importItemService.updateProfessionalSubagents(agentId, List.copyOf(targetIds));
+            } catch (Exception e) {
+                appendAgentResultMessage(result, data.getSourceId(),
+                        "专业子智能体关联恢复失败：" + errorMessage(e));
+            }
+        }
+    }
+
+    private void appendAgentResultMessage(ConfigImportResultDTO result, Long sourceId, String message) {
+        result.getItems().stream()
+                .filter(item -> AGENT.equals(item.getType()) && Objects.equals(sourceId, item.getSourceId()))
+                .findFirst()
+                .ifPresent(item -> item.setMessage(appendMessage(item.getMessage(), message)));
     }
 
     private void importEnvironmentVariables(List<AgentConfigBundleDTO.EnvironmentVariableData> items,
@@ -653,6 +703,10 @@ public class AgentConfigTransferService {
         data.setSecondaryLlmId(entity.getSecondaryLlmId());
         data.setEmbeddingModelId(entity.getEmbeddingModelId());
         data.setAggressiveMemoryRecall(entity.getAggressiveMemoryRecall());
+        data.setAllowAsSubagent(entity.getAllowAsSubagent());
+        data.setProfessionalSubagentIds(subagentRelationRepository.findByParentAgentId(entity.getId()).stream()
+                .map(AgentSubagentRelation::getSubagentId)
+                .toList());
         return data;
     }
 

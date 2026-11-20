@@ -3,8 +3,11 @@ package com.gacfox.meowclaw.service;
 import com.gacfox.meowclaw.entity.Agent;
 import com.gacfox.meowclaw.entity.ChatEventBatch;
 import com.gacfox.meowclaw.entity.ContextRecap;
+import com.gacfox.meowclaw.repository.AgentRepository;
+import com.gacfox.meowclaw.repository.AgentSubagentRelationRepository;
 import com.gacfox.meowclaw.repository.ChatEventBatchRepository;
 import com.gacfox.meowclaw.repository.ContextRecapRepository;
+import com.gacfox.meowclaw.tool.SpawnSubagentTool;
 import com.gacfox.meowclaw.util.FrontmatterParseUtil;
 import com.gacfox.meowclaw.util.JsonUtil;
 import com.gacfox.proarc.agentic.prompt.PromptTemplate;
@@ -45,6 +48,8 @@ public class SystemPromptService {
 
     private final ChatEventBatchRepository batchRepository;
     private final ContextRecapRepository recapRepository;
+    private final AgentRepository agentRepository;
+    private final AgentSubagentRelationRepository subagentRelationRepository;
     private final JsonUtil jsonUtil;
     private String systemPromptTemplate;
     private String turnContextTemplate;
@@ -52,9 +57,13 @@ public class SystemPromptService {
     @Autowired
     public SystemPromptService(ChatEventBatchRepository batchRepository,
                                ContextRecapRepository recapRepository,
+                               AgentRepository agentRepository,
+                               AgentSubagentRelationRepository subagentRelationRepository,
                                JsonUtil jsonUtil) {
         this.batchRepository = batchRepository;
         this.recapRepository = recapRepository;
+        this.agentRepository = agentRepository;
+        this.subagentRelationRepository = subagentRelationRepository;
         this.jsonUtil = jsonUtil;
     }
 
@@ -72,12 +81,51 @@ public class SystemPromptService {
      * 构建不含会话动态数据的系统提示词
      */
     public String buildSystemPrompt(Agent agent) {
+        return buildSystemPrompt(agent, List.of());
+    }
+
+    /**
+     * 构建系统提示词，并在派生工具可用时列出当前智能体可委派的专业子智能体
+     */
+    public String buildSystemPrompt(Agent agent, List<String> toolNames) {
         Map<String, Object> vars = new HashMap<>();
         String persona = agent.getPersona();
         if (persona != null && !persona.isBlank()) {
             vars.put("persona", persona.strip());
         }
-        return PromptTemplate.build(systemPromptTemplate, vars);
+        String prompt = PromptTemplate.build(systemPromptTemplate, vars);
+        if (!toolNames.contains(SpawnSubagentTool.TOOL_NAME)) {
+            return prompt;
+        }
+        List<Agent> professionals = professionalSubagents(agent.getId());
+        if (professionals.isEmpty()) {
+            return prompt;
+        }
+        StringBuilder result = new StringBuilder(prompt)
+                .append("\n\n## 可委派的专业子智能体\n")
+                .append("调用 spawn_subagent 时传入下列 agent_id 可使用对应专业子智能体；")
+                .append("缺省 agent_id 则创建 general 子智能体。\n");
+        for (Agent professional : professionals) {
+            result.append("\n- agent_id: ").append(professional.getId())
+                    .append("\n  name: ").append(professional.getName());
+            if (professional.getPersona() != null && !professional.getPersona().isBlank()) {
+                result.append("\n  persona: ").append(professional.getPersona().strip());
+            }
+        }
+        return result.toString();
+    }
+
+    private List<Agent> professionalSubagents(Long parentAgentId) {
+        List<Long> ids = subagentRelationRepository.findByParentAgentId(parentAgentId).stream()
+                .map(relation -> relation.getSubagentId())
+                .toList();
+        if (ids.isEmpty()) {
+            return List.of();
+        }
+        return agentRepository.findAllById(ids).stream()
+                .filter(candidate -> Boolean.TRUE.equals(candidate.getAllowAsSubagent()))
+                .sorted(Comparator.comparing(Agent::getId))
+                .toList();
     }
 
     /**

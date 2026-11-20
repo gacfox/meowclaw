@@ -6,6 +6,8 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+import java.util.List;
+
 @Getter
 @Setter
 @NoArgsConstructor
@@ -34,6 +36,10 @@ public class AgentDTO {
     private String workspaceFolder;
     @Schema(description = "是否启用积极记忆召回")
     private Boolean aggressiveMemoryRecall;
+    @Schema(description = "是否允许作为专业子Agent")
+    private Boolean allowAsSubagent;
+    @Schema(description = "专业子Agent ID列表")
+    private List<Long> professionalSubagentIds;
     @Schema(description = "创建时间戳")
     private Long createdAt;
     @Schema(description = "更新时间戳")

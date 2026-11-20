@@ -12,6 +12,7 @@ import com.gacfox.meowclaw.dto.LlmDTO;
 import com.gacfox.meowclaw.dto.McpServiceDTO;
 import com.gacfox.meowclaw.dto.ScheduledTaskDTO;
 import com.gacfox.meowclaw.entity.Agent;
+import com.gacfox.meowclaw.entity.AgentSubagentRelation;
 import com.gacfox.meowclaw.entity.EmbeddingModel;
 import com.gacfox.meowclaw.entity.EnvironmentVariable;
 import com.gacfox.meowclaw.entity.GuardrailPolicy;
@@ -19,6 +20,7 @@ import com.gacfox.meowclaw.entity.Llm;
 import com.gacfox.meowclaw.entity.McpServiceConfig;
 import com.gacfox.meowclaw.entity.ScheduledTask;
 import com.gacfox.meowclaw.repository.AgentRepository;
+import com.gacfox.meowclaw.repository.AgentSubagentRelationRepository;
 import com.gacfox.meowclaw.repository.EmbeddingModelRepository;
 import com.gacfox.meowclaw.repository.EnvironmentVariableRepository;
 import com.gacfox.meowclaw.repository.GuardrailPolicyRepository;
@@ -60,6 +62,7 @@ class AgentConfigTransferServiceTest {
     private McpServiceConfigRepository mcpServiceRepository;
     private GuardrailPolicyRepository guardrailPolicyRepository;
     private AgentRepository agentRepository;
+    private AgentSubagentRelationRepository subagentRelationRepository;
     private EnvironmentVariableRepository environmentVariableRepository;
     private ScheduledTaskRepository scheduledTaskRepository;
     private AgentConfigImportItemService importItemService;
@@ -73,13 +76,15 @@ class AgentConfigTransferServiceTest {
         mcpServiceRepository = mock(McpServiceConfigRepository.class);
         guardrailPolicyRepository = mock(GuardrailPolicyRepository.class);
         agentRepository = mock(AgentRepository.class);
+        subagentRelationRepository = mock(AgentSubagentRelationRepository.class);
         environmentVariableRepository = mock(EnvironmentVariableRepository.class);
         scheduledTaskRepository = mock(ScheduledTaskRepository.class);
         importItemService = mock(AgentConfigImportItemService.class);
         objectMapper = new ObjectMapper();
         service = new AgentConfigTransferService(llmRepository, embeddingModelRepository,
-                mcpServiceRepository, guardrailPolicyRepository, agentRepository,
+                mcpServiceRepository, guardrailPolicyRepository, agentRepository, subagentRelationRepository,
                 environmentVariableRepository, scheduledTaskRepository, importItemService, objectMapper);
+        when(subagentRelationRepository.findByParentAgentId(any())).thenReturn(List.of());
     }
 
     @Test
@@ -129,6 +134,7 @@ class AgentConfigTransferServiceTest {
         agent.setLlmId(1L);
         agent.setSecondaryLlmId(1L);
         agent.setEmbeddingModelId(2L);
+        agent.setAllowAsSubagent(true);
         agent.setAvatarUrl("https://example.com/avatar.png");
         agent.setWorkspaceFolder("C:/private/workspace");
         agent.setCreatedAt(501L);
@@ -159,6 +165,8 @@ class AgentConfigTransferServiceTest {
         when(mcpServiceRepository.findAll()).thenReturn(List.of(mcp));
         when(guardrailPolicyRepository.findAll()).thenReturn(List.of(guardrail));
         when(agentRepository.findAll()).thenReturn(List.of(agent));
+        when(subagentRelationRepository.findByParentAgentId(5L))
+                .thenReturn(List.of(new AgentSubagentRelation(null, 5L, 8L)));
         when(environmentVariableRepository.findAll()).thenReturn(List.of(variable));
         when(scheduledTaskRepository.findAll()).thenReturn(List.of(task));
 
@@ -193,6 +201,8 @@ class AgentConfigTransferServiceTest {
         assertThat(exportedTask.has("lastStatus")).isFalse();
         assertThat(exportedTask.has("lastExecutedAt")).isFalse();
         JsonNode exportedAgent = root.at("/agents/0");
+        assertThat(exportedAgent.get("allowAsSubagent").asBoolean()).isTrue();
+        assertThat(exportedAgent.get("professionalSubagentIds").get(0).asLong()).isEqualTo(8L);
         assertThat(exportedAgent.has("workspaceFolder")).isFalse();
         assertThat(exportedAgent.has("avatarUrl")).isFalse();
     }
@@ -359,6 +369,45 @@ class AgentConfigTransferServiceTest {
         assertThat(result.getImportedCount()).isEqualTo(2);
         assertThat(result.getSkippedCount()).isEqualTo(3);
         assertThat(result.getFailedCount()).isEqualTo(1);
+    }
+
+    @Test
+    void importRestoresProfessionalSubagentRelationsAfterCreatingAllAgents() throws Exception {
+        AgentConfigBundleDTO bundle = emptyBundle();
+        bundle.setLlms(List.of(llm(1L, "primary")));
+        AgentConfigBundleDTO.AgentData professional = agent(40L, "professional", 1L, 1L);
+        professional.setAllowAsSubagent(true);
+        AgentConfigBundleDTO.AgentData parent = agent(41L, "parent", 1L, 1L);
+        parent.setProfessionalSubagentIds(List.of(40L));
+        bundle.setAgents(List.of(parent, professional));
+        when(importItemService.createLlm(any())).thenReturn(llmDto(101L, "primary"));
+        when(importItemService.createAgent(any(), any(), any(), any(), any(), any())).thenAnswer(invocation -> {
+            AgentConfigBundleDTO.AgentData data = invocation.getArgument(0);
+            return agentDto(data.getSourceId() + 500, data.getName());
+        });
+
+        ConfigImportResultDTO result = service.importConfig(file(bundle));
+
+        verify(importItemService).updateProfessionalSubagents(541L, List.of(540L));
+        assertThat(result.getImportedCount()).isEqualTo(3);
+        assertThat(item(result, "AGENT", 41L).getMessage()).contains("默认工作区");
+    }
+
+    @Test
+    void importReportsProfessionalSubagentRelationsWhoseTargetsFailed() throws Exception {
+        AgentConfigBundleDTO bundle = emptyBundle();
+        bundle.setLlms(List.of(llm(1L, "primary")));
+        AgentConfigBundleDTO.AgentData parent = agent(41L, "parent", 1L, 1L);
+        parent.setProfessionalSubagentIds(List.of(99L));
+        bundle.setAgents(List.of(parent));
+        when(importItemService.createLlm(any())).thenReturn(llmDto(101L, "primary"));
+        when(importItemService.createAgent(any(), any(), any(), any(), any(), any()))
+                .thenReturn(agentDto(541L, "parent"));
+
+        ConfigImportResultDTO result = service.importConfig(file(bundle));
+
+        verify(importItemService, never()).updateProfessionalSubagents(any(), any());
+        assertThat(item(result, "AGENT", 41L).getMessage()).contains("1 个专业子智能体未能导入");
     }
 
     @ParameterizedTest

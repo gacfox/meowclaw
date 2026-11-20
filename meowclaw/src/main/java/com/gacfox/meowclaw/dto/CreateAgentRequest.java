@@ -9,6 +9,8 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+import java.util.List;
+
 @Getter
 @Setter
 @NoArgsConstructor
@@ -52,4 +54,25 @@ public class CreateAgentRequest {
 
     @Schema(description = "是否启用积极记忆召回")
     private Boolean aggressiveMemoryRecall;
+
+    @Schema(description = "是否允许作为专业子Agent")
+    private Boolean allowAsSubagent;
+
+    @Schema(description = "专业子Agent ID列表")
+    private List<Long> professionalSubagentIds;
+
+    public CreateAgentRequest(String name, String avatarUrl, String persona, String enabledTools,
+                              String enabledMcpTools, Long llmId, Long secondaryLlmId, Long embeddingModelId,
+                              String workspaceFolder, Boolean aggressiveMemoryRecall) {
+        this.name = name;
+        this.avatarUrl = avatarUrl;
+        this.persona = persona;
+        this.enabledTools = enabledTools;
+        this.enabledMcpTools = enabledMcpTools;
+        this.llmId = llmId;
+        this.secondaryLlmId = secondaryLlmId;
+        this.embeddingModelId = embeddingModelId;
+        this.workspaceFolder = workspaceFolder;
+        this.aggressiveMemoryRecall = aggressiveMemoryRecall;
+    }
 }

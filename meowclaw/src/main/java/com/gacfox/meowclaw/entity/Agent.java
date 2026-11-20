@@ -47,6 +47,9 @@ public class Agent {
     @Column(name = "aggressive_memory_recall", nullable = false)
     private Boolean aggressiveMemoryRecall;
 
+    @Column(name = "allow_as_subagent", nullable = false)
+    private Boolean allowAsSubagent;
+
     @Column(name = "created_at", nullable = false)
     private Long createdAt;
 

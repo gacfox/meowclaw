@@ -111,14 +111,17 @@ export function ConversationToolCall({
   args,
   result,
   pending,
+  failed,
 }: {
   name: string;
   args?: string;
   result?: string;
   pending?: boolean;
+  failed?: boolean;
 }) {
   const parsedArgs = parseToolArgs(args);
   const preview = toolArgsPreview(parsedArgs);
+  const hasFailed = failed ?? (result?.trimStart().toLowerCase().startsWith("error:") ?? false);
   return (
     <details className="group overflow-hidden rounded-lg border bg-card text-xs text-card-foreground">
       <summary className="flex min-w-0 cursor-pointer items-center gap-2 px-3 py-2.5 list-none transition-colors hover:bg-muted/50 [&::-webkit-details-marker]:hidden">
@@ -129,6 +132,11 @@ export function ConversationToolCall({
           <span className="ml-auto flex shrink-0 items-center gap-1 text-muted-foreground">
             <Loader2 className="size-3 animate-spin" />
             执行中
+          </span>
+        ) : hasFailed ? (
+          <span className="ml-auto flex shrink-0 items-center gap-1 text-destructive">
+            <X className="size-3" />
+            失败
           </span>
         ) : result !== undefined ? (
           <span className="ml-auto flex shrink-0 items-center gap-1 text-muted-foreground">
@@ -332,12 +340,28 @@ export function ConversationTimeline({
               if (name === "spawn_subagent") {
                 const subEvent = entries.find((item) => item.type === "subagent" && item.toolCallId === entry.toolCallId);
                 const info = entry.subagent ?? parseSubagentContent(subEvent?.content);
+                const spawnFailed = info == null && (entry.result === undefined
+                  ? !running
+                  : !entry.result.includes("已启动"));
+                if (spawnFailed) {
+                  return (
+                    <ConversationToolCall
+                      key={key}
+                      name={name}
+                      args={args}
+                      result={entry.result}
+                      failed
+                    />
+                  );
+                }
+                const fallbackStatus = running ? "running" : entry.result === undefined ? "failed" : "completed";
                 return (
                   <SubagentDetails
                     key={key}
                     args={args}
                     description={info?.description}
-                    status={info?.status ?? (running ? "running" : "completed")}
+                    agentName={info?.agentName}
+                    status={info?.status ?? fallbackStatus}
                     onOpen={info?.childConversationId != null && onOpenSubagent != null
                       ? () => onOpenSubagent(info.childConversationId, info.description)
                       : undefined}
@@ -443,27 +467,30 @@ const SUBAGENT_STATUS_LABELS: Record<string, string> = {
 
 export function SubagentDetails({
   description,
+  agentName,
   args,
   status,
   onOpen,
 }: {
   description?: string;
+  agentName?: string;
   args?: string;
   status?: string;
   onOpen?: () => void;
 }) {
   const parsed = parseToolArgs(args);
   const desc = description ?? (typeof parsed?.description === "string" ? parsed.description : "子任务");
+  const label = agentName ? `${agentName} · ${desc}` : desc;
   const effectiveStatus = status ?? "running";
   return (
     <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
       <Bot className="size-3.5 shrink-0" />
       {onOpen ? (
         <button type="button" onClick={onOpen} className="truncate hover:text-foreground hover:underline" title="查看子任务运行流程">
-          子智能体：{desc}
+          子智能体：{label}
         </button>
       ) : (
-        <span className="truncate">子智能体：{desc}</span>
+        <span className="truncate">子智能体：{label}</span>
       )}
       {effectiveStatus === "completed" ? (
         <Check className="size-3 shrink-0 text-green-500" />

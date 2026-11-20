@@ -8,6 +8,8 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+import java.util.List;
+
 @Getter
 @Setter
 @NoArgsConstructor
@@ -50,4 +52,10 @@ public class UpdateAgentRequest {
 
     @Schema(description = "是否启用积极记忆召回")
     private Boolean aggressiveMemoryRecall;
+
+    @Schema(description = "是否允许作为专业子Agent")
+    private Boolean allowAsSubagent;
+
+    @Schema(description = "专业子Agent ID列表，null表示不修改，空列表表示清空")
+    private List<Long> professionalSubagentIds;
 }

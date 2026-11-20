@@ -77,6 +77,8 @@ public class AgentConfigBundleDTO {
         private Long secondaryLlmId;
         private Long embeddingModelId;
         private Boolean aggressiveMemoryRecall;
+        private Boolean allowAsSubagent;
+        private List<Long> professionalSubagentIds;
     }
 
     @Getter

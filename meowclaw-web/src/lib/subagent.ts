@@ -1,6 +1,8 @@
 export interface SubagentContent {
   childConversationId: number;
   description?: string;
+  agentId?: number;
+  agentName?: string;
   status: string;
 }
 

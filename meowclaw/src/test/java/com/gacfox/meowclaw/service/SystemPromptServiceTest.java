@@ -2,8 +2,11 @@ package com.gacfox.meowclaw.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.gacfox.meowclaw.entity.Agent;
+import com.gacfox.meowclaw.entity.AgentSubagentRelation;
 import com.gacfox.meowclaw.entity.ChatEventBatch;
 import com.gacfox.meowclaw.entity.ContextRecap;
+import com.gacfox.meowclaw.repository.AgentRepository;
+import com.gacfox.meowclaw.repository.AgentSubagentRelationRepository;
 import com.gacfox.meowclaw.repository.ChatEventBatchRepository;
 import com.gacfox.meowclaw.repository.ContextRecapRepository;
 import com.gacfox.meowclaw.service.SystemPromptService.PromptContext;
@@ -31,6 +34,8 @@ class SystemPromptServiceTest {
 
     private ChatEventBatchRepository batchRepository;
     private ContextRecapRepository recapRepository;
+    private AgentRepository agentRepository;
+    private AgentSubagentRelationRepository subagentRelationRepository;
     private JsonUtil jsonUtil;
     private SystemPromptService service;
     private Agent agent;
@@ -39,8 +44,11 @@ class SystemPromptServiceTest {
     void setUp() throws Exception {
         batchRepository = mock(ChatEventBatchRepository.class);
         recapRepository = mock(ContextRecapRepository.class);
+        agentRepository = mock(AgentRepository.class);
+        subagentRelationRepository = mock(AgentSubagentRelationRepository.class);
         jsonUtil = new JsonUtil(new ObjectMapper());
-        service = new SystemPromptService(batchRepository, recapRepository, jsonUtil);
+        service = new SystemPromptService(batchRepository, recapRepository, agentRepository,
+                subagentRelationRepository, jsonUtil);
         ReflectionTestUtils.setField(service, "systemPromptResource",
                 new ClassPathResource("prompt/system-prompt.md"));
         ReflectionTestUtils.setField(service, "turnContextResource",
@@ -64,6 +72,27 @@ class SystemPromptServiceTest {
         assertThat(first).isEqualTo(second);
         assertThat(first).contains("你是测试助手。", "CWD已经是目标目录", "demo/pom.xml");
         assertThat(first).doesNotContain("currentTime", workspace.toString(), "retrieved_memories\">");
+    }
+
+    @Test
+    void systemPromptListsAuthorizedProfessionalSubagentsOnlyWhenSpawnToolIsAvailable() {
+        agent.setId(1L);
+        Agent professional = new Agent();
+        professional.setId(2L);
+        professional.setName("代码审查员");
+        professional.setPersona("负责代码审查");
+        professional.setAllowAsSubagent(true);
+        AgentSubagentRelation relation = new AgentSubagentRelation();
+        relation.setParentAgentId(1L);
+        relation.setSubagentId(2L);
+        when(subagentRelationRepository.findByParentAgentId(1L)).thenReturn(List.of(relation));
+        when(agentRepository.findAllById(List.of(2L))).thenReturn(List.of(professional));
+
+        String prompt = service.buildSystemPrompt(agent, List.of("spawn_subagent"));
+        String withoutSpawn = service.buildSystemPrompt(agent, List.of("read"));
+
+        assertThat(prompt).contains("可委派的专业子智能体", "agent_id: 2", "代码审查员", "负责代码审查");
+        assertThat(withoutSpawn).doesNotContain("可委派的专业子智能体");
     }
 
     @Test
