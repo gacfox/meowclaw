@@ -666,7 +666,8 @@ public class ChatService {
                     List<Message> newMessages =
                             context.getMessages().subList(messageCountBefore, context.getMessages().size());
                     chatPersistenceService.completeBatch(batchId, conversationId, newMessages,
-                            tokenAccum.getInputTokens(), tokenAccum.getOutputTokens());
+                            tokenAccum.getInputTokens(), tokenAccum.getOutputTokens(),
+                            tokenAccum.getOutputTokensPerSecond());
                     long promptTokens = tokenAccum.getLastPromptTokens();
                     String contextStatus;
                     Integer contextLength = llm.getContextLength();

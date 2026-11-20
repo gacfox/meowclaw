@@ -152,6 +152,7 @@ export interface ChatEventBatchDTO {
   errorMessage: string | null;
   inputTokens: number | null;
   outputTokens: number | null;
+  outputTokensPerSecond: number | null;
   createdAt: number;
   completedAt: number | null;
   events: ChatEventDTO[];

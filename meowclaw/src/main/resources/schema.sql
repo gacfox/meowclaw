@@ -104,10 +104,14 @@ CREATE TABLE IF NOT EXISTS mc_chat_event_batch
     error_message       TEXT COMMENT '错误信息(仅ERROR状态)',
     input_tokens        BIGINT COMMENT '输入token数',
     output_tokens       BIGINT COMMENT '输出token数',
+    output_tokens_per_second DOUBLE COMMENT '平均输出速度(tokens/秒)',
     created_at          BIGINT      NOT NULL COMMENT '创建时间(时间戳毫秒)',
     completed_at        BIGINT COMMENT '完成时间(时间戳毫秒)',
     PRIMARY KEY (id)
 );
+
+ALTER TABLE mc_chat_event_batch
+    ADD COLUMN IF NOT EXISTS output_tokens_per_second DOUBLE;
 
 CREATE INDEX IF NOT EXISTS idx_mc_chat_event_batch_conversation_id ON mc_chat_event_batch (conversation_id);
 

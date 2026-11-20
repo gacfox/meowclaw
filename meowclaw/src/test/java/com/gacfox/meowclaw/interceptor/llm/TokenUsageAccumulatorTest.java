@@ -21,4 +21,35 @@ class TokenUsageAccumulatorTest {
         assertThat(accumulator.getLastPromptTokens()).isEqualTo(2400L);
         assertThat(accumulator.getInputTokens()).isEqualTo(3600L);
     }
+
+    @Test
+    void calculatesDurationWeightedOutputSpeed() {
+        TokenUsageAccumulator accumulator = new TokenUsageAccumulator();
+
+        accumulator.addOutputSpeedSample(100, 2000);
+        accumulator.addOutputSpeedSample(10, 10000);
+
+        assertThat(accumulator.getOutputTokensPerSecond()).isEqualTo(110000.0 / 12000);
+    }
+
+    @Test
+    void ignoresInvalidSamplesAndIncludesZeroOutputCallDuration() {
+        TokenUsageAccumulator accumulator = new TokenUsageAccumulator();
+        accumulator.addOutputSpeedSample(-1, 1000);
+        accumulator.addOutputSpeedSample(100, 0);
+        assertThat(accumulator.getOutputTokensPerSecond()).isNull();
+
+        accumulator.addOutputSpeedSample(0, 2000);
+        accumulator.addOutputSpeedSample(20, 2000);
+        assertThat(accumulator.getOutputTokensPerSecond()).isEqualTo(5.0);
+    }
+
+    @Test
+    void returnsNullWhenEveryCallHasZeroOutputTokens() {
+        TokenUsageAccumulator accumulator = new TokenUsageAccumulator();
+
+        accumulator.addOutputSpeedSample(0, 2000);
+
+        assertThat(accumulator.getOutputTokensPerSecond()).isNull();
+    }
 }

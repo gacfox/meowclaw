@@ -18,7 +18,7 @@ import java.util.List;
 
 /**
  * LLM调用记录拦截器：分别记录可清理的追踪明细和独立Token统计，
- * 同时累加批次tokens（供上下文水位计算）。
+ * 同时累加批次tokens（供上下文水位计算）与输出速度采样。
  * 位于重试拦截器外层，一次逻辑调用（含重试）只记一条记录。
  */
 @Slf4j
@@ -72,7 +72,12 @@ public class LlmCallRecordInterceptor implements LlmInterceptor {
         Usage usage = response != null ? response.getUsage() : null;
         if (usage != null) {
             if (usage.getPromptTokens() != null) accumulator.addInput(usage.getPromptTokens());
-            if (usage.getCompletionTokens() != null) accumulator.addOutput(usage.getCompletionTokens());
+            if (usage.getCompletionTokens() != null) {
+                accumulator.addOutput(usage.getCompletionTokens());
+                if ("SUCCESS".equals(status)) {
+                    accumulator.addOutputSpeedSample(usage.getCompletionTokens(), durationMs);
+                }
+            }
         }
         String requestMessages = serializeMessages(request);
         Schedulers.boundedElastic().schedule(() -> {

@@ -18,7 +18,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, SquarePen, Loader2, Copy, Pencil, RefreshCw, ArrowUp, ArrowDown, Check, Clock, TriangleAlert, X, Square, Shield, ShieldAlert, MoreHorizontal, FolderPlus, Brain, MessagesSquare } from "lucide-react";
+import { Plus, SquarePen, Loader2, Copy, Pencil, RefreshCw, ArrowUp, ArrowDown, Check, Clock, TriangleAlert, X, Square, Shield, ShieldAlert, MoreHorizontal, FolderPlus, Brain, MessagesSquare, Zap } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Alert, AlertTitle, AlertDescription, AlertAction } from "@/components/ui/alert";
@@ -1528,6 +1528,17 @@ export function ChatPage() {
                                 <span className="inline-flex items-center gap-0.5"><ArrowUp className="size-3" />{batch.inputTokens}</span>
                                 <span className="inline-flex items-center gap-0.5"><ArrowDown className="size-3" />{batch.outputTokens}</span>
                               </span>
+                            )}
+                            {batch.outputTokensPerSecond != null && (
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <span className="ml-2 inline-flex items-center gap-0.5 text-xs text-muted-foreground">
+                                    <Zap className="size-3" />
+                                    {batch.outputTokensPerSecond.toFixed(1)} tok/s
+                                  </span>
+                                </TooltipTrigger>
+                                <TooltipContent>平均输出速度：LLM 输出 tokens ÷ 调用总耗时</TooltipContent>
+                              </Tooltip>
                             )}
                             {batch.completedAt && (() => {
                               const d = new Date(batch.completedAt);
