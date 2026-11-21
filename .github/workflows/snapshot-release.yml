@@ -6,6 +6,8 @@ on:
       - master
     paths-ignore:
       - "**.md"
+      - "docs/**"
+      - ".github/workflows/mdbook.yml"
       - "LICENSE"
       - ".gitignore"
       - ".gitattributes"

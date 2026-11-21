@@ -1,0 +1,12 @@
+[book]
+title = "MeowClaw 喵爪智能体"
+authors = ["gacfox"]
+language = "zh-CN"
+src = "src"
+
+[preprocessor.mermaid]
+command = "mdbook-mermaid"
+
+[output.html]
+additional-js = ["mermaid.min.js", "mermaid-init.js"]
+git-repository-url = "https://github.com/gacfox/meowclaw"
