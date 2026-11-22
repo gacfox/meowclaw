@@ -217,6 +217,11 @@ export function ChatPage() {
   const isCurrentConvoRunning = selectedConvoId != null
     && (streamConvoId === selectedConvoId || runningConvoIds.has(selectedConvoId));
 
+  const handleAgentChange = useCallback((agentId: number) => {
+    setSelectedAgentId(agentId);
+    writeSelectedAgentId(agentId);
+  }, []);
+
   useEffect(() => {
     listAgents().then((list) => {
       setAgents(list);
@@ -234,6 +239,27 @@ export function ChatPage() {
     listLlms().then(setLlms).catch(() => {});
     listGuardrailPolicies().then(setPolicies).catch(() => {});
   }, []);
+
+  useEffect(() => {
+    const handleAgentSwitchKey = (event: KeyboardEvent) => {
+      if (event.key !== "Tab" || !event.shiftKey || event.ctrlKey || event.altKey || event.metaKey
+        || agents.length < 2) {
+        return;
+      }
+      const target = event.target;
+      if (target instanceof Element
+        && target.closest('[role="dialog"], [role="alertdialog"], [role="listbox"], [role="menu"]')) {
+        return;
+      }
+      event.preventDefault();
+      if (event.repeat) return;
+      const currentIndex = agents.findIndex((agent) => agent.id === selectedAgentId);
+      const nextAgent = agents[(currentIndex + 1) % agents.length];
+      handleAgentChange(nextAgent.id);
+    };
+    window.addEventListener("keydown", handleAgentSwitchKey);
+    return () => window.removeEventListener("keydown", handleAgentSwitchKey);
+  }, [agents, selectedAgentId, handleAgentChange]);
 
   const refreshRunningConversations = useCallback(async () => {
     try {
@@ -1241,13 +1267,9 @@ export function ChatPage() {
           <div className="flex-1">
             <Select
               value={selectedAgentId != null ? String(selectedAgentId) : ""}
-              onValueChange={(v) => {
-                const agentId = Number(v);
-                setSelectedAgentId(agentId);
-                writeSelectedAgentId(agentId);
-              }}
+              onValueChange={(v) => handleAgentChange(Number(v))}
             >
-            <SelectTrigger className="w-full">
+            <SelectTrigger className="w-full" title="选择智能体（Shift+Tab 轮换）">
               <SelectValue placeholder="选择智能体" />
             </SelectTrigger>
             <SelectContent>
