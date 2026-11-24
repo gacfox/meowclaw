@@ -46,7 +46,8 @@ public class WebMvcConfig implements WebMvcConfigurer {
                         "/api/auth/login",
                         "/api/auth/check-init",
                         "/api/auth/init",
-                        "/api/health/**"
+                        "/api/health/**",
+                        "/api/workspace/download-ticket/**"
                 );
     }
 

@@ -3,6 +3,7 @@ import { Outlet } from "react-router-dom";
 import { AppSidebar } from "./AppSidebar";
 import { AppHeader } from "./AppHeader";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
+import { WorkspaceUploadProvider } from "@/context/WorkspaceUploadContext";
 
 const SIDEBAR_OPEN_STORAGE_KEY = "meowclaw_sidebar_open";
 
@@ -26,14 +27,16 @@ export function MainLayout() {
   };
 
   return (
-    <SidebarProvider open={sidebarOpen} onOpenChange={handleOpenChange}>
-      <AppSidebar />
-      <SidebarInset>
-        <AppHeader />
-        <div className="flex-1 p-3 sm:p-4 lg:p-6">
-          <Outlet />
-        </div>
-      </SidebarInset>
-    </SidebarProvider>
+    <WorkspaceUploadProvider>
+      <SidebarProvider open={sidebarOpen} onOpenChange={handleOpenChange}>
+        <AppSidebar />
+        <SidebarInset>
+          <AppHeader />
+          <div className="flex-1 p-3 sm:p-4 lg:p-6">
+            <Outlet />
+          </div>
+        </SidebarInset>
+      </SidebarProvider>
+    </WorkspaceUploadProvider>
   );
 }

@@ -1,7 +1,9 @@
 package com.gacfox.meowclaw.controller;
 
 import com.gacfox.meowclaw.dto.*;
+import com.gacfox.meowclaw.service.WorkspaceDownloadService;
 import com.gacfox.meowclaw.service.WorkspaceService;
+import com.gacfox.meowclaw.service.WorkspaceUploadService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -14,6 +16,7 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
+import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -29,9 +32,15 @@ import java.util.List;
 @RequestMapping("/api/workspace")
 public class WorkspaceController {
     private final WorkspaceService workspaceService;
+    private final WorkspaceDownloadService downloadService;
+    private final WorkspaceUploadService uploadService;
 
-    public WorkspaceController(WorkspaceService workspaceService) {
+    public WorkspaceController(WorkspaceService workspaceService,
+                               WorkspaceDownloadService downloadService,
+                               WorkspaceUploadService uploadService) {
         this.workspaceService = workspaceService;
+        this.downloadService = downloadService;
+        this.uploadService = uploadService;
     }
 
     @Operation(summary = "查询工作区目录")
@@ -65,6 +74,27 @@ public class WorkspaceController {
                 .body(resource);
     }
 
+    @Operation(summary = "准备单文件或多选 ZIP 下载")
+    @PostMapping("/download/prepare")
+    public ApiResult<DownloadTicketDTO> prepareDownload(@RequestBody @Valid WorkspacePathsRequest req) throws IOException {
+        return ApiResult.success(downloadService.prepare(req.getAgentId(), req.getPaths()));
+    }
+
+    @Operation(summary = "使用一次性票据下载文件或 ZIP")
+    @GetMapping("/download-ticket/{ticket}")
+    public ResponseEntity<StreamingResponseBody> downloadByTicket(@PathVariable String ticket) {
+        WorkspaceDownloadService.WorkspaceDownload download = downloadService.open(ticket);
+        ResponseEntity.BodyBuilder response = ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, ContentDisposition.attachment()
+                        .filename(download.filename(), StandardCharsets.UTF_8)
+                        .build().toString())
+                .contentType(MediaType.APPLICATION_OCTET_STREAM);
+        if (download.contentLength() != null) {
+            response.contentLength(download.contentLength());
+        }
+        return response.body(download.body());
+    }
+
     @Operation(summary = "保存文本文件")
     @PutMapping("/file")
     public ApiResult<?> save(@RequestBody @Valid SaveFileRequest req) throws IOException {
@@ -77,6 +107,39 @@ public class WorkspaceController {
     public ApiResult<?> move(@RequestBody @Valid MoveRequest req) throws IOException {
         workspaceService.move(req.getAgentId(), req.getFromPath(), req.getToPath());
         return ApiResult.success();
+    }
+
+    @Operation(summary = "递归复制文件或目录到目标目录")
+    @PostMapping("/copy")
+    public ApiResult<BatchOperationResultDTO> copy(@RequestBody @Valid BatchTransferRequest req) throws IOException {
+        return ApiResult.success(workspaceService.copy(req.getAgentId(), req.getSourcePaths(),
+                req.getTargetDir(), req.getConflict()));
+    }
+
+    @Operation(summary = "批量移动文件或目录到目标目录")
+    @PostMapping("/move-batch")
+    public ApiResult<BatchOperationResultDTO> moveBatch(@RequestBody @Valid BatchTransferRequest req) throws IOException {
+        return ApiResult.success(workspaceService.moveBatch(req.getAgentId(), req.getSourcePaths(),
+                req.getTargetDir(), req.getConflict()));
+    }
+
+    @Operation(summary = "重命名单个文件或目录")
+    @PostMapping("/rename")
+    public ApiResult<BatchOperationResultDTO> rename(@RequestBody @Valid RenameEntryRequest req) throws IOException {
+        return ApiResult.success(workspaceService.rename(req.getAgentId(), req.getPath(),
+                req.getNewName(), req.getConflict()));
+    }
+
+    @Operation(summary = "批量递归删除")
+    @PostMapping("/delete-batch")
+    public ApiResult<BatchOperationResultDTO> deleteBatch(@RequestBody @Valid WorkspacePathsRequest req) throws IOException {
+        return ApiResult.success(workspaceService.deleteBatch(req.getAgentId(), req.getPaths()));
+    }
+
+    @Operation(summary = "递归统计文件属性")
+    @PostMapping("/properties")
+    public ApiResult<WorkspacePropertiesDTO> properties(@RequestBody @Valid WorkspacePathsRequest req) throws IOException {
+        return ApiResult.success(workspaceService.properties(req.getAgentId(), req.getPaths()));
     }
 
     @Operation(summary = "创建文件或目录")
@@ -92,6 +155,40 @@ public class WorkspaceController {
                                           @Parameter(description = "目标目录相对路径，不传则上传到根目录") @RequestParam(required = false) String path,
                                           @Parameter(description = "要上传的文件") @RequestParam("file") MultipartFile file) throws IOException {
         return ApiResult.success(workspaceService.upload(agentId, path, file));
+    }
+
+    @Operation(summary = "创建原始字节分块上传会话")
+    @PostMapping("/upload/session")
+    public ApiResult<UploadSessionDTO> createUploadSession(@RequestBody @Valid CreateUploadSessionRequest req) throws IOException {
+        return ApiResult.success(uploadService.create(req.getAgentId(), req.getTargetDir(), req.getFileName(),
+                req.getFileSize(), req.getChunkSize(), req.getTotalChunks()));
+    }
+
+    @Operation(summary = "查询分块上传会话")
+    @GetMapping("/upload/session/{uploadId}")
+    public ApiResult<UploadSessionDTO> getUploadSession(@PathVariable String uploadId) throws IOException {
+        return ApiResult.success(uploadService.get(uploadId));
+    }
+
+    @Operation(summary = "上传一个原始字节分块")
+    @PutMapping(value = "/upload/session/{uploadId}/chunk/{index}", consumes = MediaType.APPLICATION_OCTET_STREAM_VALUE)
+    public ApiResult<UploadSessionDTO> uploadChunk(@PathVariable String uploadId, @PathVariable int index,
+                                                   @RequestBody byte[] body) throws IOException {
+        return ApiResult.success(uploadService.putChunk(uploadId, index, body));
+    }
+
+    @Operation(summary = "合并并完成分块上传")
+    @PostMapping("/upload/session/{uploadId}/complete")
+    public ApiResult<UploadCompleteDTO> completeUpload(@PathVariable String uploadId,
+                                                       @RequestBody @Valid CompleteUploadRequest req) throws IOException {
+        return ApiResult.success(uploadService.complete(uploadId, req.getConflict()));
+    }
+
+    @Operation(summary = "取消分块上传并清理临时文件")
+    @DeleteMapping("/upload/session/{uploadId}")
+    public ApiResult<?> cancelUpload(@PathVariable String uploadId) throws IOException {
+        uploadService.cancel(uploadId);
+        return ApiResult.success();
     }
 
     @Operation(summary = "删除文件或目录")

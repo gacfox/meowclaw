@@ -1,18 +1,31 @@
-import { Fragment, useCallback, useEffect, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import type { AgentDTO, CreateEntryType, FileContent, FileEntry } from "@/types";
+import type {
+  AgentDTO,
+  ConflictStrategy,
+  CreateEntryType,
+  FileContent,
+  FileEntry,
+  FileOperationResult,
+  WorkspaceProperties,
+} from "@/types";
 import { listAgents } from "@/services/agent";
 import { readSelectedAgentId, writeSelectedAgentId } from "@/lib/selectedAgent";
 import {
+  copyWorkspaceEntries,
   createWorkspaceEntry,
-  deleteWorkspaceFile,
-  downloadWorkspaceFile,
+  deleteWorkspaceEntries,
+  getWorkspaceProperties,
   listWorkspaceFiles,
-  moveWorkspaceFile,
+  moveWorkspaceEntries,
+  prepareWorkspaceDownload,
   readWorkspaceFile,
+  renameWorkspaceEntry,
   saveWorkspaceFile,
-  uploadWorkspaceFile,
 } from "@/services/workspace";
+import { useWorkspaceUpload } from "@/context/WorkspaceUploadContext";
+import { useWorkspaceSelection } from "@/hooks/useWorkspaceSelection";
+import { useTouchInteraction } from "@/hooks/useTouchInteraction";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -20,6 +33,7 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -36,13 +50,20 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuLabel,
+  ContextMenuSeparator,
+  ContextMenuTrigger,
+} from "@/components/ui/context-menu";
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -53,79 +74,142 @@ import {
 } from "@/components/ui/breadcrumb";
 import {
   ArrowUp,
+  Check,
+  ClipboardPaste,
+  Copy,
   Download,
-  FileImage,
+  Eye,
   FilePlus,
-  FileText,
-  Folder,
   FolderPlus,
+  Grid2X2,
+  Info,
+  LayoutGrid,
+  List,
+  ListChecks,
   Loader2,
-  Move,
+  MoreVertical,
   Pencil,
   RefreshCw,
+  Scissors,
   Trash2,
   Upload,
 } from "lucide-react";
 import { toast } from "sonner";
 import { MarkdownRenderer } from "@/components/markdown/MarkdownRenderer";
+import { WorkspaceEntryView, type WorkspaceViewMode } from "@/components/workspace/WorkspaceEntryView";
+import { extensionOf, fileTypeLabel, formatFileSize } from "@/lib/workspaceFiles";
+import { WorkspaceConflictDialog } from "@/components/workspace/WorkspaceConflictDialog";
+import { WorkspaceTouchActionSheet } from "@/components/workspace/WorkspaceTouchActionSheet";
 
-const IMAGE_EXTS = new Set(["png", "jpg", "jpeg", "gif", "webp", "bmp", "ico", "svg"]);
 const MD_EXTS = new Set(["md", "markdown"]);
 const EXT_TO_LANG: Record<string, string> = {
   ts: "typescript", tsx: "typescript", mjs: "javascript", cjs: "javascript", js: "javascript", jsx: "javascript",
-  java: "java", kt: "kotlin", py: "python", go: "go", rs: "rust", c: "c", h: "c", cpp: "cpp", cc: "cpp", hpp: "cpp",
+  java: "java", kt: "kotlin", py: "python", go: "go", rs: "rust", c: "c", h: "c", cpp: "cpp", cc: "cpp", hpp: "hpp",
   cs: "csharp", rb: "ruby", php: "php", swift: "swift",
   css: "css", scss: "scss", less: "less", html: "html", htm: "html", xml: "xml",
   json: "json", yml: "yaml", yaml: "yaml", toml: "toml", ini: "ini", properties: "properties",
   sh: "bash", bash: "bash", zsh: "bash", bat: "bat", ps1: "powershell",
   sql: "sql", graphql: "graphql", gql: "graphql", vue: "vue", svelte: "svelte",
 };
-
-function isMarkdown(name: string): boolean {
-  return MD_EXTS.has(extOf(name));
-}
+const VIEW_MODE_KEY = "meowclaw_workspace_view_mode";
 
 function codeFence(name: string, code: string): string {
-  const lang = EXT_TO_LANG[extOf(name)] ?? "";
+  const lang = EXT_TO_LANG[extensionOf(name)] ?? "";
   return (lang ? "```" + lang + "\n" : "```\n") + code + "\n```";
 }
 
-function extOf(name: string): string {
-  const dot = name.lastIndexOf(".");
-  return dot < 0 ? "" : name.slice(dot + 1).toLowerCase();
-}
-
-function formatSize(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}
-
 function parentOf(path: string): string {
-  const segs = path.split("/").filter(Boolean);
-  segs.pop();
-  return segs.join("/");
+  const segments = path.split("/").filter(Boolean);
+  segments.pop();
+  return segments.join("/");
 }
 
-/**
- * 统一工作区相对路径：反斜杠转正斜杠并去掉首尾斜杠。
- */
 function normalizeRelativePath(path: string | null): string {
-  return (path ?? "").replace(/\\/g, "/").replace(/^\/+|\/+$/g, "");
+  return (path ?? "").replace(/^\/+|\/+$/g, "");
 }
 
 function segmentsOf(path: string): { name: string; path: string }[] {
-  const segs = path.split("/").filter(Boolean);
-  return segs.map((seg, i) => ({ name: seg, path: segs.slice(0, i + 1).join("/") }));
+  const segments = path.split("/").filter(Boolean);
+  return segments.map((name, index) => ({ name, path: segments.slice(0, index + 1).join("/") }));
+}
+
+function readViewMode(): WorkspaceViewMode {
+  try {
+    const value = localStorage.getItem(VIEW_MODE_KEY);
+    if (value === "large" || value === "medium" || value === "details") return value;
+  } catch { /* 存储不可用时使用默认视图 */ }
+  return "details";
+}
+
+function isConflictMessage(message: string): boolean {
+  const normalized = message.toLowerCase();
+  return normalized.includes("已存在") || normalized.includes("同名") || normalized.includes("冲突")
+    || normalized.includes("exist") || normalized.includes("conflict");
+}
+
+function failedResults(result: FileOperationResult) {
+  return result.results.filter((item) => !item.success && !item.skipped);
+}
+
+interface WorkspaceClipboard {
+  agentId: number;
+  mode: "copy" | "cut";
+  entries: FileEntry[];
+}
+
+interface ConflictChoice {
+  strategy: ConflictStrategy;
+  applyAll: boolean;
 }
 
 export function WorkspacePage() {
   const [searchParams] = useSearchParams();
+  const { enqueue } = useWorkspaceUpload();
   const [agents, setAgents] = useState<AgentDTO[]>([]);
   const [selectedAgentId, setSelectedAgentId] = useState<number | null>(null);
   const [currentPath, setCurrentPath] = useState(() => normalizeRelativePath(searchParams.get("path")));
   const [entries, setEntries] = useState<FileEntry[]>([]);
   const [loading, setLoading] = useState(false);
+  const [viewMode, setViewModeState] = useState<WorkspaceViewMode>(readViewMode);
+  const [operationPending, setOperationPending] = useState(false);
+  const [contextEntry, setContextEntry] = useState<FileEntry | null>(null);
+  const [mobileSheetOpen, setMobileSheetOpen] = useState(false);
+  const [desktopMenuOpen, setDesktopMenuOpen] = useState(false);
+  const operationLockRef = useRef(false);
+  const entriesRequestRef = useRef(0);
+  const previewRequestRef = useRef(0);
+  const saveRequestRef = useRef(0);
+  const propertiesRequestRef = useRef(0);
+  const locationRef = useRef({ agentId: selectedAgentId, path: currentPath });
+  useEffect(() => {
+    locationRef.current = { agentId: selectedAgentId, path: currentPath };
+  }, [selectedAgentId, currentPath]);
+  const {
+    selectedPaths,
+    selectionMode,
+    clearSelection,
+    selectSingle,
+    selectAll,
+    enterSelectionMode,
+    exitSelectionMode,
+    toggleSelection,
+    pruneSelection,
+    handleEntryClick,
+  } = useWorkspaceSelection(entries);
+
+  const handleInteractionModeChange = useCallback(() => {
+    setMobileSheetOpen(false);
+    setDesktopMenuOpen(false);
+    setContextEntry(null);
+    clearSelection();
+  }, [clearSelection]);
+  const touchMode = useTouchInteraction(handleInteractionModeChange);
+
+  const selectedEntries = useMemo(
+    () => entries.filter((entry) => selectedPaths.has(entry.path)),
+    [entries, selectedPaths],
+  );
+  const selectedAgent = agents.find((agent) => agent.id === selectedAgentId) ?? null;
 
   const fetchAgents = useCallback(async () => {
     try {
@@ -140,43 +224,74 @@ export function WorkspacePage() {
           : list[0]?.id ?? null;
       setSelectedAgentId(validAgentId);
       if (validAgentId != null) writeSelectedAgentId(validAgentId);
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "加载智能体失败");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "加载智能体失败");
     }
   }, [searchParams]);
 
   const fetchEntries = useCallback(async () => {
+    if (locationRef.current.agentId !== selectedAgentId || locationRef.current.path !== currentPath) return;
+    const requestId = ++entriesRequestRef.current;
+    const isCurrentRequest = () => requestId === entriesRequestRef.current
+      && locationRef.current.agentId === selectedAgentId && locationRef.current.path === currentPath;
     if (selectedAgentId == null) {
       setEntries([]);
+      setLoading(false);
       return;
     }
     setLoading(true);
     try {
-      setEntries(await listWorkspaceFiles(selectedAgentId, currentPath));
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "加载文件列表失败");
+      const nextEntries = await listWorkspaceFiles(selectedAgentId, currentPath);
+      if (!isCurrentRequest()) return;
+      setEntries(nextEntries);
+      pruneSelection(nextEntries);
+    } catch (error) {
+      if (!isCurrentRequest()) return;
+      toast.error(error instanceof Error ? error.message : "加载文件列表失败");
       setEntries([]);
+      clearSelection();
     } finally {
-      setLoading(false);
+      if (isCurrentRequest()) setLoading(false);
     }
-  }, [selectedAgentId, currentPath]);
+  }, [selectedAgentId, currentPath, pruneSelection, clearSelection]);
+
+  useEffect(() => { fetchAgents(); }, [fetchAgents]);
+  useEffect(() => { fetchEntries(); }, [fetchEntries]);
 
   useEffect(() => {
-    fetchAgents();
-  }, [fetchAgents]);
+    const handleUploadCompleted = (event: Event) => {
+      const detail = (event as CustomEvent<{ agentId: number; targetDir: string }>).detail;
+      if (detail?.agentId === selectedAgentId && detail.targetDir === currentPath) fetchEntries();
+    };
+    window.addEventListener("workspace-upload-completed", handleUploadCompleted);
+    return () => window.removeEventListener("workspace-upload-completed", handleUploadCompleted);
+  }, [selectedAgentId, currentPath, fetchEntries]);
 
-  useEffect(() => {
-    fetchEntries();
-  }, [fetchEntries]);
+  const navigateTo = useCallback((path: string) => {
+    const nextPath = normalizeRelativePath(path);
+    entriesRequestRef.current += 1;
+    locationRef.current = { agentId: selectedAgentId, path: nextPath };
+    setMobileSheetOpen(false);
+    setDesktopMenuOpen(false);
+    setContextEntry(null);
+    setCurrentPath(nextPath);
+    setEntries([]);
+    setLoading(true);
+    clearSelection();
+  }, [clearSelection, selectedAgentId]);
 
   const onAgentChange = (id: string) => {
     const agentId = Number(id);
     setSelectedAgentId(agentId);
     writeSelectedAgentId(agentId);
-    setCurrentPath("");
+    navigateTo("");
+    locationRef.current = { agentId, path: "" };
   };
 
-  const selectedAgent = agents.find((a) => a.id === selectedAgentId) ?? null;
+  const setViewMode = (mode: WorkspaceViewMode) => {
+    setViewModeState(mode);
+    try { localStorage.setItem(VIEW_MODE_KEY, mode); } catch { /* 仅保持当前页面状态 */ }
+  };
 
   // ---- 预览 / 编辑 ----
   const [previewEntry, setPreviewEntry] = useState<FileEntry | null>(null);
@@ -190,73 +305,65 @@ export function WorkspacePage() {
 
   const openPreview = async (entry: FileEntry) => {
     if (selectedAgentId == null) return;
+    const requestId = ++previewRequestRef.current;
+    saveRequestRef.current += 1;
     setPreviewEntry(entry);
     setPreviewContent(null);
     setPreviewError(null);
     setEditText("");
     setEditModified(false);
+    setEditSaving(false);
     setPreviewMode("view");
     setPreviewLoading(true);
     try {
-      const c = await readWorkspaceFile(selectedAgentId, entry.path);
-      setPreviewContent(c);
-      if (c.kind === "TEXT") setEditText(c.content ?? "");
-    } catch (err) {
-      setPreviewError(err instanceof Error ? err.message : "读取失败");
+      const content = await readWorkspaceFile(selectedAgentId, entry.path);
+      if (requestId !== previewRequestRef.current) return;
+      setPreviewContent(content);
+      if (content.kind === "TEXT") setEditText(content.content ?? "");
+    } catch (error) {
+      if (requestId !== previewRequestRef.current) return;
+      setPreviewError(error instanceof Error ? error.message : "读取失败");
     } finally {
-      setPreviewLoading(false);
+      if (requestId === previewRequestRef.current) setPreviewLoading(false);
     }
+  };
+
+  const openEntry = (entry: FileEntry) => {
+    if (touchMode) clearSelection();
+    if (entry.directory) navigateTo(entry.path);
+    else openPreview(entry);
   };
 
   const closePreview = () => {
+    previewRequestRef.current += 1;
+    saveRequestRef.current += 1;
     setPreviewEntry(null);
     setPreviewContent(null);
     setPreviewError(null);
+    setEditSaving(false);
   };
 
   const handleSave = async () => {
-    if (!previewEntry || selectedAgentId == null) return;
+    if (!previewEntry || selectedAgentId == null || editSaving) return;
+    const agentId = selectedAgentId;
+    const path = previewEntry.path;
+    const content = editText;
+    const previewRequestId = previewRequestRef.current;
+    const saveRequestId = ++saveRequestRef.current;
     setEditSaving(true);
     try {
-      await saveWorkspaceFile({ agentId: selectedAgentId, path: previewEntry.path, content: editText });
+      await saveWorkspaceFile({ agentId, path, content });
+      if (saveRequestId !== saveRequestRef.current || previewRequestId !== previewRequestRef.current) return;
       toast.success("已保存");
       setEditModified(false);
-      setPreviewContent((prev) => (prev && prev.kind === "TEXT" ? { ...prev, content: editText } : prev));
+      setPreviewContent((previous) => previous?.kind === "TEXT" ? { ...previous, content } : previous);
       fetchEntries();
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "保存失败");
+    } catch (error) {
+      if (saveRequestId === saveRequestRef.current && previewRequestId === previewRequestRef.current) {
+        toast.error(error instanceof Error ? error.message : "保存失败");
+      }
     } finally {
-      setEditSaving(false);
-    }
-  };
-
-  // ---- 移动 / 重命名 ----
-  const [moveEntry, setMoveEntry] = useState<FileEntry | null>(null);
-  const [moveTo, setMoveTo] = useState("");
-  const [moveSaving, setMoveSaving] = useState(false);
-
-  const openMove = (entry: FileEntry) => {
-    setMoveEntry(entry);
-    setMoveTo(entry.path);
-  };
-
-  const handleMove = async () => {
-    if (!moveEntry || selectedAgentId == null) return;
-    const target = moveTo.trim();
-    if (!target || target === moveEntry.path) {
-      setMoveEntry(null);
-      return;
-    }
-    setMoveSaving(true);
-    try {
-      await moveWorkspaceFile({ agentId: selectedAgentId, fromPath: moveEntry.path, toPath: target });
-      toast.success("已移动");
-      setMoveEntry(null);
-      fetchEntries();
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "移动失败");
-    } finally {
-      setMoveSaving(false);
+      if (saveRequestId === saveRequestRef.current) setEditSaving(false);
     }
   };
 
@@ -273,92 +380,322 @@ export function WorkspacePage() {
   };
 
   const handleCreate = async () => {
-    if (selectedAgentId == null) return;
+    if (selectedAgentId == null || createSaving) return;
     const name = createName.trim();
     if (!name) {
       toast.error("请输入名称");
       return;
     }
-    const path = currentPath ? `${currentPath}/${name}` : name;
     setCreateSaving(true);
     try {
-      await createWorkspaceEntry({ agentId: selectedAgentId, path, type: createType });
+      await createWorkspaceEntry({
+        agentId: selectedAgentId,
+        path: currentPath ? `${currentPath}/${name}` : name,
+        type: createType,
+      });
       toast.success("已创建");
       setCreateOpen(false);
       fetchEntries();
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "创建失败");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "创建失败");
     } finally {
       setCreateSaving(false);
     }
   };
 
+  // ---- 复制 / 剪切 / 粘贴 ----
+  const [clipboard, setClipboard] = useState<WorkspaceClipboard | null>(null);
+  const [conflictName, setConflictName] = useState<string | null>(null);
+  const [conflictAllowApplyAll, setConflictAllowApplyAll] = useState(true);
+  const conflictResolverRef = useRef<((choice: ConflictChoice) => void) | null>(null);
+
+  const canPaste = clipboard != null && clipboard.agentId === selectedAgentId;
+  const cutPaths = useMemo(
+    () => new Set(clipboard?.mode === "cut" && clipboard.agentId === selectedAgentId
+      ? clipboard.entries.map((entry) => entry.path)
+      : []),
+    [clipboard, selectedAgentId],
+  );
+  const contextTargets = contextEntry
+    ? selectedPaths.has(contextEntry.path) ? selectedEntries : [contextEntry]
+    : [];
+
+  const askConflict = useCallback((name: string, allowApplyAll = true) => {
+    setConflictAllowApplyAll(allowApplyAll);
+    setConflictName(name);
+    return new Promise<ConflictChoice>((resolve) => {
+      conflictResolverRef.current = resolve;
+    });
+  }, []);
+
+  const chooseConflict = (strategy: ConflictStrategy, applyAll: boolean) => {
+    setConflictName(null);
+    conflictResolverRef.current?.({ strategy, applyAll });
+    conflictResolverRef.current = null;
+  };
+
+  const setClipboardFor = (mode: "copy" | "cut", targets: FileEntry[]) => {
+    if (selectedAgentId == null || targets.length === 0) return;
+    setClipboard({ agentId: selectedAgentId, mode, entries: targets });
+    toast.success(`${mode === "copy" ? "已复制" : "已剪切"} ${targets.length} 个项目`);
+  };
+
+  const handlePaste = async (targetDir: string) => {
+    if (!clipboard || selectedAgentId == null || clipboard.agentId !== selectedAgentId || operationLockRef.current) return;
+    const operationClipboard = clipboard;
+    operationLockRef.current = true;
+    setOperationPending(true);
+    try {
+      let rememberedStrategy: ConflictStrategy | null = null;
+      const failedPaths = new Set<string>();
+      let completed = 0;
+
+      for (const entry of operationClipboard.entries) {
+        let strategy = rememberedStrategy ?? "FAIL";
+        let handled = false;
+        while (!handled) {
+          try {
+            const operation = operationClipboard.mode === "copy" ? copyWorkspaceEntries : moveWorkspaceEntries;
+            const result = await operation({
+              agentId: selectedAgentId,
+              sourcePaths: [entry.path],
+              targetDir,
+              conflict: strategy,
+            });
+            const item = result.results[0];
+            if (item?.success || item?.skipped) {
+              completed += 1;
+              handled = true;
+              break;
+            }
+            const message = item?.message || "操作失败";
+            if (!isConflictMessage(message)) throw new Error(message);
+          } catch (error) {
+            const message = error instanceof Error ? error.message : "操作失败";
+            if (!isConflictMessage(message)) {
+              toast.error(`处理「${entry.name}」失败：${message}`);
+              failedPaths.add(entry.path);
+              break;
+            }
+          }
+
+          if (rememberedStrategy && strategy !== rememberedStrategy) {
+            strategy = rememberedStrategy;
+            continue;
+          }
+          const choice = await askConflict(entry.name);
+          if (choice.applyAll) rememberedStrategy = choice.strategy;
+          strategy = choice.strategy;
+        }
+      }
+
+      if (operationClipboard.mode === "cut") {
+        setClipboard((previous) => {
+          if (previous !== operationClipboard) return previous;
+          const remaining = previous.entries.filter((entry) => failedPaths.has(entry.path));
+          return remaining.length > 0 ? { ...previous, entries: remaining } : null;
+        });
+      }
+      if (completed > 0) toast.success(`已处理 ${completed} 个项目`);
+      fetchEntries();
+    } finally {
+      operationLockRef.current = false;
+      setOperationPending(false);
+    }
+  };
+
+  // ---- 重命名 ----
+  const [renameEntry, setRenameEntry] = useState<FileEntry | null>(null);
+  const [renameValue, setRenameValue] = useState("");
+  const [renaming, setRenaming] = useState(false);
+
+  const openRename = (entry: FileEntry) => {
+    if (operationLockRef.current) return;
+    setRenameEntry(entry);
+    setRenameValue(entry.name);
+  };
+
+  const handleRename = async () => {
+    if (!renameEntry || selectedAgentId == null || !renameValue.trim() || operationLockRef.current) return;
+    operationLockRef.current = true;
+    setOperationPending(true);
+    setRenaming(true);
+    let strategy: ConflictStrategy = "FAIL";
+    try {
+      while (true) {
+        try {
+          const result = await renameWorkspaceEntry({
+            agentId: selectedAgentId,
+            path: renameEntry.path,
+            newName: renameValue.trim(),
+            conflict: strategy,
+          });
+          const item = result.results[0];
+          if (item?.success || item?.skipped) {
+            toast.success(item.skipped ? "已跳过重命名" : "已重命名");
+            setRenameEntry(null);
+            fetchEntries();
+            break;
+          }
+          const message = item?.message || "重命名失败";
+          if (!isConflictMessage(message)) throw new Error(message);
+        } catch (error) {
+          const message = error instanceof Error ? error.message : "重命名失败";
+          if (!isConflictMessage(message)) throw error;
+        }
+        const choice = await askConflict(renameValue.trim(), false);
+        strategy = choice.strategy;
+      }
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "重命名失败");
+    } finally {
+      operationLockRef.current = false;
+      setOperationPending(false);
+      setRenaming(false);
+    }
+  };
+
   // ---- 删除 ----
-  const [deleteEntry, setDeleteEntry] = useState<FileEntry | null>(null);
+  const [deleteEntries, setDeleteEntries] = useState<FileEntry[]>([]);
   const [deleting, setDeleting] = useState(false);
 
   const handleDelete = async () => {
-    if (!deleteEntry || selectedAgentId == null) return;
+    if (selectedAgentId == null || deleteEntries.length === 0 || operationLockRef.current) return;
+    operationLockRef.current = true;
+    setOperationPending(true);
     setDeleting(true);
     try {
-      await deleteWorkspaceFile(selectedAgentId, deleteEntry.path);
-      toast.success("已删除");
-      setDeleteEntry(null);
+      const result = await deleteWorkspaceEntries(selectedAgentId, deleteEntries.map((entry) => entry.path));
+      const failed = failedResults(result);
+      if (failed.length > 0) {
+        toast.error(`${failed.length} 个项目删除失败：${failed[0].message ?? "未知错误"}`);
+      } else {
+        toast.success(`已删除 ${deleteEntries.length} 个项目`);
+      }
+      setDeleteEntries([]);
+      clearSelection();
       fetchEntries();
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "删除失败");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "删除失败");
     } finally {
+      operationLockRef.current = false;
+      setOperationPending(false);
       setDeleting(false);
     }
   };
 
   // ---- 下载 ----
-  const [downloadingPath, setDownloadingPath] = useState<string | null>(null);
+  const [downloading, setDownloading] = useState(false);
 
-  const handleDownload = async (entry: FileEntry) => {
-    if (selectedAgentId == null || entry.directory || downloadingPath != null) return;
-    setDownloadingPath(entry.path);
+  const handleDownload = async (targets: FileEntry[]) => {
+    if (selectedAgentId == null || targets.length === 0 || downloading) return;
+    setDownloading(true);
     try {
-      const blob = await downloadWorkspaceFile(selectedAgentId, entry.path);
-      const objectUrl = URL.createObjectURL(blob);
+      const prepared = await prepareWorkspaceDownload(selectedAgentId, targets.map((entry) => entry.path));
       const link = document.createElement("a");
-      link.href = objectUrl;
-      link.download = entry.name;
+      link.href = `/api/workspace/download-ticket/${encodeURIComponent(prepared.ticket)}`;
+      link.download = prepared.filename;
       link.style.display = "none";
       document.body.appendChild(link);
       link.click();
       link.remove();
-      window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
-      toast.success("下载已开始");
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "下载失败");
+      toast.success(targets.length === 1 && !targets[0].directory ? "下载已开始" : "ZIP 下载已开始");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "下载失败");
     } finally {
-      setDownloadingPath(null);
+      setDownloading(false);
     }
+  };
+
+  // ---- 属性 ----
+  const [propertiesEntries, setPropertiesEntries] = useState<FileEntry[]>([]);
+  const [properties, setProperties] = useState<WorkspaceProperties | null>(null);
+  const [propertiesLoading, setPropertiesLoading] = useState(false);
+
+  const openProperties = async (targets: FileEntry[]) => {
+    if (selectedAgentId == null || targets.length === 0) return;
+    const requestId = ++propertiesRequestRef.current;
+    setPropertiesEntries(targets);
+    setProperties(null);
+    setPropertiesLoading(true);
+    try {
+      const result = await getWorkspaceProperties(selectedAgentId, targets.map((entry) => entry.path));
+      if (requestId === propertiesRequestRef.current) setProperties(result);
+    } catch (error) {
+      if (requestId !== propertiesRequestRef.current) return;
+      toast.error(error instanceof Error ? error.message : "读取属性失败");
+      setPropertiesEntries([]);
+    } finally {
+      if (requestId === propertiesRequestRef.current) setPropertiesLoading(false);
+    }
+  };
+
+  const closeProperties = () => {
+    propertiesRequestRef.current += 1;
+    setPropertiesEntries([]);
+    setPropertiesLoading(false);
   };
 
   // ---- 上传 ----
   const uploadRef = useRef<HTMLInputElement>(null);
-  const handleUploadSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file || selectedAgentId == null) return;
-    try {
-      await uploadWorkspaceFile(selectedAgentId, currentPath, file);
-      toast.success("上传成功");
-      fetchEntries();
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "上传失败");
-    } finally {
-      if (uploadRef.current) uploadRef.current.value = "";
+  const handleUploadSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = event.target.files;
+    if (files?.length && selectedAgentId != null) enqueue(files, selectedAgentId, currentPath);
+    event.target.value = "";
+  };
+
+  const handleContextEntry = (entry: FileEntry) => {
+    if (!selectedPaths.has(entry.path)) selectSingle(entry.path);
+    setContextEntry(entry);
+  };
+
+  const handleLongPressEntry = (entry: FileEntry) => {
+    if (!touchMode || selectionMode) return;
+    handleContextEntry(entry);
+    setMobileSheetOpen(true);
+  };
+
+  const openMobileDirectoryMenu = () => {
+    setContextEntry(null);
+    setMobileSheetOpen(true);
+  };
+
+  const handleMobileSelect = () => {
+    if (contextEntry && !selectedPaths.has(contextEntry.path)) enterSelectionMode(contextEntry.path);
+    else enterSelectionMode();
+  };
+
+  const handleListKeyDown = (event: React.KeyboardEvent) => {
+    if (selectedAgentId == null || operationPending) return;
+    const modifier = event.ctrlKey || event.metaKey;
+    if (modifier && event.key.toLowerCase() === "a") {
+      event.preventDefault();
+      selectAll();
+    } else if (modifier && event.key.toLowerCase() === "c" && selectedEntries.length > 0) {
+      event.preventDefault();
+      setClipboardFor("copy", selectedEntries);
+    } else if (modifier && event.key.toLowerCase() === "x" && selectedEntries.length > 0) {
+      event.preventDefault();
+      setClipboardFor("cut", selectedEntries);
+    } else if (modifier && event.key.toLowerCase() === "v" && canPaste) {
+      event.preventDefault();
+      handlePaste(currentPath);
+    } else if (event.key === "Delete" && selectedEntries.length > 0) {
+      event.preventDefault();
+      setDeleteEntries(selectedEntries);
+    } else if (event.key === "F2" && selectedEntries.length === 1) {
+      event.preventDefault();
+      openRename(selectedEntries[0]);
     }
   };
 
-  const segs = segmentsOf(currentPath);
+  const segments = segmentsOf(currentPath);
   const atRoot = currentPath === "";
+  const noAgent = selectedAgentId == null;
 
   return (
-    <div className="flex flex-col gap-4">
-      <div className="flex items-center justify-between gap-3">
+    <div className="flex h-[calc(100dvh-7.5rem)] min-h-[30rem] flex-col gap-4">
+      <div className="flex shrink-0 items-center justify-between gap-3">
         <h1 className="text-2xl font-semibold">工作区</h1>
         <div className="flex items-center gap-2">
           <Select value={selectedAgentId != null ? String(selectedAgentId) : undefined} onValueChange={onAgentChange}>
@@ -366,159 +703,208 @@ export function WorkspacePage() {
               <SelectValue placeholder="选择智能体" />
             </SelectTrigger>
             <SelectContent>
-              {agents.map((a) => (
-                <SelectItem key={a.id} value={String(a.id)}>
-                  {a.name}
-                </SelectItem>
-              ))}
+              {agents.map((agent) => <SelectItem key={agent.id} value={String(agent.id)}>{agent.name}</SelectItem>)}
             </SelectContent>
           </Select>
-          <Button variant="outline" size="icon" onClick={fetchEntries} title="刷新" disabled={loading || selectedAgentId == null}>
+          <Button variant="outline" size="icon" onClick={fetchEntries} title="刷新" disabled={loading || noAgent}>
             <RefreshCw className={loading ? "size-4 animate-spin" : "size-4"} />
           </Button>
         </div>
       </div>
 
       {selectedAgent?.workspaceFolder && (
-        <div className="text-xs text-muted-foreground">
+        <div className="shrink-0 text-xs text-muted-foreground">
           工作区根目录：<code className="break-all">{selectedAgent.workspaceFolder}</code>
         </div>
       )}
 
-      <div className="flex flex-wrap items-center gap-2">
-        <Breadcrumb className="min-w-0 flex-1">
+      <div className="flex shrink-0 flex-wrap items-center gap-2">
+        <Breadcrumb className="min-w-48 flex-1">
           <BreadcrumbList>
             <BreadcrumbItem>
               {atRoot ? (
-                <BreadcrumbPage className="flex items-center gap-1">
-                  <Folder className="size-3.5" />
-                  <span>{selectedAgent?.name ?? "工作区"}</span>
-                </BreadcrumbPage>
+                <BreadcrumbPage>{selectedAgent?.name ?? "工作区"}</BreadcrumbPage>
               ) : (
                 <BreadcrumbLink asChild>
-                  <button className="flex items-center gap-1" onClick={() => setCurrentPath("")}>
-                    <Folder className="size-3.5" />
-                    <span>{selectedAgent?.name ?? "工作区"}</span>
-                  </button>
+                  <button onClick={() => navigateTo("")}>{selectedAgent?.name ?? "工作区"}</button>
                 </BreadcrumbLink>
               )}
             </BreadcrumbItem>
-            {segs.map((seg, i) => (
-              <Fragment key={seg.path}>
+            {segments.map((segment, index) => (
+              <Fragment key={segment.path}>
                 <BreadcrumbSeparator />
                 <BreadcrumbItem>
-                  {i === segs.length - 1 ? (
-                    <BreadcrumbPage>{seg.name}</BreadcrumbPage>
+                  {index === segments.length - 1 ? (
+                    <BreadcrumbPage>{segment.name}</BreadcrumbPage>
                   ) : (
-                    <BreadcrumbLink asChild>
-                      <button onClick={() => setCurrentPath(seg.path)}>{seg.name}</button>
-                    </BreadcrumbLink>
+                    <BreadcrumbLink asChild><button onClick={() => navigateTo(segment.path)}>{segment.name}</button></BreadcrumbLink>
                   )}
                 </BreadcrumbItem>
               </Fragment>
             ))}
           </BreadcrumbList>
         </Breadcrumb>
+        <Button variant="outline" size="sm" onClick={() => navigateTo(parentOf(currentPath))} disabled={atRoot || noAgent}>
+          <ArrowUp />上一级
+        </Button>
+      </div>
 
-        <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={() => setCurrentPath(parentOf(currentPath))} disabled={atRoot || selectedAgentId == null}>
-            <ArrowUp className="mr-1 size-4" />
-            上一级
-          </Button>
-          <Button variant="outline" size="sm" onClick={() => openCreate("DIR")} disabled={selectedAgentId == null}>
-            <FolderPlus className="mr-1 size-4" />
-            新建文件夹
-          </Button>
-          <Button variant="outline" size="sm" onClick={() => openCreate("FILE")} disabled={selectedAgentId == null}>
-            <FilePlus className="mr-1 size-4" />
-            新建文件
-          </Button>
-          <Button variant="outline" size="sm" onClick={() => uploadRef.current?.click()} disabled={selectedAgentId == null}>
-            <Upload className="mr-1 size-4" />
-            上传
-          </Button>
-          <input ref={uploadRef} type="file" className="hidden" onChange={handleUploadSelect} />
+      <div className="flex shrink-0 flex-wrap items-center gap-1.5 rounded-lg border bg-muted/20 p-1.5">
+        <input ref={uploadRef} type="file" multiple className="hidden" onChange={handleUploadSelect} />
+        {!touchMode ? (
+          <>
+            <Button variant="ghost" size="sm" onClick={() => openCreate("DIR")} disabled={noAgent}><FolderPlus />新建文件夹</Button>
+            <Button variant="ghost" size="sm" onClick={() => openCreate("FILE")} disabled={noAgent}><FilePlus />新建文件</Button>
+            <Button variant="ghost" size="sm" onClick={() => uploadRef.current?.click()} disabled={noAgent}><Upload />上传</Button>
+            <div className="mx-1 h-5 w-px bg-border" />
+            <Button variant="ghost" size="sm" disabled={selectedEntries.length === 0} onClick={() => setClipboardFor("copy", selectedEntries)}><Copy />复制</Button>
+            <Button variant="ghost" size="sm" disabled={selectedEntries.length === 0} onClick={() => setClipboardFor("cut", selectedEntries)}><Scissors />剪切</Button>
+            <Button variant="ghost" size="sm" disabled={!canPaste || operationPending} onClick={() => handlePaste(currentPath)}><ClipboardPaste />粘贴</Button>
+            <Button variant="ghost" size="sm" disabled={selectedEntries.length !== 1 || operationPending} onClick={() => openRename(selectedEntries[0])}><Pencil />重命名</Button>
+            <Button variant="ghost" size="sm" disabled={selectedEntries.length === 0 || downloading} onClick={() => handleDownload(selectedEntries)}>
+              {downloading ? <Loader2 className="animate-spin" /> : <Download />}下载
+            </Button>
+            <Button variant="ghost" size="sm" disabled={selectedEntries.length === 0 || operationPending} onClick={() => setDeleteEntries(selectedEntries)}><Trash2 />删除</Button>
+            <Button variant="ghost" size="sm" disabled={selectedEntries.length === 0} onClick={() => openProperties(selectedEntries)}><Info />属性</Button>
+          </>
+        ) : selectionMode ? (
+          <>
+            <span className="px-2 text-sm font-medium whitespace-nowrap">已选 {selectedEntries.length} 项</span>
+            <Button variant="ghost" size="sm" disabled={entries.length === 0} onClick={selectAll}><ListChecks />全选</Button>
+            <Button variant="ghost" size="sm" disabled={selectedEntries.length === 0} onClick={() => setClipboardFor("copy", selectedEntries)}><Copy />复制</Button>
+            <Button variant="ghost" size="sm" disabled={selectedEntries.length === 0} onClick={() => setClipboardFor("cut", selectedEntries)}><Scissors />剪切</Button>
+            <Button variant="ghost" size="sm" disabled={selectedEntries.length === 0 || downloading} onClick={() => handleDownload(selectedEntries)}><Download />下载</Button>
+            <Button variant="ghost" size="sm" disabled={selectedEntries.length === 0 || operationPending} onClick={() => setDeleteEntries(selectedEntries)}><Trash2 />删除</Button>
+            <Button variant="ghost" size="sm" disabled={selectedEntries.length === 0} onClick={() => openProperties(selectedEntries)}><Info />属性</Button>
+            <Button variant="outline" size="sm" className="ms-auto" onClick={exitSelectionMode}><Check />完成</Button>
+          </>
+        ) : (
+          <>
+            <Button variant="ghost" size="sm" onClick={() => uploadRef.current?.click()} disabled={noAgent}><Upload />上传</Button>
+            <Button variant="ghost" size="sm" onClick={() => enterSelectionMode()} disabled={noAgent || entries.length === 0}><ListChecks />选择</Button>
+            <Button variant="ghost" size="sm" onClick={openMobileDirectoryMenu} disabled={noAgent}><MoreVertical />更多</Button>
+          </>
+        )}
+        <div className={selectionMode && touchMode ? "hidden" : "ms-auto"}>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild><Button variant="outline" size="sm"><Eye />查看</Button></DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuRadioGroup value={viewMode} onValueChange={(value) => setViewMode(value as WorkspaceViewMode)}>
+                <DropdownMenuRadioItem value="large"><LayoutGrid />大图标</DropdownMenuRadioItem>
+                <DropdownMenuRadioItem value="medium"><Grid2X2 />中图标</DropdownMenuRadioItem>
+                <DropdownMenuRadioItem value="details"><List />详细</DropdownMenuRadioItem>
+              </DropdownMenuRadioGroup>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
 
-      {selectedAgentId == null ? (
-        <div className="py-8 text-center text-muted-foreground">暂无智能体，请先在「智能体」中创建</div>
-      ) : loading ? (
-        <div className="py-8 text-center text-muted-foreground">加载中...</div>
-      ) : entries.length === 0 ? (
-        <div className="py-8 text-center text-muted-foreground">空目录</div>
-      ) : (
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>名称</TableHead>
-              <TableHead className="w-32">大小</TableHead>
-              <TableHead className="w-48">修改时间</TableHead>
-              <TableHead className="w-40 text-right">操作</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {entries.map((entry) => (
-              <TableRow key={entry.path}>
-                <TableCell>
-                  <button
-                    className="flex items-center gap-2 text-left font-medium hover:underline"
-                    onClick={() => (entry.directory ? setCurrentPath(entry.path) : openPreview(entry))}
-                  >
-                    {entry.directory ? (
-                      <Folder className="size-4 text-amber-500" />
-                    ) : IMAGE_EXTS.has(extOf(entry.name)) ? (
-                      <FileImage className="size-4 text-blue-500" />
-                    ) : (
-                      <FileText className="size-4 text-muted-foreground" />
-                    )}
-                    <span>{entry.name}</span>
-                  </button>
-                </TableCell>
-                <TableCell className="text-muted-foreground">
-                  {entry.directory ? "-" : formatSize(entry.size)}
-                </TableCell>
-                <TableCell className="text-muted-foreground">
-                  {entry.lastModified ? new Date(entry.lastModified).toLocaleString() : "-"}
-                </TableCell>
-                <TableCell className="text-right">
-                  <div className="flex items-center justify-end gap-1">
-                    {!entry.directory && (
-                      <>
-                        <Button variant="ghost" size="icon-sm" onClick={() => openPreview(entry)} title="查看 / 编辑">
-                          <Pencil className="size-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon-sm"
-                          onClick={() => handleDownload(entry)}
-                          title="下载"
-                          disabled={downloadingPath != null}
-                        >
-                          {downloadingPath === entry.path ? <Loader2 className="size-4 animate-spin" /> : <Download className="size-4" />}
-                        </Button>
-                      </>
-                    )}
-                    <Button variant="ghost" size="icon-sm" onClick={() => openMove(entry)} title="移动 / 重命名">
-                      <Move className="size-4" />
-                    </Button>
-                    <Button variant="ghost" size="icon-sm" onClick={() => setDeleteEntry(entry)} title="删除">
-                      <Trash2 className="size-4 text-destructive" />
-                    </Button>
-                  </div>
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      )}
+      <ContextMenu
+        open={touchMode ? false : desktopMenuOpen}
+        onOpenChange={(open) => { if (!touchMode) setDesktopMenuOpen(open); }}
+      >
+        <ContextMenuTrigger asChild>
+          <div
+            className="min-h-0 flex-1 overflow-auto rounded-lg border bg-background outline-none focus-visible:ring-2 focus-visible:ring-ring/30"
+            tabIndex={0}
+            onKeyDown={handleListKeyDown}
+            onClick={(event) => {
+              if (!touchMode && !(event.target as Element).closest("[data-workspace-entry]")) clearSelection();
+            }}
+            onContextMenu={(event) => {
+              if (touchMode) event.preventDefault();
+              if (!(event.target as Element).closest("[data-workspace-entry]")) setContextEntry(null);
+            }}
+          >
+            {noAgent ? (
+              <div className="flex h-full items-center justify-center text-muted-foreground">暂无智能体，请先在「智能体」中创建</div>
+            ) : loading && entries.length === 0 ? (
+              <div className="flex h-full items-center justify-center text-muted-foreground">加载中...</div>
+            ) : entries.length === 0 ? (
+              <div className="flex h-full items-center justify-center text-muted-foreground">
+                {touchMode ? "空目录，可通过“更多”新建或上传文件" : "空目录，可右键新建或上传文件"}
+              </div>
+            ) : (
+              <WorkspaceEntryView
+                entries={entries}
+                viewMode={viewMode}
+                selectedPaths={selectedPaths}
+                cutPaths={cutPaths}
+                touchMode={touchMode}
+                selectionMode={selectionMode}
+                onEntryClick={handleEntryClick}
+                onToggleSelect={(entry) => toggleSelection(entry.path)}
+                onOpen={openEntry}
+                onContextEntry={handleContextEntry}
+                onLongPress={handleLongPressEntry}
+              />
+            )}
+          </div>
+        </ContextMenuTrigger>
+        <ContextMenuContent>
+          {contextEntry ? (
+            <>
+              <ContextMenuLabel>{contextTargets.length > 1 ? `已选择 ${contextTargets.length} 个项目` : contextEntry.name}</ContextMenuLabel>
+              <ContextMenuSeparator />
+              {contextTargets.length === 1 && <ContextMenuItem onSelect={() => openEntry(contextEntry)}>打开</ContextMenuItem>}
+              <ContextMenuItem onSelect={() => handleDownload(contextTargets)}><Download />下载</ContextMenuItem>
+              <ContextMenuItem onSelect={() => setClipboardFor("copy", contextTargets)}><Copy />复制</ContextMenuItem>
+              <ContextMenuItem onSelect={() => setClipboardFor("cut", contextTargets)}><Scissors />剪切</ContextMenuItem>
+              <ContextMenuItem disabled={!canPaste || operationPending} onSelect={() => handlePaste(contextEntry.directory ? contextEntry.path : currentPath)}>
+                <ClipboardPaste />粘贴{contextEntry.directory ? "到此文件夹" : ""}
+              </ContextMenuItem>
+              {contextTargets.length === 1 && <ContextMenuItem onSelect={() => openRename(contextEntry)}><Pencil />重命名</ContextMenuItem>}
+              <ContextMenuSeparator />
+              <ContextMenuItem variant="destructive" disabled={operationPending} onSelect={() => setDeleteEntries(contextTargets)}><Trash2 />删除</ContextMenuItem>
+              <ContextMenuItem onSelect={() => openProperties(contextTargets)}><Info />属性</ContextMenuItem>
+            </>
+          ) : (
+            <>
+              <ContextMenuItem disabled={!canPaste || operationPending} onSelect={() => handlePaste(currentPath)}><ClipboardPaste />粘贴</ContextMenuItem>
+              <ContextMenuSeparator />
+              <ContextMenuItem onSelect={() => openCreate("DIR")}><FolderPlus />新建文件夹</ContextMenuItem>
+              <ContextMenuItem onSelect={() => openCreate("FILE")}><FilePlus />新建文件</ContextMenuItem>
+              <ContextMenuItem onSelect={() => uploadRef.current?.click()}><Upload />上传</ContextMenuItem>
+              <ContextMenuItem onSelect={fetchEntries}><RefreshCw />刷新</ContextMenuItem>
+            </>
+          )}
+        </ContextMenuContent>
+      </ContextMenu>
+
+      <WorkspaceTouchActionSheet
+        open={touchMode && mobileSheetOpen}
+        entry={contextEntry}
+        targetCount={contextTargets.length}
+        canPaste={canPaste}
+        operationPending={operationPending}
+        onOpenChange={setMobileSheetOpen}
+        onOpen={() => contextEntry && openEntry(contextEntry)}
+        onDownload={() => handleDownload(contextTargets)}
+        onCopy={() => setClipboardFor("copy", contextTargets)}
+        onCut={() => setClipboardFor("cut", contextTargets)}
+        onPaste={() => handlePaste(contextEntry?.directory ? contextEntry.path : currentPath)}
+        onRename={() => contextEntry && openRename(contextEntry)}
+        onDelete={() => setDeleteEntries(contextTargets)}
+        onProperties={() => openProperties(contextTargets)}
+        onSelect={handleMobileSelect}
+        onCreate={openCreate}
+        onUpload={() => uploadRef.current?.click()}
+        onRefresh={fetchEntries}
+      />
+
+      <div className="shrink-0 text-xs text-muted-foreground">
+        {entries.length} 个项目{selectedEntries.length > 0 ? `，已选择 ${selectedEntries.length} 个` : ""}
+        <span className="ms-2 hidden sm:inline">
+          {touchMode
+            ? selectionMode ? "单击切换选择，点击完成退出多选" : "单击打开，长按更多操作"
+            : "单击选择，双击打开；Ctrl 多选，Shift 连续选择"}
+        </span>
+      </div>
 
       {/* 预览 / 编辑 */}
-      <Dialog open={!!previewEntry} onOpenChange={(o) => { if (!o) closePreview(); }}>
+      <Dialog open={!!previewEntry} onOpenChange={(open) => { if (!open) closePreview(); }}>
         <DialogContent className="flex max-h-[90vh] flex-col overflow-hidden sm:max-w-6xl">
-          <DialogHeader>
-            <DialogTitle className="break-all">{previewEntry?.path}</DialogTitle>
-          </DialogHeader>
+          <DialogHeader><DialogTitle className="break-all">{previewEntry?.path}</DialogTitle></DialogHeader>
           {previewLoading ? (
             <div className="py-8 text-center text-muted-foreground">加载中...</div>
           ) : previewError ? (
@@ -531,35 +917,20 @@ export function WorkspacePage() {
             <>
               <div className="min-h-0 flex-1 overflow-auto">
                 {previewMode === "view" ? (
-                  <MarkdownRenderer
-                    content={
-                      isMarkdown(previewEntry?.name ?? "")
-                        ? previewContent.content ?? ""
-                        : codeFence(previewEntry?.name ?? "", previewContent.content ?? "")
-                    }
-                  />
+                  <MarkdownRenderer content={MD_EXTS.has(extensionOf(previewEntry?.name ?? ""))
+                    ? previewContent.content ?? ""
+                    : codeFence(previewEntry?.name ?? "", previewContent.content ?? "")} />
                 ) : (
-                  <Textarea
-                    rows={20}
-                    className="resize-y font-mono text-sm"
-                    value={editText}
-                    onChange={(e) => { setEditText(e.target.value); setEditModified(true); }}
-                  />
+                  <Textarea rows={20} className="resize-y font-mono text-sm" value={editText}
+                    onChange={(event) => { setEditText(event.target.value); setEditModified(true); }} />
                 )}
               </div>
               <DialogFooter>
                 {previewMode === "view" ? (
-                  <>
-                    <Button variant="outline" onClick={closePreview}>关闭</Button>
-                    <Button onClick={() => setPreviewMode("edit")}>编辑</Button>
-                  </>
+                  <><Button variant="outline" onClick={closePreview}>关闭</Button><Button onClick={() => setPreviewMode("edit")}>编辑</Button></>
                 ) : (
-                  <>
-                    <Button variant="outline" onClick={() => setPreviewMode("view")}>预览</Button>
-                    <Button onClick={handleSave} disabled={editSaving || !editModified}>
-                      {editSaving ? "保存中..." : "保存"}
-                    </Button>
-                  </>
+                  <><Button variant="outline" onClick={() => setPreviewMode("view")}>预览</Button>
+                    <Button onClick={handleSave} disabled={editSaving || !editModified}>{editSaving ? "保存中..." : "保存"}</Button></>
                 )}
               </DialogFooter>
             </>
@@ -569,64 +940,74 @@ export function WorkspacePage() {
         </DialogContent>
       </Dialog>
 
-      {/* 移动 / 重命名 */}
-      <Dialog open={!!moveEntry} onOpenChange={(o) => { if (!o) setMoveEntry(null); }}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <DialogTitle>移动 / 重命名</DialogTitle>
-          </DialogHeader>
-          <div className="flex flex-col gap-2">
-            <Label>目标相对路径</Label>
-            <Input value={moveTo} onChange={(e) => setMoveTo(e.target.value)} placeholder="如 notes/draft.md" />
-            <p className="text-xs text-muted-foreground">修改文件名即重命名，修改目录前缀即移动。</p>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setMoveEntry(null)}>取消</Button>
-            <Button onClick={handleMove} disabled={moveSaving}>{moveSaving ? "处理中..." : "确定"}</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
       {/* 新建 */}
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
         <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <DialogTitle>{createType === "DIR" ? "新建文件夹" : "新建文件"}</DialogTitle>
-          </DialogHeader>
+          <DialogHeader><DialogTitle>{createType === "DIR" ? "新建文件夹" : "新建文件"}</DialogTitle></DialogHeader>
           <div className="flex flex-col gap-2">
             <Label>名称{createType === "DIR" ? "" : "（含扩展名，如 notes.md）"}</Label>
-            <Input
-              value={createName}
-              onChange={(e) => setCreateName(e.target.value)}
+            <Input value={createName} onChange={(event) => setCreateName(event.target.value)}
               placeholder={createType === "DIR" ? "folder-name" : "notes.md"}
-              onKeyDown={(e) => { if (e.key === "Enter") handleCreate(); }}
-              autoFocus
-            />
+              onKeyDown={(event) => { if (event.key === "Enter") handleCreate(); }} autoFocus />
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setCreateOpen(false)}>取消</Button>
-            <Button onClick={handleCreate} disabled={createSaving}>{createSaving ? "创建中..." : "创建"}</Button>
-          </DialogFooter>
+          <DialogFooter><Button variant="outline" onClick={() => setCreateOpen(false)}>取消</Button>
+            <Button onClick={handleCreate} disabled={createSaving}>{createSaving ? "创建中..." : "确定"}</Button></DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* 重命名 */}
+      <Dialog open={!!renameEntry} onOpenChange={(open) => { if (!open && !renaming) setRenameEntry(null); }}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader><DialogTitle>重命名</DialogTitle><DialogDescription>输入新的文件或文件夹名称。</DialogDescription></DialogHeader>
+          <Input value={renameValue} onChange={(event) => setRenameValue(event.target.value)} autoFocus
+            onKeyDown={(event) => { if (event.key === "Enter") handleRename(); }} />
+          <DialogFooter><Button variant="outline" onClick={() => setRenameEntry(null)} disabled={renaming}>取消</Button>
+            <Button onClick={handleRename} disabled={renaming || !renameValue.trim()}>{renaming ? "处理中..." : "确定"}</Button></DialogFooter>
         </DialogContent>
       </Dialog>
 
       {/* 删除确认 */}
-      <AlertDialog open={!!deleteEntry} onOpenChange={(o) => { if (!o) setDeleteEntry(null); }}>
+      <AlertDialog open={deleteEntries.length > 0} onOpenChange={(open) => { if (!open && !deleting) setDeleteEntries([]); }}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>确认删除</AlertDialogTitle>
             <AlertDialogDescription>
-              确定要删除「{deleteEntry?.name}」吗？{deleteEntry?.directory ? "文件夹及其所有内容将被一并删除，" : ""}此操作不可撤销。
+              确定要删除 {deleteEntries.length > 1 ? `选中的 ${deleteEntries.length} 个项目` : `「${deleteEntries[0]?.name}」`} 吗？
+              {deleteEntries.some((entry) => entry.directory) ? "文件夹及其所有内容将被一并删除，" : ""}此操作不可撤销。
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>取消</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDelete} disabled={deleting}>
-              {deleting ? "删除中..." : "删除"}
-            </AlertDialogAction>
-          </AlertDialogFooter>
+          <AlertDialogFooter><AlertDialogCancel>取消</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDelete} disabled={deleting}>{deleting ? "删除中..." : "删除"}</AlertDialogAction></AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* 属性 */}
+      <Dialog open={propertiesEntries.length > 0} onOpenChange={(open) => { if (!open) closeProperties(); }}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader><DialogTitle>属性</DialogTitle><DialogDescription>
+            {propertiesEntries.length === 1 ? propertiesEntries[0].name : `选中的 ${propertiesEntries.length} 个项目`}
+          </DialogDescription></DialogHeader>
+          {propertiesLoading ? (
+            <div className="flex justify-center py-8"><Loader2 className="animate-spin" /></div>
+          ) : properties && (
+            <dl className="grid grid-cols-[6rem_1fr] gap-x-3 gap-y-3 text-sm">
+              <dt className="text-muted-foreground">位置</dt><dd className="break-all">{currentPath || "工作区根目录"}</dd>
+              {propertiesEntries.length === 1 && <><dt className="text-muted-foreground">类型</dt><dd>{fileTypeLabel(propertiesEntries[0].name, propertiesEntries[0].directory)}</dd></>}
+              <dt className="text-muted-foreground">文件</dt><dd>{properties.files.toLocaleString()} 个</dd>
+              <dt className="text-muted-foreground">文件夹</dt><dd>{properties.directories.toLocaleString()} 个</dd>
+              <dt className="text-muted-foreground">总大小</dt><dd>{formatFileSize(properties.totalSize)}</dd>
+              <dt className="text-muted-foreground">修改时间</dt><dd>{properties.lastModified ? new Date(properties.lastModified).toLocaleString() : "-"}</dd>
+            </dl>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      <WorkspaceConflictDialog
+        key={conflictName ?? "no-conflict"}
+        name={conflictName}
+        showApplyAll={conflictAllowApplyAll}
+        onChoose={chooseConflict}
+      />
     </div>
   );
 }
