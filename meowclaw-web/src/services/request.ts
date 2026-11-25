@@ -31,17 +31,30 @@ export async function request<T>(url: string, options?: RequestInit): Promise<Ap
   return json;
 }
 
-export async function downloadRequest(url: string): Promise<Blob> {
-  const token = getToken();
-  const headers: Record<string, string> = {};
-  if (token) {
-    headers["Authorization"] = `Bearer ${token}`;
+export class HttpRequestError extends Error {
+  readonly status: number;
+
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = "HttpRequestError";
+    this.status = status;
   }
-  const res = await fetch(url, { headers });
+}
+
+export async function resourceRequest(url: string, options?: RequestInit): Promise<Response> {
+  const token = getToken();
+  const headers = new Headers(options?.headers);
+  if (token) headers.set("Authorization", `Bearer ${token}`);
+  const res = await fetch(url, { ...options, headers });
   if (!res.ok) {
     const error = (await res.json().catch(() => null)) as ApiResult<unknown> | null;
-    throw new Error(error?.message || `下载失败（HTTP ${res.status}）`);
+    throw new HttpRequestError(error?.message || `请求失败（HTTP ${res.status}）`, res.status);
   }
+  return res;
+}
+
+export async function downloadRequest(url: string, signal?: AbortSignal): Promise<Blob> {
+  const res = await resourceRequest(url, { signal });
   return res.blob();
 }
 

@@ -194,8 +194,8 @@ class WorkspaceOperationServiceTest {
         Files.writeString(workspace.resolve("a.txt"), "plain");
         Files.writeString(workspace.resolve(" a.txt"), "leading");
 
-        assertThat(service.read(1L, " a.txt").getContent()).isEqualTo("leading");
-        assertThat(service.read(1L, "a.txt").getContent()).isEqualTo("plain");
+        assertThat(service.read(1L, " a.txt").file()).hasContent("leading");
+        assertThat(service.read(1L, "a.txt").file()).hasContent("plain");
 
         service.deleteBatch(1L, List.of(" a.txt"));
         assertThat(workspace.resolve(" a.txt")).doesNotExist();

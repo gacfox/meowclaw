@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import type {
   AgentDTO,
@@ -22,6 +22,7 @@ import {
   readWorkspaceFile,
   renameWorkspaceEntry,
   saveWorkspaceFile,
+  workspaceFileUrl,
 } from "@/services/workspace";
 import { useWorkspaceUpload } from "@/context/WorkspaceUploadContext";
 import { useWorkspaceSelection } from "@/hooks/useWorkspaceSelection";
@@ -100,6 +101,10 @@ import { WorkspaceEntryView, type WorkspaceViewMode } from "@/components/workspa
 import { extensionOf, fileTypeLabel, formatFileSize } from "@/lib/workspaceFiles";
 import { WorkspaceConflictDialog } from "@/components/workspace/WorkspaceConflictDialog";
 import { WorkspaceTouchActionSheet } from "@/components/workspace/WorkspaceTouchActionSheet";
+import { WorkspaceImagePreview } from "@/components/workspace/WorkspaceImagePreview";
+
+const WorkspacePdfPreview = lazy(() => import("@/components/workspace/WorkspacePdfPreview")
+  .then((module) => ({ default: module.WorkspacePdfPreview })));
 
 const MD_EXTS = new Set(["md", "markdown"]);
 const EXT_TO_LANG: Record<string, string> = {
@@ -178,12 +183,17 @@ export function WorkspacePage() {
   const operationLockRef = useRef(false);
   const entriesRequestRef = useRef(0);
   const previewRequestRef = useRef(0);
+  const previewAbortRef = useRef<AbortController | null>(null);
   const saveRequestRef = useRef(0);
   const propertiesRequestRef = useRef(0);
   const locationRef = useRef({ agentId: selectedAgentId, path: currentPath });
   useEffect(() => {
     locationRef.current = { agentId: selectedAgentId, path: currentPath };
   }, [selectedAgentId, currentPath]);
+  useEffect(() => () => {
+    previewRequestRef.current += 1;
+    previewAbortRef.current?.abort();
+  }, []);
   const {
     selectedPaths,
     selectionMode,
@@ -296,6 +306,7 @@ export function WorkspacePage() {
   // ---- 预览 / 编辑 ----
   const [previewEntry, setPreviewEntry] = useState<FileEntry | null>(null);
   const [previewContent, setPreviewContent] = useState<FileContent | null>(null);
+  const [previewPdfUrl, setPreviewPdfUrl] = useState<string | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [previewError, setPreviewError] = useState<string | null>(null);
   const [editText, setEditText] = useState("");
@@ -307,6 +318,8 @@ export function WorkspacePage() {
     if (selectedAgentId == null) return;
     const requestId = ++previewRequestRef.current;
     saveRequestRef.current += 1;
+    previewAbortRef.current?.abort();
+    previewAbortRef.current = null;
     setPreviewEntry(entry);
     setPreviewContent(null);
     setPreviewError(null);
@@ -314,17 +327,30 @@ export function WorkspacePage() {
     setEditModified(false);
     setEditSaving(false);
     setPreviewMode("view");
+
+    if (extensionOf(entry.name) === "pdf") {
+      setPreviewPdfUrl(workspaceFileUrl(selectedAgentId, entry.path));
+      setPreviewLoading(false);
+      return;
+    }
+
+    const abortController = new AbortController();
+    previewAbortRef.current = abortController;
+    setPreviewPdfUrl(null);
     setPreviewLoading(true);
     try {
-      const content = await readWorkspaceFile(selectedAgentId, entry.path);
+      const content = await readWorkspaceFile(selectedAgentId, entry.path, abortController.signal);
       if (requestId !== previewRequestRef.current) return;
       setPreviewContent(content);
-      if (content.kind === "TEXT") setEditText(content.content ?? "");
+      if (content.kind === "TEXT") setEditText(content.content);
     } catch (error) {
       if (requestId !== previewRequestRef.current) return;
       setPreviewError(error instanceof Error ? error.message : "读取失败");
     } finally {
-      if (requestId === previewRequestRef.current) setPreviewLoading(false);
+      if (requestId === previewRequestRef.current) {
+        setPreviewLoading(false);
+        previewAbortRef.current = null;
+      }
     }
   };
 
@@ -337,8 +363,11 @@ export function WorkspacePage() {
   const closePreview = () => {
     previewRequestRef.current += 1;
     saveRequestRef.current += 1;
+    previewAbortRef.current?.abort();
+    previewAbortRef.current = null;
     setPreviewEntry(null);
     setPreviewContent(null);
+    setPreviewPdfUrl(null);
     setPreviewError(null);
     setEditSaving(false);
   };
@@ -909,10 +938,17 @@ export function WorkspacePage() {
             <div className="py-8 text-center text-muted-foreground">加载中...</div>
           ) : previewError ? (
             <div className="py-8 text-center text-destructive">{previewError}</div>
+          ) : previewPdfUrl && previewEntry ? (
+            <Suspense fallback={<div className="py-8 text-center text-muted-foreground">正在加载 PDF 查看器...</div>}>
+              <WorkspacePdfPreview
+                key={previewPdfUrl}
+                url={previewPdfUrl}
+                downloading={downloading}
+                onDownload={() => handleDownload([previewEntry])}
+              />
+            </Suspense>
           ) : previewContent?.kind === "IMAGE" ? (
-            <div className="flex justify-center overflow-y-auto">
-              <img src={previewContent.dataUrl ?? undefined} alt={previewEntry?.name} className="max-h-[70vh] rounded" />
-            </div>
+            <WorkspaceImagePreview blob={previewContent.blob} name={previewEntry?.name ?? "图片预览"} />
           ) : previewContent?.kind === "TEXT" ? (
             <>
               <div className="min-h-0 flex-1 overflow-auto">

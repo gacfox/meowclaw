@@ -2,16 +2,21 @@ package com.gacfox.meowclaw.controller;
 
 import com.gacfox.meowclaw.dto.*;
 import com.gacfox.meowclaw.service.WorkspaceDownloadService;
+import com.gacfox.meowclaw.service.WorkspaceFilePreview;
 import com.gacfox.meowclaw.service.WorkspaceService;
 import com.gacfox.meowclaw.service.WorkspaceUploadService;
+import com.gacfox.meowclaw.util.ClientDisconnectUtil;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.io.FileSystemResource;
 import org.springframework.core.io.Resource;
 import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpRange;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -19,6 +24,9 @@ import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
 
 import java.io.IOException;
+import java.io.InputStream;
+import java.nio.channels.Channels;
+import java.nio.channels.SeekableByteChannel;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -28,6 +36,7 @@ import java.util.List;
  * 工作区管理
  */
 @Tag(name = "工作区")
+@Slf4j
 @RestController
 @RequestMapping("/api/workspace")
 public class WorkspaceController {
@@ -50,11 +59,38 @@ public class WorkspaceController {
         return ApiResult.success(workspaceService.list(agentId, path));
     }
 
-    @Operation(summary = "读取文件内容")
+    @Operation(summary = "预览工作区文件")
     @GetMapping("/file")
-    public ApiResult<FileContentDTO> read(@Parameter(description = "智能体 ID") @RequestParam Long agentId,
-                                          @Parameter(description = "文件相对路径") @RequestParam String path) throws IOException {
-        return ApiResult.success(workspaceService.read(agentId, path));
+    public ResponseEntity<StreamingResponseBody> read(@Parameter(description = "智能体 ID") @RequestParam Long agentId,
+                                                      @Parameter(description = "文件相对路径") @RequestParam String path,
+                                                      @RequestHeader(value = HttpHeaders.RANGE, required = false) String rangeHeader) throws IOException {
+        WorkspaceFilePreview preview = workspaceService.read(agentId, path);
+        if (preview.kind() != WorkspaceFilePreview.Kind.PDF || rangeHeader == null) {
+            return previewResponse(preview, HttpStatus.OK)
+                    .contentLength(preview.size())
+                    .body(stream(preview.file(), 0, preview.size()));
+        }
+
+        List<HttpRange> ranges;
+        try {
+            ranges = HttpRange.parseRanges(rangeHeader);
+        } catch (IllegalArgumentException e) {
+            return rangeNotSatisfiable(preview.size());
+        }
+        if (ranges.size() != 1) {
+            return rangeNotSatisfiable(preview.size());
+        }
+
+        HttpRange range = ranges.get(0);
+        long start = range.getRangeStart(preview.size());
+        long end = range.getRangeEnd(preview.size());
+        if (start >= preview.size() || end < start) {
+            return rangeNotSatisfiable(preview.size());
+        }
+        return previewResponse(preview, HttpStatus.PARTIAL_CONTENT)
+                .header(HttpHeaders.CONTENT_RANGE, "bytes %d-%d/%d".formatted(start, end, preview.size()))
+                .contentLength(end - start + 1)
+                .body(stream(preview.file(), start, end - start + 1));
     }
 
     @Operation(summary = "下载工作区文件")
@@ -197,5 +233,50 @@ public class WorkspaceController {
                                @Parameter(description = "文件或目录相对路径") @RequestParam String path) throws IOException {
         workspaceService.delete(agentId, path);
         return ApiResult.success();
+    }
+
+    private ResponseEntity.BodyBuilder previewResponse(WorkspaceFilePreview preview, HttpStatus status) {
+        MediaType contentType = preview.kind() == WorkspaceFilePreview.Kind.TEXT
+                ? new MediaType("text", "plain", StandardCharsets.UTF_8)
+                : MediaType.parseMediaType(preview.mimeType());
+        return ResponseEntity.status(status)
+                .header("X-Workspace-Kind", preview.kind().name())
+                .header(HttpHeaders.CONTENT_DISPOSITION, ContentDisposition.inline()
+                        .filename(preview.file().getFileName().toString(), StandardCharsets.UTF_8)
+                        .build().toString())
+                .header(HttpHeaders.CACHE_CONTROL, "private,no-store")
+                .header("X-Content-Type-Options", "nosniff")
+                .header(HttpHeaders.ACCEPT_RANGES, "bytes")
+                .contentType(contentType);
+    }
+
+    private ResponseEntity<StreamingResponseBody> rangeNotSatisfiable(long size) {
+        return ResponseEntity.status(HttpStatus.REQUESTED_RANGE_NOT_SATISFIABLE)
+                .header(HttpHeaders.CONTENT_RANGE, "bytes */" + size)
+                .build();
+    }
+
+    StreamingResponseBody stream(Path file, long start, long length) {
+        return output -> {
+            try (SeekableByteChannel channel = Files.newByteChannel(file);
+                 InputStream input = Channels.newInputStream(channel)) {
+                channel.position(start);
+                byte[] buffer = new byte[8192];
+                long remaining = length;
+                while (remaining > 0) {
+                    int read = input.read(buffer, 0, (int) Math.min(buffer.length, remaining));
+                    if (read < 0) {
+                        break;
+                    }
+                    output.write(buffer, 0, read);
+                    remaining -= read;
+                }
+            } catch (IOException e) {
+                if (!ClientDisconnectUtil.isClientDisconnect(e)) {
+                    throw e;
+                }
+                log.info("客户端取消工作区文件流输出：{}", file.getFileName());
+            }
+        };
     }
 }

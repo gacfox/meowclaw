@@ -2,6 +2,7 @@ package com.gacfox.meowclaw.service;
 
 import com.gacfox.meowclaw.dto.*;
 import com.gacfox.meowclaw.entity.Agent;
+import com.gacfox.meowclaw.exception.UnsupportedWorkspaceFileTypeException;
 import com.gacfox.meowclaw.repository.AgentRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -12,7 +13,6 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
 import java.util.ArrayList;
-import java.util.Base64;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
@@ -63,20 +63,26 @@ public class WorkspaceService {
         }
     }
 
-    public FileContentDTO read(Long agentId, String path) throws IOException {
-        Path root = resolveRoot(agentId);
-        Path file = resolveExisting(root, path);
-        if (Files.isDirectory(file)) {
-            throw new IllegalArgumentException("不能读取目录内容");
-        }
+    public WorkspaceFilePreview read(Long agentId, String path) throws IOException {
+        Path file = resolveFileForDownload(agentId, path);
+        long size = Files.size(file);
         String ext = extension(file.getFileName().toString());
         if (IMAGE_MIME.containsKey(ext)) {
-            return readImage(file, IMAGE_MIME.get(ext));
+            if (size > MAX_IMAGE_BYTES) {
+                throw new IllegalArgumentException("图片过大，暂不支持预览（上限 10MB）");
+            }
+            return new WorkspaceFilePreview(file, WorkspaceFilePreview.Kind.IMAGE, IMAGE_MIME.get(ext), size);
         }
         if (TEXT_EXTENSIONS.contains(ext)) {
-            return readText(file);
+            if (size > MAX_TEXT_BYTES) {
+                throw new IllegalArgumentException("文件过大，暂不支持预览（上限 2MB）");
+            }
+            return new WorkspaceFilePreview(file, WorkspaceFilePreview.Kind.TEXT, "text/plain", size);
         }
-        return new FileContentDTO(FileContentDTO.Kind.UNSUPPORTED, null, null, null);
+        if ("pdf".equals(ext)) {
+            return new WorkspaceFilePreview(file, WorkspaceFilePreview.Kind.PDF, "application/pdf", size);
+        }
+        throw new UnsupportedWorkspaceFileTypeException("该文件类型不支持预览");
     }
 
     public Path resolveFileForDownload(Long agentId, String path) throws IOException {
@@ -661,25 +667,6 @@ public class WorkspaceService {
 
     private String errorMessage(Exception e) {
         return e.getMessage() == null || e.getMessage().isBlank() ? e.getClass().getSimpleName() : e.getMessage();
-    }
-
-    private FileContentDTO readText(Path file) throws IOException {
-        long size = Files.size(file);
-        if (size > MAX_TEXT_BYTES) {
-            throw new IllegalArgumentException("文件过大，暂不支持预览（上限 2MB）");
-        }
-        String content = Files.readString(file, StandardCharsets.UTF_8);
-        return new FileContentDTO(FileContentDTO.Kind.TEXT, "text/plain", content, null);
-    }
-
-    private FileContentDTO readImage(Path file, String mime) throws IOException {
-        long size = Files.size(file);
-        if (size > MAX_IMAGE_BYTES) {
-            throw new IllegalArgumentException("图片过大，暂不支持预览（上限 10MB）");
-        }
-        byte[] bytes = Files.readAllBytes(file);
-        String dataUrl = "data:" + mime + ";base64," + Base64.getEncoder().encodeToString(bytes);
-        return new FileContentDTO(FileContentDTO.Kind.IMAGE, mime, null, dataUrl);
     }
 
     private FileEntryDTO toEntry(Path root, Path p) {

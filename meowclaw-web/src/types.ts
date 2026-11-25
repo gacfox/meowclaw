@@ -284,7 +284,6 @@ export interface TokenStatsDTO {
   modelSeries: TokenModelSeries[];
 }
 
-export type FileKind = "TEXT" | "IMAGE" | "UNSUPPORTED";
 export type CreateEntryType = "FILE" | "DIR";
 
 export interface FileEntry {
@@ -295,12 +294,10 @@ export interface FileEntry {
   lastModified: number;
 }
 
-export interface FileContent {
-  kind: FileKind;
-  mimeType: string | null;
-  content: string | null;
-  dataUrl: string | null;
-}
+export type FileContent =
+  | { kind: "TEXT"; content: string }
+  | { kind: "IMAGE"; blob: Blob; mimeType: string }
+  | { kind: "UNSUPPORTED" };
 
 export type ConflictStrategy = "FAIL" | "OVERWRITE" | "SKIP" | "RENAME";
 

@@ -10,20 +10,47 @@ import type {
   WorkspaceUploadSession,
 } from "@/types";
 import type { ApiResult } from "@/types";
-import { downloadRequest, getToken, request, uploadRequest } from "./request";
+import { downloadRequest, getToken, HttpRequestError, request, resourceRequest, uploadRequest } from "./request";
 
 export async function listWorkspaceFiles(agentId: number, path = ""): Promise<FileEntry[]> {
   const res = await request<FileEntry[]>(`/api/workspace?agentId=${agentId}&path=${encodeURIComponent(path)}`);
   return res.data;
 }
 
-export async function readWorkspaceFile(agentId: number, path: string): Promise<FileContent> {
-  const res = await request<FileContent>(`/api/workspace/file?agentId=${agentId}&path=${encodeURIComponent(path)}`);
-  return res.data;
+export function workspaceFileUrl(agentId: number, path: string): string {
+  return `/api/workspace/file?agentId=${agentId}&path=${encodeURIComponent(path)}`;
 }
 
-export async function downloadWorkspaceFile(agentId: number, path: string): Promise<Blob> {
-  return downloadRequest(`/api/workspace/download?agentId=${agentId}&path=${encodeURIComponent(path)}`);
+export async function readWorkspaceFile(
+  agentId: number,
+  path: string,
+  signal?: AbortSignal,
+): Promise<FileContent> {
+  try {
+    const res = await resourceRequest(workspaceFileUrl(agentId, path), { signal });
+    const kind = res.headers.get("X-Workspace-Kind");
+    if (kind === "TEXT") {
+      const bytes = await res.arrayBuffer();
+      try {
+        const content = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(bytes);
+        return { kind, content };
+      } catch (error) {
+        if (error instanceof TypeError) throw new Error("文件不是有效的 UTF-8 文本，无法预览或编辑", { cause: error });
+        throw error;
+      }
+    }
+    if (kind === "IMAGE") {
+      return { kind, blob: await res.blob(), mimeType: res.headers.get("Content-Type") ?? "image/*" };
+    }
+    throw new Error("该文件类型不支持在线预览");
+  } catch (error) {
+    if (error instanceof HttpRequestError && error.status === 415) return { kind: "UNSUPPORTED" };
+    throw error;
+  }
+}
+
+export async function downloadWorkspaceFile(agentId: number, path: string, signal?: AbortSignal): Promise<Blob> {
+  return downloadRequest(`/api/workspace/download?agentId=${agentId}&path=${encodeURIComponent(path)}`, signal);
 }
 
 export async function saveWorkspaceFile(data: {
