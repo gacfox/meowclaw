@@ -11,6 +11,7 @@ import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.io.FileSystemResource;
 import org.springframework.core.io.Resource;
 import org.springframework.http.ContentDisposition;
@@ -44,6 +45,7 @@ public class WorkspaceController {
     private final WorkspaceDownloadService downloadService;
     private final WorkspaceUploadService uploadService;
 
+    @Autowired
     public WorkspaceController(WorkspaceService workspaceService,
                                WorkspaceDownloadService downloadService,
                                WorkspaceUploadService uploadService) {

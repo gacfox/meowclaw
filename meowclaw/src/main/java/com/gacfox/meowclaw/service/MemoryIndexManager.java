@@ -7,6 +7,7 @@ import org.apache.lucene.index.IndexWriterConfig;
 import org.apache.lucene.search.SearcherManager;
 import org.apache.lucene.store.FSDirectory;
 import org.apache.lucene.store.LockObtainFailedException;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.wltea.analyzer.lucene.IKAnalyzer;
@@ -28,6 +29,7 @@ public class MemoryIndexManager {
     private final String baseDir;
     private final Map<Long, AgentMemoryIndex> indexes = new ConcurrentHashMap<>();
 
+    @Autowired
     public MemoryIndexManager(@Value("${meowclaw.data-dir}") String dataDir) {
         this.baseDir = Paths.get(dataDir, "lucene", "memory").toString();
     }

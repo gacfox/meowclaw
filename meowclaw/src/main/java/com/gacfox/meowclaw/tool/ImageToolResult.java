@@ -3,6 +3,7 @@ package com.gacfox.meowclaw.tool;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.gacfox.meowclaw.util.JsonUtil;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import java.nio.file.Path;
@@ -39,6 +40,7 @@ public class ImageToolResult {
     private final ObjectMapper objectMapper;
     private final JsonUtil jsonUtil;
 
+    @Autowired
     public ImageToolResult(ObjectMapper objectMapper, JsonUtil jsonUtil) {
         this.objectMapper = objectMapper;
         this.jsonUtil = jsonUtil;

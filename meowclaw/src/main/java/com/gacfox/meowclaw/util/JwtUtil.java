@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.gacfox.meowclaw.dto.UserDTO;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
@@ -21,6 +22,7 @@ public class JwtUtil {
     private final long expireMillis;
     private final ObjectMapper objectMapper;
 
+    @Autowired
     public JwtUtil(@Value("${meowclaw.jwt.secret}") String secret,
                    @Value("${meowclaw.jwt.expire-hours}") long expireHours,
                    ObjectMapper objectMapper) {

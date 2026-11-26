@@ -4,6 +4,7 @@ import com.gacfox.meowclaw.util.ToolPathUtil;
 import com.gacfox.proarc.agentic.agent.AgentContext;
 import com.gacfox.proarc.agentic.tool.AgenticTool;
 import com.gacfox.proarc.agentic.tool.AgenticToolParam;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import java.io.BufferedReader;
@@ -25,6 +26,7 @@ public class ReadFileTool {
 
     private final ImageToolResult imageToolResult;
 
+    @Autowired
     public ReadFileTool(ImageToolResult imageToolResult) {
         this.imageToolResult = imageToolResult;
     }

@@ -1,6 +1,7 @@
 package com.gacfox.meowclaw.service;
 
 import com.gacfox.meowclaw.dto.DownloadTicketDTO;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
@@ -32,6 +33,7 @@ public class WorkspaceDownloadService {
     private final SecureRandom secureRandom = new SecureRandom();
     private final ConcurrentHashMap<String, DownloadTicket> tickets = new ConcurrentHashMap<>();
 
+    @Autowired
     public WorkspaceDownloadService(WorkspaceService workspaceService) {
         this.workspaceService = workspaceService;
     }

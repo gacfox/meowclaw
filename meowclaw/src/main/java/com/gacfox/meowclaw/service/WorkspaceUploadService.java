@@ -3,6 +3,7 @@ package com.gacfox.meowclaw.service;
 import com.gacfox.meowclaw.dto.UploadCompleteDTO;
 import com.gacfox.meowclaw.dto.UploadSessionDTO;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
@@ -36,6 +37,7 @@ public class WorkspaceUploadService {
     private final Path tempRoot;
     private final ConcurrentHashMap<String, UploadSession> sessions = new ConcurrentHashMap<>();
 
+    @Autowired
     public WorkspaceUploadService(WorkspaceService workspaceService,
                                   @Value("${meowclaw.data-dir}") String dataDir) {
         this.workspaceService = workspaceService;
