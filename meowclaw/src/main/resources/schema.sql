@@ -169,8 +169,6 @@ CREATE TABLE IF NOT EXISTS mc_message
     reasoning_content TEXT COMMENT '推理内容',
     tool_calls_json   TEXT COMMENT '工具调用列表JSON',
     tool_call_id      VARCHAR(100) COMMENT '工具调用ID',
-    input_tokens      BIGINT COMMENT '输入token数',
-    output_tokens     BIGINT COMMENT '输出token数',
     created_at        BIGINT      NOT NULL COMMENT '创建时间戳',
     PRIMARY KEY (id)
 );

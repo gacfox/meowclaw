@@ -38,12 +38,6 @@ public class Message {
     @Column(name = "tool_call_id", length = 100)
     private String toolCallId;
 
-    @Column(name = "input_tokens")
-    private Long inputTokens;
-
-    @Column(name = "output_tokens")
-    private Long outputTokens;
-
     @Column(name = "created_at", nullable = false)
     private Long createdAt;
 }

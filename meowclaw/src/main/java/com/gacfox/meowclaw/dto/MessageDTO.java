@@ -28,10 +28,6 @@ public class MessageDTO {
     private String toolCallsJson;
     @Schema(description = "工具调用 ID")
     private String toolCallId;
-    @Schema(description = "输入 Token 数")
-    private Long inputTokens;
-    @Schema(description = "输出 Token 数")
-    private Long outputTokens;
     @Schema(description = "消息创建时间戳")
     private Long createdAt;
 }
