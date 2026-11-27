@@ -211,11 +211,8 @@ export function SystemConfigPage() {
   };
 
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-col gap-6">
-      <div className="flex flex-col gap-1">
-        <h1 className="text-2xl font-semibold">系统配置</h1>
-        <p className="text-sm text-muted-foreground">管理系统级功能与数据处理策略。</p>
-      </div>
+    <div className="flex flex-col gap-6">
+      <h1 className="text-2xl font-semibold">系统配置</h1>
 
       <Card>
         <CardHeader>

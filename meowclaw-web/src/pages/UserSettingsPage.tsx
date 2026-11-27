@@ -89,7 +89,7 @@ export function UserSettingsPage() {
   };
 
   return (
-    <div className="mx-auto max-w-2xl">
+    <div>
       <h1 className="mb-6 text-2xl font-semibold">用户设置</h1>
       <Tabs defaultValue="profile">
         <TabsList>
