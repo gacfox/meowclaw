@@ -22,6 +22,7 @@ export interface MultiSelectOption {
   value: string;
   label: string;
   description?: string;
+  group?: string;
 }
 
 interface MultiSelectProps {
@@ -61,6 +62,60 @@ export function MultiSelect({
   const selectedOptions = options.filter((option) =>
     selected.includes(option.value)
   );
+
+  const groups = React.useMemo(() => {
+    const map = new Map<string, MultiSelectOption[]>();
+    for (const option of options) {
+      const key = option.group ?? "";
+      if (!map.has(key)) map.set(key, []);
+      map.get(key)!.push(option);
+    }
+    return [...map.entries()];
+  }, [options]);
+
+  const setGroupSelected = (
+    groupOptions: MultiSelectOption[],
+    checked: boolean
+  ) => {
+    const values = groupOptions.map((option) => option.value);
+    onChange(
+      checked
+        ? [...new Set([...selected, ...values])]
+        : selected.filter((v) => !values.includes(v))
+    );
+  };
+
+  const renderOption = (option: MultiSelectOption) => {
+    const isSelected = selected.includes(option.value);
+    return (
+      <CommandItem
+        key={option.value}
+        value={option.value}
+        keywords={[option.label, option.group ?? "", option.description ?? ""]}
+        onSelect={() => toggle(option.value)}
+      >
+        <Check
+          className={cn(
+            "mr-2 size-4 shrink-0",
+            isSelected ? "opacity-100" : "opacity-0"
+          )}
+        />
+        <div className="flex min-w-0 flex-col">
+          <span className="truncate" title={option.label}>
+            {option.label}
+          </span>
+          {option.description && (
+            <span
+              className="truncate text-xs text-muted-foreground"
+              title={option.description}
+            >
+              {option.description}
+            </span>
+          )}
+        </div>
+      </CommandItem>
+    );
+  };
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -114,41 +169,71 @@ export function MultiSelect({
         </Button>
       </PopoverTrigger>
       <PopoverContent
-        className="flex w-[--radix-popover-trigger-width] max-w-sm flex-col overflow-hidden p-0 max-h-80"
+        className="flex w-[--radix-popover-trigger-width] max-w-lg flex-col overflow-hidden p-0 max-h-96"
         onWheel={(e) => e.stopPropagation()}
       >
         <Command className="flex h-full flex-col overflow-hidden">
           <CommandInput placeholder={searchPlaceholder} />
-          <CommandList className="flex-1 overflow-y-auto">
+          <CommandList className="max-h-none flex-1 overflow-y-auto">
             <CommandEmpty>{emptyText}</CommandEmpty>
-            <CommandGroup>
-              {options.map((option) => {
-                const isSelected = selected.includes(option.value);
-                return (
-                  <CommandItem
-                    key={option.value}
-                    value={option.value}
-                    onSelect={() => toggle(option.value)}
-                  >
-                    <Check
-                      className={cn(
-                        "mr-2 size-4",
-                        isSelected ? "opacity-100" : "opacity-0"
-                      )}
-                    />
-                    <div className="flex flex-col">
-                      <span className="break-words">{option.label}</span>
-                      {option.description && (
-                        <span className="break-words text-xs text-muted-foreground">
-                          {option.description}
+            {groups.map(([groupName, groupOptions]) => {
+              const allSelected = groupOptions.every((option) =>
+                selected.includes(option.value)
+              );
+              return (
+                <CommandGroup
+                  key={groupName}
+                  heading={
+                    groupName ? (
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="truncate" title={groupName}>
+                          {groupName}
                         </span>
-                      )}
-                    </div>
-                  </CommandItem>
-                );
-              })}
-            </CommandGroup>
+                        <span
+                          role="button"
+                          tabIndex={0}
+                          onClick={() =>
+                            setGroupSelected(groupOptions, !allSelected)
+                          }
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter" || e.key === " ") {
+                              e.preventDefault();
+                              setGroupSelected(groupOptions, !allSelected);
+                            }
+                          }}
+                          className="shrink-0 cursor-pointer text-primary hover:underline"
+                        >
+                          {allSelected ? "取消全选" : "全选"}
+                        </span>
+                      </div>
+                    ) : undefined
+                  }
+                >
+                  {groupOptions.map(renderOption)}
+                </CommandGroup>
+              );
+            })}
           </CommandList>
+          <div className="flex items-center justify-between border-t px-3 py-1.5 text-xs text-muted-foreground">
+            <span>已选 {selected.length} 项</span>
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                className="hover:text-foreground"
+                onClick={() => onChange(options.map((option) => option.value))}
+              >
+                全选
+              </button>
+              <button
+                type="button"
+                className="hover:text-foreground disabled:pointer-events-none disabled:opacity-50"
+                disabled={selected.length === 0}
+                onClick={() => onChange([])}
+              >
+                清空
+              </button>
+            </div>
+          </div>
         </Command>
       </PopoverContent>
     </Popover>

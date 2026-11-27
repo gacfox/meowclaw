@@ -32,6 +32,7 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { MultiSelect } from "@/components/ui/multi-select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Plus, Pencil, Trash2, Copy, FolderOpen, Camera, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 
@@ -118,9 +119,11 @@ export function AgentConfigPage() {
   const [editing, setEditing] = useState<AgentDTO | null>(null);
   const [form, setForm] = useState<AgentFormData>(emptyForm);
   const [saving, setSaving] = useState(false);
+  const [activeTab, setActiveTab] = useState("basic");
 
   const openCreate = () => {
     setEditing(null);
+    setActiveTab("basic");
     setForm({
       ...emptyForm,
       enabledTools: tools.map((tool) => tool.name),
@@ -130,6 +133,7 @@ export function AgentConfigPage() {
 
   const openEdit = (agent: AgentDTO) => {
     setEditing(agent);
+    setActiveTab("basic");
     setForm({
       name: agent.name,
       persona: agent.persona ?? "",
@@ -149,10 +153,12 @@ export function AgentConfigPage() {
 
   const handleSave = async () => {
     if (!form.llmId) {
+      setActiveTab("models");
       toast.error("请选择Agent执行LLM");
       return;
     }
     if (!form.secondaryLlmId) {
+      setActiveTab("models");
       toast.error("请选择辅助LLM");
       return;
     }
@@ -354,167 +360,188 @@ export function AgentConfigPage() {
 
       {/* Create / Edit Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-lg">
+        <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-2xl">
           <DialogHeader>
             <DialogTitle>{editing ? "编辑智能体" : "添加智能体"}</DialogTitle>
           </DialogHeader>
-          <div className="flex flex-col gap-4">
-            <div className="flex flex-col gap-2">
-              <Label>智能体名称</Label>
-              <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
-            </div>
-            <div className="flex flex-col gap-2">
-              <Label>人设</Label>
-              <Textarea
-                value={form.persona}
-                onChange={(e) => setForm({ ...form, persona: e.target.value })}
-                rows={5}
-                placeholder="描述该智能体的角色与风格..."
-              />
-            </div>
-            <div className="flex flex-col gap-2">
-              <Label>启用内置工具</Label>
-              <MultiSelect
-                options={tools.map((tool) => ({ value: tool.name, label: tool.name, description: tool.description }))}
-                selected={form.enabledTools}
-                onChange={(selected) => setForm((prev) => ({ ...prev, enabledTools: selected }))}
-                placeholder="选择内置工具"
-                searchPlaceholder="搜索内置工具"
-                emptyText="无可用内置工具"
-              />
-            </div>
-            <div className="flex flex-col gap-2">
-              <Label>启用 MCP 工具</Label>
-              {mcpTools.length === 0 ? (
-                <p className="text-xs text-muted-foreground">暂无可用的 MCP 工具，请先在「MCP 服务」中启用服务</p>
-              ) : (
-                <MultiSelect
-                  options={mcpTools.map((tool) => ({ value: tool.name, label: tool.name, description: tool.description || undefined }))}
-                  selected={form.enabledMcpTools}
-                  onChange={(selected) => setForm((prev) => ({ ...prev, enabledMcpTools: selected }))}
-                  placeholder="选择 MCP 工具"
-                  searchPlaceholder="搜索 MCP 工具"
-                  emptyText="无可用 MCP 工具"
-                />
-              )}
-            </div>
-            <div className="flex flex-col gap-2">
-              <Label>Agent执行LLM</Label>
-              <Select
-                value={form.llmId}
-                onValueChange={(v) =>
-                  setForm((prev) => ({
-                    ...prev,
-                    llmId: v,
-                    secondaryLlmId: prev.secondaryLlmId || v,
-                  }))
-                }
-              >
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="选择 LLM" />
-                </SelectTrigger>
-                <SelectContent>
-                  {llms.map((llm) => (
-                    <SelectItem key={llm.id} value={llm.id.toString()}>
-                      {llm.name} ({llm.model})
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="flex flex-col gap-2">
-              <Label>辅助LLM</Label>
-              <Select
-                value={form.secondaryLlmId}
-                onValueChange={(v) => setForm({ ...form, secondaryLlmId: v })}
-              >
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="选择辅助 LLM" />
-                </SelectTrigger>
-                <SelectContent>
-                  {llms.map((llm) => (
-                    <SelectItem key={llm.id} value={llm.id.toString()}>
-                      {llm.name} ({llm.model})
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="flex flex-col gap-2">
-              <Label>向量嵌入模型（可选）</Label>
-              <Select
-                value={form.embeddingModelId}
-                onValueChange={(v) => setForm({ ...form, embeddingModelId: v })}
-              >
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="不使用向量检索（仅传统检索）" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">不使用向量检索</SelectItem>
-                  {embeddingModels.map((em) => (
-                    <SelectItem key={em.id} value={em.id.toString()}>
-                      {em.name} ({em.model}, {em.dimensions}维)
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="flex flex-col gap-2">
-              <div className="flex items-center justify-between">
-                <Label htmlFor="aggressive-memory-recall">激进记忆召回</Label>
-                <Switch
-                  id="aggressive-memory-recall"
-                  checked={form.aggressiveMemoryRecall}
-                  onCheckedChange={(checked) => setForm({ ...form, aggressiveMemoryRecall: checked })}
+          <Tabs value={activeTab} onValueChange={setActiveTab}>
+            <TabsList className="grid w-full grid-cols-4">
+              <TabsTrigger value="basic">基本</TabsTrigger>
+              <TabsTrigger value="models">模型</TabsTrigger>
+              <TabsTrigger value="tools">工具</TabsTrigger>
+              <TabsTrigger value="advanced">高级</TabsTrigger>
+            </TabsList>
+            <TabsContent value="basic" className="flex flex-col gap-4 pt-2">
+              <div className="flex flex-col gap-2">
+                <Label>智能体名称</Label>
+                <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+              </div>
+              <div className="flex flex-col gap-2">
+                <Label>人设</Label>
+                <Textarea
+                  value={form.persona}
+                  onChange={(e) => setForm({ ...form, persona: e.target.value })}
+                  rows={8}
+                  placeholder="描述该智能体的角色与风格..."
                 />
               </div>
-              <p className="text-xs text-muted-foreground">
-                开启后，每次对话都会自动用您的输入召回相关记忆并注入提示词，无需智能体主动调用 memory_recall 工具
-              </p>
-            </div>
-            <div className="flex items-center justify-between">
-              <Label htmlFor="allow-as-subagent">允许作为子智能体</Label>
-              <Switch
-                id="allow-as-subagent"
-                checked={form.allowAsSubagent}
-                onCheckedChange={(checked) => setForm({ ...form, allowAsSubagent: checked })}
-              />
-            </div>
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="subagent-description">子智能体描述</Label>
-              <Textarea
-                id="subagent-description"
-                value={form.subagentDescription}
-                onChange={(e) => setForm({ ...form, subagentDescription: e.target.value })}
-                rows={3}
-                placeholder="描述该智能体擅长的任务，供主智能体编排调度时参考..."
-              />
-              <p className="text-xs text-muted-foreground">
-                作为专业子智能体被委派时，该描述会注入主智能体的系统提示词；未开启「允许作为子智能体」时不生效
-              </p>
-            </div>
-            <div className="flex flex-col gap-2">
-              <Label>专业子智能体</Label>
-              <MultiSelect
-                options={agents
-                  .filter((agent) => agent.allowAsSubagent && agent.id !== editing?.id)
-                  .map((agent) => ({ value: agent.id.toString(), label: agent.name }))}
-                selected={form.professionalSubagentIds}
-                onChange={(selected) => setForm((prev) => ({ ...prev, professionalSubagentIds: selected }))}
-                placeholder="选择专业子智能体"
-                searchPlaceholder="搜索专业子智能体"
-                emptyText="无可用专业子智能体"
-              />
-            </div>
-            <div className="flex flex-col gap-2">
-              <Label>工作区路径</Label>
-              <Input
-                value={form.workspaceFolder}
-                onChange={(e) => setForm({ ...form, workspaceFolder: e.target.value })}
-                placeholder="留空则自动生成"
-              />
-            </div>
-          </div>
+            </TabsContent>
+            <TabsContent value="models" className="grid gap-4 pt-2 sm:grid-cols-2">
+              <div className="flex flex-col gap-2">
+                <Label>Agent执行LLM</Label>
+                <Select
+                  value={form.llmId}
+                  onValueChange={(v) =>
+                    setForm((prev) => ({
+                      ...prev,
+                      llmId: v,
+                      secondaryLlmId: prev.secondaryLlmId || v,
+                    }))
+                  }
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="选择 LLM" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {llms.map((llm) => (
+                      <SelectItem key={llm.id} value={llm.id.toString()}>
+                        {llm.name} ({llm.model})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex flex-col gap-2">
+                <Label>辅助LLM</Label>
+                <Select
+                  value={form.secondaryLlmId}
+                  onValueChange={(v) => setForm({ ...form, secondaryLlmId: v })}
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="选择辅助 LLM" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {llms.map((llm) => (
+                      <SelectItem key={llm.id} value={llm.id.toString()}>
+                        {llm.name} ({llm.model})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex flex-col gap-2">
+                <Label>向量嵌入模型（可选）</Label>
+                <Select
+                  value={form.embeddingModelId}
+                  onValueChange={(v) => setForm({ ...form, embeddingModelId: v })}
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="不使用向量检索（仅传统检索）" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">不使用向量检索</SelectItem>
+                    {embeddingModels.map((em) => (
+                      <SelectItem key={em.id} value={em.id.toString()}>
+                        {em.name} ({em.model}, {em.dimensions}维)
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </TabsContent>
+            <TabsContent value="tools" className="flex flex-col gap-4 pt-2">
+              <div className="flex flex-col gap-2">
+                <Label>启用内置工具</Label>
+                <MultiSelect
+                  options={tools.map((tool) => ({ value: tool.name, label: tool.name, description: tool.description }))}
+                  selected={form.enabledTools}
+                  onChange={(selected) => setForm((prev) => ({ ...prev, enabledTools: selected }))}
+                  placeholder="选择内置工具"
+                  searchPlaceholder="搜索内置工具"
+                  emptyText="无可用内置工具"
+                />
+              </div>
+              <div className="flex flex-col gap-2">
+                <Label>启用 MCP 工具</Label>
+                {mcpTools.length === 0 ? (
+                  <p className="text-xs text-muted-foreground">暂无可用的 MCP 工具，请先在「MCP 服务」中启用服务</p>
+                ) : (
+                  <MultiSelect
+                    options={mcpTools.map((tool) => ({
+                      value: tool.name,
+                      label: tool.name.startsWith(`${tool.serviceName}__`)
+                        ? tool.name.slice(tool.serviceName.length + 2)
+                        : tool.name,
+                      description: tool.description || undefined,
+                      group: tool.serviceName,
+                    }))}
+                    selected={form.enabledMcpTools}
+                    onChange={(selected) => setForm((prev) => ({ ...prev, enabledMcpTools: selected }))}
+                    placeholder="选择 MCP 工具"
+                    searchPlaceholder="搜索 MCP 工具"
+                    emptyText="无可用 MCP 工具"
+                  />
+                )}
+              </div>
+            </TabsContent>
+            <TabsContent value="advanced" className="flex flex-col gap-4 pt-2">
+              <div className="flex flex-col gap-2">
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="aggressive-memory-recall">激进记忆召回</Label>
+                  <Switch
+                    id="aggressive-memory-recall"
+                    checked={form.aggressiveMemoryRecall}
+                    onCheckedChange={(checked) => setForm({ ...form, aggressiveMemoryRecall: checked })}
+                  />
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  开启后，每次对话都会自动用您的输入召回相关记忆并注入提示词，无需智能体主动调用 memory_recall 工具
+                </p>
+              </div>
+              <div className="flex items-center justify-between">
+                <Label htmlFor="allow-as-subagent">允许作为子智能体</Label>
+                <Switch
+                  id="allow-as-subagent"
+                  checked={form.allowAsSubagent}
+                  onCheckedChange={(checked) => setForm({ ...form, allowAsSubagent: checked })}
+                />
+              </div>
+              <div className="flex flex-col gap-2">
+                <Label htmlFor="subagent-description">子智能体描述</Label>
+                <Textarea
+                  id="subagent-description"
+                  value={form.subagentDescription}
+                  onChange={(e) => setForm({ ...form, subagentDescription: e.target.value })}
+                  rows={3}
+                  placeholder="描述该智能体擅长的任务，供主智能体编排调度时参考..."
+                />
+                <p className="text-xs text-muted-foreground">
+                  作为专业子智能体被委派时，该描述会注入主智能体的系统提示词；未开启「允许作为子智能体」时不生效
+                </p>
+              </div>
+              <div className="flex flex-col gap-2">
+                <Label>专业子智能体</Label>
+                <MultiSelect
+                  options={agents
+                    .filter((agent) => agent.allowAsSubagent && agent.id !== editing?.id)
+                    .map((agent) => ({ value: agent.id.toString(), label: agent.name }))}
+                  selected={form.professionalSubagentIds}
+                  onChange={(selected) => setForm((prev) => ({ ...prev, professionalSubagentIds: selected }))}
+                  placeholder="选择专业子智能体"
+                  searchPlaceholder="搜索专业子智能体"
+                  emptyText="无可用专业子智能体"
+                />
+              </div>
+              <div className="flex flex-col gap-2">
+                <Label>工作区路径</Label>
+                <Input
+                  value={form.workspaceFolder}
+                  onChange={(e) => setForm({ ...form, workspaceFolder: e.target.value })}
+                  placeholder="留空则自动生成"
+                />
+              </div>
+            </TabsContent>
+          </Tabs>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDialogOpen(false)}>取消</Button>
             <Button onClick={handleSave} disabled={saving || !form.name}>
