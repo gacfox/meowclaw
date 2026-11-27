@@ -25,13 +25,13 @@ class ImageToolResultTest {
     void buildAndParseRoundTripsWindowsPath() {
         String content = imageToolResult.build(Path.of("H:\\workspace\\cat.png"), "image/png", 12345);
 
-        ImageToolResult.ImageRef ref = imageToolResult.parse(content);
+        ImageRef ref = imageToolResult.parse(content);
 
         assertThat(ref).isNotNull();
-        assertThat(ref.path()).isEqualTo("H:\\workspace\\cat.png");
-        assertThat(ref.mimeType()).isEqualTo("image/png");
-        assertThat(ref.bytes()).isEqualTo(12345L);
-        assertThat(ref.note()).contains("图片文件已读取");
+        assertThat(ref.getPath()).isEqualTo("H:\\workspace\\cat.png");
+        assertThat(ref.getMimeType()).isEqualTo("image/png");
+        assertThat(ref.getBytes()).isEqualTo(12345L);
+        assertThat(ref.getNote()).contains("图片文件已读取");
     }
 
     @Test

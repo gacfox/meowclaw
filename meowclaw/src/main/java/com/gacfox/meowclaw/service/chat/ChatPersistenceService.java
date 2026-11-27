@@ -1,0 +1,168 @@
+package com.gacfox.meowclaw.service.chat;
+
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.gacfox.meowclaw.dto.chat.ConversationDTO;
+import com.gacfox.meowclaw.entity.ChatEvent;
+import com.gacfox.meowclaw.entity.ChatEventBatch;
+import com.gacfox.meowclaw.entity.Message;
+import com.gacfox.meowclaw.repository.ChatEventBatchRepository;
+import com.gacfox.meowclaw.repository.ChatEventRepository;
+import com.gacfox.meowclaw.repository.MessageRepository;
+import com.gacfox.meowclaw.util.JsonUtil;
+import com.gacfox.proarc.agentic.model.openai.ToolCall;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.util.List;
+
+@Slf4j
+@Service
+public class ChatPersistenceService {
+    private final ChatEventBatchRepository chatEventBatchRepository;
+    private final ChatEventRepository chatEventRepository;
+    private final MessageRepository messageRepository;
+    private final ConversationService conversationService;
+    private final JsonUtil jsonUtil;
+
+    @Autowired
+    public ChatPersistenceService(ChatEventBatchRepository chatEventBatchRepository,
+                                  ChatEventRepository chatEventRepository,
+                                  MessageRepository messageRepository,
+                                  ConversationService conversationService,
+                                  JsonUtil jsonUtil) {
+        this.chatEventBatchRepository = chatEventBatchRepository;
+        this.chatEventRepository = chatEventRepository;
+        this.messageRepository = messageRepository;
+        this.conversationService = conversationService;
+        this.jsonUtil = jsonUtil;
+    }
+
+    @Transactional
+    public ChatEventBatch createBatch(Long conversationId, String userContent, String attachmentsJson) {
+        ChatEventBatch batch = new ChatEventBatch();
+        batch.setConversationId(conversationId);
+        batch.setUserContent(userContent);
+        batch.setAttachments(attachmentsJson);
+        batch.setType("USER");
+        batch.setStatus("RUNNING");
+        batch.setCreatedAt(System.currentTimeMillis());
+        return chatEventBatchRepository.save(batch);
+    }
+
+    @Transactional
+    public void updatePromptContext(Long batchId, String promptContextJson) {
+        ChatEventBatch batch = chatEventBatchRepository.findById(batchId).orElseThrow();
+        batch.setPromptContextJson(promptContextJson);
+        chatEventBatchRepository.save(batch);
+    }
+
+    @Transactional
+    public ChatEventBatch createContextCompressionBatch(Long conversationId, String content) {
+        ChatEventBatch batch = new ChatEventBatch();
+        batch.setConversationId(conversationId);
+        batch.setUserContent("");
+        batch.setType("CONTEXT_COMPACTION");
+        batch.setStatus("COMPLETED");
+        batch.setCreatedAt(System.currentTimeMillis());
+        batch.setCompletedAt(batch.getCreatedAt());
+        batch = chatEventBatchRepository.save(batch);
+        saveChatEvent(batch.getId(), 0, "context_compression", content, null, null, null);
+        return batch;
+    }
+
+    @Transactional
+    public Long saveChatEvent(Long batchId, int eventOrder, String type, String content,
+                              String toolName, String toolCallId, String toolArguments) {
+        ChatEvent chatEvent = new ChatEvent();
+        chatEvent.setBatchId(batchId);
+        chatEvent.setEventOrder(eventOrder);
+        chatEvent.setType(type);
+        chatEvent.setContent(content);
+        chatEvent.setToolName(toolName);
+        chatEvent.setToolCallId(toolCallId);
+        chatEvent.setToolArguments(toolArguments);
+        chatEvent.setCreatedAt(System.currentTimeMillis());
+        return chatEventRepository.save(chatEvent).getId();
+    }
+
+    @Transactional
+    public void updateChatEventContent(Long eventId, String content) {
+        ChatEvent chatEvent = chatEventRepository.findById(eventId).orElseThrow();
+        chatEvent.setContent(content);
+        chatEventRepository.save(chatEvent);
+    }
+
+    @Transactional
+    public void completeBatch(Long batchId, Long conversationId,
+                              List<com.gacfox.proarc.agentic.model.openai.Message> newMessages,
+                              long inputTokens, long outputTokens, Long cachedTokens,
+                              Double outputTokensPerSecond) {
+        for (var msg : newMessages) {
+            saveContextMessage(batchId, conversationId, msg);
+        }
+        ChatEventBatch batch = chatEventBatchRepository.findById(batchId).orElseThrow();
+        batch.setStatus("COMPLETED");
+        batch.setCompletedAt(System.currentTimeMillis());
+        batch.setInputTokens(inputTokens);
+        batch.setOutputTokens(outputTokens);
+        batch.setCachedTokens(cachedTokens);
+        batch.setOutputTokensPerSecond(outputTokensPerSecond);
+        chatEventBatchRepository.save(batch);
+        ConversationDTO ignored = conversationService.touch(conversationId);
+    }
+
+    @Transactional
+    public void failBatch(Long batchId, String errorMessage) {
+        ChatEventBatch batch = chatEventBatchRepository.findById(batchId).orElseThrow();
+        batch.setStatus("ERROR");
+        batch.setErrorMessage(errorMessage);
+        batch.setCompletedAt(System.currentTimeMillis());
+        chatEventBatchRepository.save(batch);
+    }
+
+    private void saveContextMessage(Long batchId, Long conversationId,
+                                    com.gacfox.proarc.agentic.model.openai.Message msg) {
+        Message entity = new Message();
+        entity.setBatchId(batchId);
+        entity.setConversationId(conversationId);
+        entity.setRole(msg.getRole());
+        entity.setContent(msg.getContent() != null ? msg.getContent().toString() : "");
+        entity.setReasoningContent(msg.getReasoningContent());
+        entity.setToolCallId(msg.getToolCallId());
+        if (msg.getToolCalls() != null && !msg.getToolCalls().isEmpty()) {
+            try {
+                entity.setToolCallsJson(jsonUtil.dump(msg.getToolCalls()));
+            } catch (Exception e) {
+                log.warn("Failed to serialize tool calls", e);
+            }
+        }
+        entity.setCreatedAt(System.currentTimeMillis());
+        messageRepository.save(entity);
+    }
+
+    @Transactional(readOnly = true)
+    public com.gacfox.proarc.agentic.model.openai.Message toProarcMessage(Message entity) {
+        var builder = com.gacfox.proarc.agentic.model.openai.Message.builder()
+                .role(entity.getRole())
+                .content(entity.getContent());
+        if (entity.getReasoningContent() != null) {
+            builder.reasoningContent(entity.getReasoningContent());
+        }
+        if (entity.getToolCallId() != null) {
+            builder.toolCallId(entity.getToolCallId());
+        }
+        if (entity.getToolCallsJson() != null) {
+            try {
+                List<ToolCall> toolCalls = jsonUtil.load(
+                        entity.getToolCallsJson(), new TypeReference<>() {
+                        });
+                builder.toolCalls(toolCalls);
+            } catch (Exception e) {
+                log.warn("Failed to deserialize tool calls for message {}", entity.getId(), e);
+            }
+        }
+        return builder.build();
+    }
+}

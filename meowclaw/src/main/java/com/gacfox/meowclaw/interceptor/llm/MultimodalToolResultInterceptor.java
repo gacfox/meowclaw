@@ -1,7 +1,9 @@
 package com.gacfox.meowclaw.interceptor.llm;
 
-import com.gacfox.meowclaw.service.ImagePreprocessingService;
+import com.gacfox.meowclaw.service.chat.ImagePreprocessingService;
 import com.gacfox.meowclaw.tool.ImageToolResult;
+import com.gacfox.meowclaw.tool.ImageRef;
+import com.gacfox.meowclaw.service.chat.ProcessedImage;
 import com.gacfox.proarc.agentic.client.interceptor.LlmInterceptor;
 import com.gacfox.proarc.agentic.client.interceptor.LlmInterceptorChain;
 import com.gacfox.proarc.agentic.model.openai.Message;
@@ -12,11 +14,7 @@ import lombok.extern.slf4j.Slf4j;
 import reactor.core.publisher.Flux;
 
 import java.nio.file.Path;
-import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 
 /**
  * 多模态请求拦截器：请求发出前把工具结果中的图片标记物化为图片部件，
@@ -55,30 +53,30 @@ public class MultimodalToolResultInterceptor implements LlmInterceptor {
                 && modelInfo.getCapabilities().contains(ModelInfo.CAPABILITY_VISION);
         List<Message> expanded = new ArrayList<>(messages.size() + 2);
         for (Message message : messages) {
-            ImageToolResult.ImageRef ref = Message.ROLE_TOOL.equals(message.getRole())
+            ImageRef ref = Message.ROLE_TOOL.equals(message.getRole())
                     ? imageToolResult.parse(message.getContent()) : null;
             if (ref == null) {
                 expanded.add(message);
                 continue;
             }
             if (!visionSupported) {
-                expanded.add(toolText(message, ref.note() + "\n（当前模型不支持视觉能力，图片未携带）"));
+                expanded.add(toolText(message, ref.getNote() + "\n（当前模型不支持视觉能力，图片未携带）"));
                 continue;
             }
             try {
-                ImagePreprocessingService.ProcessedImage image = imagePreprocessingService.process(
-                        Path.of(ref.path()), ref.mimeType());
+                ProcessedImage image = imagePreprocessingService.process(
+                        Path.of(ref.getPath()), ref.getMimeType());
                 String dataUrl = image.toDataUrl();
-                expanded.add(toolText(message, ref.note()));
+                expanded.add(toolText(message, ref.getNote()));
                 expanded.add(Message.builder()
                         .role(Message.ROLE_USER)
                         .content(List.of(
-                                Map.of("type", "text", "text", "[图片内容: " + ref.path() + "]"),
+                                Map.of("type", "text", "text", "[图片内容: " + ref.getPath() + "]"),
                                 Map.of("type", "image_url", "image_url", Map.of("url", dataUrl))))
                         .build());
             } catch (Exception e) {
-                log.warn("图片物化失败，降级为文本: {}", ref.path(), e);
-                expanded.add(toolText(message, ref.note() + "\n（图片读取失败，未携带: " + e.getMessage() + "）"));
+                log.warn("图片物化失败，降级为文本: {}", ref.getPath(), e);
+                expanded.add(toolText(message, ref.getNote() + "\n（图片读取失败，未携带: " + e.getMessage() + "）"));
             }
         }
         request.setMessages(limitImagePayload(expanded));
@@ -126,7 +124,7 @@ public class MultimodalToolResultInterceptor implements LlmInterceptor {
     }
 
     private Message copyWithoutDroppedImages(Message message, int messageIndex,
-                                              Set<ImagePartLocation> retained) {
+                                             Set<ImagePartLocation> retained) {
         if (!(message.getContent() instanceof List<?> parts)) {
             return message;
         }
@@ -156,8 +154,8 @@ public class MultimodalToolResultInterceptor implements LlmInterceptor {
     }
 
     private long base64Length(Object part) {
-        if (!(part instanceof Map<?,?> map) || !"image_url".equals(map.get("type"))
-                || !(map.get("image_url") instanceof Map<?,?> imageUrl)
+        if (!(part instanceof Map<?, ?> map) || !"image_url".equals(map.get("type"))
+                || !(map.get("image_url") instanceof Map<?, ?> imageUrl)
                 || !(imageUrl.get("url") instanceof String url)
                 || !url.startsWith("data:image/")) {
             return -1;

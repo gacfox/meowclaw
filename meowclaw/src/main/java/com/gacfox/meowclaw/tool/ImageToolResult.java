@@ -26,17 +26,6 @@ public class ImageToolResult {
             "webp", "image/webp",
             "gif", "image/gif");
 
-    /**
-     * 标记内容
-     *
-     * @param path     图片绝对路径
-     * @param mimeType 图片MIME类型
-     * @param bytes    文件字节数
-     * @param note     展示给模型与界面的说明文本
-     */
-    public record ImageRef(String path, String mimeType, long bytes, String note) {
-    }
-
     private final ObjectMapper objectMapper;
     private final JsonUtil jsonUtil;
 
@@ -103,6 +92,6 @@ public class ImageToolResult {
         if (ref == null) {
             return content instanceof String text ? text : "";
         }
-        return "历史图片不再随请求携带（" + ref.path() + "），如需查看请重新使用 read 工具读取。";
+        return "历史图片不再随请求携带（" + ref.getPath() + "），如需查看请重新使用 read 工具读取。";
     }
 }

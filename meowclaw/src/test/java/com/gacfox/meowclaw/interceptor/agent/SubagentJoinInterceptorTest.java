@@ -1,6 +1,7 @@
 package com.gacfox.meowclaw.interceptor.agent;
 
-import com.gacfox.meowclaw.service.SubagentRegistry;
+import com.gacfox.meowclaw.service.chat.SubagentRegistry;
+import com.gacfox.meowclaw.service.chat.ChildHandle;
 import com.gacfox.proarc.agentic.agent.AgentContext;
 import com.gacfox.proarc.agentic.agent.AgentLoopResult;
 import org.junit.jupiter.api.Test;
@@ -42,8 +43,8 @@ class SubagentJoinInterceptorTest {
     @Test
     void injectsAggregatedResultsWhenAllChildrenComplete() {
         SubagentRegistry registry = new SubagentRegistry();
-        registry.register(1L, new SubagentRegistry.ChildHandle(11L, 100L, "任务一", CompletableFuture.completedFuture("结果A")));
-        registry.register(1L, new SubagentRegistry.ChildHandle(12L, 101L, "任务二", CompletableFuture.completedFuture("结果B")));
+        registry.register(1L, new ChildHandle(11L, 100L, "任务一", CompletableFuture.completedFuture("结果A")));
+        registry.register(1L, new ChildHandle(12L, 101L, "任务二", CompletableFuture.completedFuture("结果B")));
         SubagentJoinInterceptor interceptor = new SubagentJoinInterceptor(registry);
         AgentContext ctx = contextWithConversation(1L);
         AtomicBoolean proceeded = new AtomicBoolean();
@@ -63,7 +64,7 @@ class SubagentJoinInterceptorTest {
     @Test
     void stopsWaitingWhenStopRequested() {
         SubagentRegistry registry = new SubagentRegistry();
-        registry.register(1L, new SubagentRegistry.ChildHandle(11L, null, "任务", new CompletableFuture<>()));
+        registry.register(1L, new ChildHandle(11L, null, "任务", new CompletableFuture<>()));
         SubagentJoinInterceptor interceptor = new SubagentJoinInterceptor(registry);
         AgentContext ctx = contextWithConversation(1L);
         ctx.requestStop();
@@ -82,7 +83,7 @@ class SubagentJoinInterceptorTest {
     void waitsUntilChildrenComplete() throws Exception {
         SubagentRegistry registry = new SubagentRegistry();
         CompletableFuture<String> pending = new CompletableFuture<>();
-        registry.register(1L, new SubagentRegistry.ChildHandle(11L, null, "任务", pending));
+        registry.register(1L, new ChildHandle(11L, null, "任务", pending));
         SubagentJoinInterceptor interceptor = new SubagentJoinInterceptor(registry);
         AgentContext ctx = contextWithConversation(1L);
         AtomicBoolean proceeded = new AtomicBoolean();

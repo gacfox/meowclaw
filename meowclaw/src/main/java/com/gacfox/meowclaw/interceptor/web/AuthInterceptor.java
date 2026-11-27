@@ -1,7 +1,7 @@
 package com.gacfox.meowclaw.interceptor.web;
 
-import com.gacfox.meowclaw.dto.ApiResult;
-import com.gacfox.meowclaw.dto.UserDTO;
+import com.gacfox.meowclaw.dto.common.ApiResult;
+import com.gacfox.meowclaw.dto.user.UserDTO;
 import com.gacfox.meowclaw.util.JsonUtil;
 import com.gacfox.meowclaw.util.JwtUtil;
 import jakarta.servlet.http.HttpServletRequest;

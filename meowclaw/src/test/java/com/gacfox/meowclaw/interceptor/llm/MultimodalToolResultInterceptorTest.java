@@ -1,9 +1,10 @@
 package com.gacfox.meowclaw.interceptor.llm;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.gacfox.meowclaw.service.ImagePreprocessingService;
+import com.gacfox.meowclaw.service.chat.ImagePreprocessingService;
 import com.gacfox.meowclaw.tool.ImageToolResult;
 import com.gacfox.meowclaw.util.JsonUtil;
+import com.gacfox.meowclaw.service.chat.ProcessedImage;
 import com.gacfox.proarc.agentic.client.interceptor.LlmInterceptorChain;
 import com.gacfox.proarc.agentic.model.openai.Message;
 import com.gacfox.proarc.agentic.model.openai.ModelInfo;
@@ -169,7 +170,7 @@ class MultimodalToolResultInterceptorTest {
     void appliesBudgetAcrossUploadedAndReadImages() throws Exception {
         ImagePreprocessingService preprocessing = mock(ImagePreprocessingService.class);
         when(preprocessing.process(any(), any())).thenReturn(
-                new ImagePreprocessingService.ProcessedImage(new byte[3_000_000], "image/png"));
+                new ProcessedImage(new byte[3_000_000], "image/png"));
         MultimodalToolResultInterceptor budgetInterceptor =
                 new MultimodalToolResultInterceptor(imageToolResult, preprocessing);
         Message uploaded = Message.builder().role(Message.ROLE_USER)
@@ -208,7 +209,7 @@ class MultimodalToolResultInterceptorTest {
     }
 
     private static boolean isImagePart(Object part) {
-        return part instanceof Map<?,?> map && "image_url".equals(map.get("type"));
+        return part instanceof Map<?, ?> map && "image_url".equals(map.get("type"));
     }
 
     private void writePng(Path path) throws Exception {

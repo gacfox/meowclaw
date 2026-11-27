@@ -1,7 +1,7 @@
 package com.gacfox.meowclaw.interceptor.llm;
 
-import com.gacfox.meowclaw.service.LlmCallLogService;
-import com.gacfox.meowclaw.service.TokenUsageService;
+import com.gacfox.meowclaw.service.observability.LlmCallLogService;
+import com.gacfox.meowclaw.service.observability.TokenUsageService;
 import com.gacfox.meowclaw.util.JsonUtil;
 import com.gacfox.proarc.agentic.client.interceptor.LlmInterceptor;
 import com.gacfox.proarc.agentic.client.interceptor.LlmInterceptorChain;

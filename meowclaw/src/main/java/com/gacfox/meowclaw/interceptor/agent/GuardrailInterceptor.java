@@ -3,8 +3,9 @@ package com.gacfox.meowclaw.interceptor.agent;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.gacfox.meowclaw.entity.GuardrailPolicy;
-import com.gacfox.meowclaw.service.GuardrailPolicyEngine;
-import com.gacfox.meowclaw.service.GuardrailPolicyService;
+import com.gacfox.meowclaw.service.guardrail.GuardrailPolicyEngine;
+import com.gacfox.meowclaw.service.guardrail.GuardrailPolicyService;
+import com.gacfox.meowclaw.service.guardrail.Decision;
 import com.gacfox.proarc.agentic.agent.ToolInvocation;
 import com.gacfox.proarc.agentic.agent.interceptor.ToolCallChain;
 import com.gacfox.proarc.agentic.agent.interceptor.ToolCallInterceptor;
@@ -50,7 +51,7 @@ public class GuardrailInterceptor implements ToolCallInterceptor {
         Object conversationId = invocation.getAgentContext().getVariables().get("conversationId");
         Object cwd = invocation.getAgentContext().getVariables().get("cwd");
         GuardrailPolicy policy = guardrailPolicyService.resolvePolicy(((Number) conversationId).longValue());
-        GuardrailPolicyEngine.Decision decision = guardrailPolicyEngine.evaluate(
+        Decision decision = guardrailPolicyEngine.evaluate(
                 policy.getConfigJson(), toolName, extractPath(invocation.getArguments()),
                 cwd instanceof String s ? s : null);
 
@@ -59,7 +60,7 @@ public class GuardrailInterceptor implements ToolCallInterceptor {
         }
         if (decision.isAsk()) {
             log.info("工具调用等待用户审批: tool={}, conversationId={}, policy={}", toolName, conversationId, policy.getName());
-            ApprovalOutcome outcome = approvalHandler.await(invocation, policy.getName(), decision.matchedRuleIndex());
+            ApprovalOutcome outcome = approvalHandler.await(invocation, policy.getName(), decision.getMatchedRuleIndex());
             return switch (outcome) {
                 case APPROVED -> chain.proceed(invocation);
                 case REJECTED -> "The user rejected this tool call.";
@@ -67,7 +68,7 @@ public class GuardrailInterceptor implements ToolCallInterceptor {
             };
         }
         String denied = "Error: this tool call was denied by guardrail policy '" + policy.getName() + "'"
-                + (decision.matchedRuleIndex() >= 0 ? " (rule #" + (decision.matchedRuleIndex() + 1) + ")" : " (defaultDecision)");
+                + (decision.getMatchedRuleIndex() >= 0 ? " (rule #" + (decision.getMatchedRuleIndex() + 1) + ")" : " (defaultDecision)");
         log.info("工具调用被策略拒绝: tool={}, conversationId={}, {}", toolName, conversationId, denied);
         return denied;
     }

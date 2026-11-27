@@ -2,7 +2,7 @@ package com.gacfox.meowclaw.tool;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.gacfox.meowclaw.service.SubagentService;
+import com.gacfox.meowclaw.service.chat.SubagentService;
 import com.gacfox.proarc.agentic.agent.AgentContext;
 import com.gacfox.proarc.agentic.tool.ToolRegistry;
 import org.junit.jupiter.api.Test;
@@ -59,8 +59,8 @@ class SpawnSubagentToolTest {
         String result = tool.spawn(param("搜索资料", List.of("read", "grep")), parentContext(List.of("read", "grep", "spawn_subagent")));
 
         assertThat(result).isEqualTo("ok");
-        verify(subagentService).spawn(org.mockito.ArgumentMatchers.eq(1L), any(), org.mockito.ArgumentMatchers.eq("搜索资料"),
-                org.mockito.ArgumentMatchers.eq("测试子任务"), org.mockito.ArgumentMatchers.eq(List.of("read", "grep")));
+        verify(subagentService).spawn(eq(1L), any(), eq("搜索资料"),
+                eq("测试子任务"), eq(List.of("read", "grep")));
     }
 
     @Test

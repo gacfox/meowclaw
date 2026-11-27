@@ -1,6 +1,6 @@
 package com.gacfox.meowclaw.converter;
 
-import com.gacfox.meowclaw.dto.McpServiceDTO;
+import com.gacfox.meowclaw.dto.mcp.McpServiceDTO;
 import com.gacfox.meowclaw.entity.McpServiceConfig;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;

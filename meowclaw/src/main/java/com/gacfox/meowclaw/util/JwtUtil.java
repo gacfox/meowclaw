@@ -2,7 +2,7 @@ package com.gacfox.meowclaw.util;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.gacfox.meowclaw.dto.UserDTO;
+import com.gacfox.meowclaw.dto.user.UserDTO;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
 import org.springframework.beans.factory.annotation.Autowired;

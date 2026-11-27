@@ -1,6 +1,6 @@
 package com.gacfox.meowclaw.converter;
 
-import com.gacfox.meowclaw.dto.AgentDTO;
+import com.gacfox.meowclaw.dto.agent.AgentDTO;
 import com.gacfox.meowclaw.entity.Agent;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;

@@ -1,6 +1,7 @@
 package com.gacfox.meowclaw.tool;
 
-import com.gacfox.meowclaw.service.MemoryService;
+import com.gacfox.meowclaw.dto.memory.MemoryNodeDTO;
+import com.gacfox.meowclaw.service.memory.MemoryService;
 import com.gacfox.meowclaw.util.JsonUtil;
 import com.gacfox.proarc.agentic.agent.AgentContext;
 import com.gacfox.proarc.agentic.tool.AgenticTool;
@@ -39,7 +40,7 @@ public class MemoryTool {
     public String recall(@AgenticToolParam(name = "param", description = "召回参数") MemoryRecallParam param,
                          AgentContext ctx) {
         Long agentId = (Long) ctx.getVariables().get("agentId");
-        List<com.gacfox.meowclaw.dto.MemoryNodeDTO> nodes = memoryService.recall(agentId, param.getQuery(), param.getLimit());
+        List<MemoryNodeDTO> nodes = memoryService.recall(agentId, param.getQuery(), param.getLimit());
         return jsonUtil.dump(nodes);
     }
 }

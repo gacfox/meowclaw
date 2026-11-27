@@ -1,7 +1,7 @@
 package com.gacfox.meowclaw.tool;
 
 import com.gacfox.meowclaw.interceptor.agent.ToolCallIdStashInterceptor;
-import com.gacfox.meowclaw.service.SubagentService;
+import com.gacfox.meowclaw.service.chat.SubagentService;
 import com.gacfox.proarc.agentic.agent.AgentContext;
 import com.gacfox.proarc.agentic.tool.AgenticTool;
 import com.gacfox.proarc.agentic.tool.AgenticToolParam;

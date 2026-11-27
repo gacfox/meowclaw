@@ -1,6 +1,6 @@
 package com.gacfox.meowclaw.tool;
 
-import com.gacfox.meowclaw.service.EnvironmentVariableService;
+import com.gacfox.meowclaw.service.environment.EnvironmentVariableService;
 import com.gacfox.proarc.agentic.agent.AgentContext;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledOnOs;

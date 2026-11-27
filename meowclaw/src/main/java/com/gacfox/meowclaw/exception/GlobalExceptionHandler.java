@@ -1,6 +1,6 @@
 package com.gacfox.meowclaw.exception;
 
-import com.gacfox.meowclaw.dto.ApiResult;
+import com.gacfox.meowclaw.dto.common.ApiResult;
 import com.gacfox.meowclaw.util.ClientDisconnectUtil;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.extern.slf4j.Slf4j;

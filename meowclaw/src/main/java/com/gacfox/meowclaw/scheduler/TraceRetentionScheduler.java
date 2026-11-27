@@ -1,6 +1,6 @@
 package com.gacfox.meowclaw.scheduler;
 
-import com.gacfox.meowclaw.service.TraceRetentionService;
+import com.gacfox.meowclaw.service.observability.TraceRetentionService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.scheduling.annotation.Async;

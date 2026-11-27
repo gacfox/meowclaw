@@ -1,6 +1,6 @@
 package com.gacfox.meowclaw.converter;
 
-import com.gacfox.meowclaw.dto.UserDTO;
+import com.gacfox.meowclaw.dto.user.UserDTO;
 import com.gacfox.meowclaw.entity.User;
 import org.mapstruct.Mapper;
 

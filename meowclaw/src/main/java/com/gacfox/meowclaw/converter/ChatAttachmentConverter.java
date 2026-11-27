@@ -1,7 +1,7 @@
 package com.gacfox.meowclaw.converter;
 
 import com.fasterxml.jackson.core.type.TypeReference;
-import com.gacfox.meowclaw.dto.ChatAttachmentDTO;
+import com.gacfox.meowclaw.dto.chat.ChatAttachmentDTO;
 import com.gacfox.meowclaw.util.JsonUtil;
 import org.mapstruct.Named;
 import org.springframework.beans.factory.annotation.Autowired;

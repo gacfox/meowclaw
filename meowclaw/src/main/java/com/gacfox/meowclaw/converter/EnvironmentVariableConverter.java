@@ -1,6 +1,6 @@
 package com.gacfox.meowclaw.converter;
 
-import com.gacfox.meowclaw.dto.EnvironmentVariableDTO;
+import com.gacfox.meowclaw.dto.environment.EnvironmentVariableDTO;
 import com.gacfox.meowclaw.entity.EnvironmentVariable;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;

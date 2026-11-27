@@ -1,6 +1,6 @@
 package com.gacfox.meowclaw.converter;
 
-import com.gacfox.meowclaw.dto.ChatEventBatchDTO;
+import com.gacfox.meowclaw.dto.chat.ChatEventBatchDTO;
 import com.gacfox.meowclaw.entity.ChatEventBatch;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;

@@ -1,6 +1,6 @@
 package com.gacfox.meowclaw.converter;
 
-import com.gacfox.meowclaw.dto.ScheduledTaskDTO;
+import com.gacfox.meowclaw.dto.schedule.ScheduledTaskDTO;
 import com.gacfox.meowclaw.entity.ScheduledTask;
 import org.mapstruct.Mapper;
 
