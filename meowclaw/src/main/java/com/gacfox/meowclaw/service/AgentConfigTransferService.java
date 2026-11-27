@@ -704,6 +704,7 @@ public class AgentConfigTransferService {
         data.setEmbeddingModelId(entity.getEmbeddingModelId());
         data.setAggressiveMemoryRecall(entity.getAggressiveMemoryRecall());
         data.setAllowAsSubagent(entity.getAllowAsSubagent());
+        data.setSubagentDescription(entity.getSubagentDescription());
         data.setProfessionalSubagentIds(subagentRelationRepository.findByParentAgentId(entity.getId()).stream()
                 .map(AgentSubagentRelation::getSubagentId)
                 .toList());

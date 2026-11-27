@@ -18,6 +18,7 @@ export async function createAgent(data: {
   workspaceFolder?: string;
   aggressiveMemoryRecall?: boolean;
   allowAsSubagent?: boolean;
+  subagentDescription?: string;
   professionalSubagentIds?: number[];
 }): Promise<AgentDTO> {
   const res = await request<AgentDTO>("/api/agent", {
@@ -39,6 +40,7 @@ export async function updateAgent(id: number, data: {
   workspaceFolder?: string;
   aggressiveMemoryRecall?: boolean;
   allowAsSubagent?: boolean;
+  subagentDescription?: string;
   professionalSubagentIds?: number[];
 }): Promise<AgentDTO> {
   const res = await request<AgentDTO>(`/api/agent/${id}`, {

@@ -66,6 +66,7 @@ public class AgentService {
         agent.setEmbeddingModelId(req.getEmbeddingModelId());
         agent.setAggressiveMemoryRecall(Boolean.TRUE.equals(req.getAggressiveMemoryRecall()));
         agent.setAllowAsSubagent(Boolean.TRUE.equals(req.getAllowAsSubagent()));
+        agent.setSubagentDescription(req.getSubagentDescription());
         long now = System.currentTimeMillis();
         agent.setCreatedAt(now);
         agent.setUpdatedAt(now);
@@ -109,6 +110,7 @@ public class AgentService {
             if (!req.getAllowAsSubagent()) ensureNotReferencedAsSubagent(id);
             agent.setAllowAsSubagent(req.getAllowAsSubagent());
         }
+        if (req.getSubagentDescription() != null) agent.setSubagentDescription(req.getSubagentDescription());
         if (req.getProfessionalSubagentIds() != null) {
             replaceProfessionalSubagents(id, req.getProfessionalSubagentIds());
         }

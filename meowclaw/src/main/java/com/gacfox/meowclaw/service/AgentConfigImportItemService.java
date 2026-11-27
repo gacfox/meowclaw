@@ -96,6 +96,7 @@ public class AgentConfigImportItemService {
         CreateAgentRequest request = new CreateAgentRequest(data.getName(), null, data.getPersona(), enabledTools,
                 enabledMcpTools, llmId, secondaryLlmId, embeddingModelId, null, data.getAggressiveMemoryRecall());
         request.setAllowAsSubagent(data.getAllowAsSubagent());
+        request.setSubagentDescription(data.getSubagentDescription());
         validate(request);
         return agentService.create(request);
     }

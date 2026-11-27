@@ -60,6 +60,7 @@ interface AgentFormData {
   workspaceFolder: string;
   aggressiveMemoryRecall: boolean;
   allowAsSubagent: boolean;
+  subagentDescription: string;
   professionalSubagentIds: string[];
 }
 
@@ -74,6 +75,7 @@ const emptyForm: AgentFormData = {
   workspaceFolder: "",
   aggressiveMemoryRecall: false,
   allowAsSubagent: false,
+  subagentDescription: "",
   professionalSubagentIds: [],
 };
 
@@ -139,6 +141,7 @@ export function AgentConfigPage() {
       workspaceFolder: agent.workspaceFolder ?? "",
       aggressiveMemoryRecall: agent.aggressiveMemoryRecall ?? false,
       allowAsSubagent: agent.allowAsSubagent ?? false,
+      subagentDescription: agent.subagentDescription ?? "",
       professionalSubagentIds: agent.professionalSubagentIds?.map(String) ?? [],
     });
     setDialogOpen(true);
@@ -166,6 +169,7 @@ export function AgentConfigPage() {
         workspaceFolder: form.workspaceFolder || undefined,
         aggressiveMemoryRecall: form.aggressiveMemoryRecall,
         allowAsSubagent: form.allowAsSubagent,
+        subagentDescription: form.subagentDescription || undefined,
         professionalSubagentIds: form.professionalSubagentIds.map(Number),
       };
       if (editing) {
@@ -232,6 +236,7 @@ export function AgentConfigPage() {
         workspaceFolder: copyIndependentWorkspace ? undefined : (copyingAgent.workspaceFolder ?? undefined),
         aggressiveMemoryRecall: copyingAgent.aggressiveMemoryRecall ?? false,
         allowAsSubagent: copyingAgent.allowAsSubagent ?? false,
+        subagentDescription: copyingAgent.subagentDescription ?? undefined,
         professionalSubagentIds: copyingAgent.professionalSubagentIds ?? [],
       });
       await fetchData();
@@ -474,6 +479,19 @@ export function AgentConfigPage() {
                 checked={form.allowAsSubagent}
                 onCheckedChange={(checked) => setForm({ ...form, allowAsSubagent: checked })}
               />
+            </div>
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="subagent-description">子智能体描述</Label>
+              <Textarea
+                id="subagent-description"
+                value={form.subagentDescription}
+                onChange={(e) => setForm({ ...form, subagentDescription: e.target.value })}
+                rows={3}
+                placeholder="描述该智能体擅长的任务，供主智能体编排调度时参考..."
+              />
+              <p className="text-xs text-muted-foreground">
+                作为专业子智能体被委派时，该描述会注入主智能体的系统提示词；未开启「允许作为子智能体」时不生效
+              </p>
             </div>
             <div className="flex flex-col gap-2">
               <Label>专业子智能体</Label>

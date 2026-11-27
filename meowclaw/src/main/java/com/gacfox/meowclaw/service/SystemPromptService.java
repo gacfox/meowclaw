@@ -108,8 +108,9 @@ public class SystemPromptService {
         for (Agent professional : professionals) {
             result.append("\n- agent_id: ").append(professional.getId())
                     .append("\n  name: ").append(professional.getName());
-            if (professional.getPersona() != null && !professional.getPersona().isBlank()) {
-                result.append("\n  persona: ").append(professional.getPersona().strip());
+            String description = professional.getSubagentDescription();
+            if (description != null && !description.isBlank()) {
+                result.append("\n  description: ").append(description.strip());
             }
         }
         return result.toString();

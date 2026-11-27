@@ -56,6 +56,7 @@ CREATE TABLE IF NOT EXISTS mc_agent
     workspace_folder         VARCHAR(500) COMMENT '工作区目录路径',
     aggressive_memory_recall BOOLEAN      NOT NULL DEFAULT FALSE COMMENT '是否激进记忆召回: true 是, false 否',
     allow_as_subagent        BOOLEAN      NOT NULL DEFAULT FALSE COMMENT '是否允许作为专业子智能体: true 是, false 否',
+    subagent_description     TEXT COMMENT '子智能体描述提示词, 用于主智能体编排调度',
     created_at               BIGINT       NOT NULL COMMENT '创建时间戳',
     updated_at               BIGINT       NOT NULL COMMENT '更新时间戳',
     PRIMARY KEY (id)

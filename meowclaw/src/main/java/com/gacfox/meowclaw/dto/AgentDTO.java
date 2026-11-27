@@ -38,6 +38,8 @@ public class AgentDTO {
     private Boolean aggressiveMemoryRecall;
     @Schema(description = "是否允许作为专业子Agent")
     private Boolean allowAsSubagent;
+    @Schema(description = "子智能体描述提示词，用于主智能体编排调度")
+    private String subagentDescription;
     @Schema(description = "专业子Agent ID列表")
     private List<Long> professionalSubagentIds;
     @Schema(description = "创建时间戳")

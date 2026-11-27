@@ -63,6 +63,7 @@ export interface AgentDTO {
   workspaceFolder: string | null;
   aggressiveMemoryRecall: boolean | null;
   allowAsSubagent: boolean;
+  subagentDescription: string | null;
   professionalSubagentIds: number[];
   createdAt: number;
   updatedAt: number;

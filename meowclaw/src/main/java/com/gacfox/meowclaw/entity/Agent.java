@@ -50,6 +50,9 @@ public class Agent {
     @Column(name = "allow_as_subagent", nullable = false)
     private Boolean allowAsSubagent;
 
+    @Column(name = "subagent_description", columnDefinition = "TEXT")
+    private String subagentDescription;
+
     @Column(name = "created_at", nullable = false)
     private Long createdAt;
 

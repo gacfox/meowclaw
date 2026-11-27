@@ -80,7 +80,8 @@ class SystemPromptServiceTest {
         Agent professional = new Agent();
         professional.setId(2L);
         professional.setName("代码审查员");
-        professional.setPersona("负责代码审查");
+        professional.setPersona("子智能体自身人设");
+        professional.setSubagentDescription("负责代码审查");
         professional.setAllowAsSubagent(true);
         AgentSubagentRelation relation = new AgentSubagentRelation();
         relation.setParentAgentId(1L);
@@ -91,7 +92,9 @@ class SystemPromptServiceTest {
         String prompt = service.buildSystemPrompt(agent, List.of("spawn_subagent"));
         String withoutSpawn = service.buildSystemPrompt(agent, List.of("read"));
 
-        assertThat(prompt).contains("可委派的专业子智能体", "agent_id: 2", "代码审查员", "负责代码审查");
+        assertThat(prompt).contains("可委派的专业子智能体", "agent_id: 2", "代码审查员",
+                "description: 负责代码审查");
+        assertThat(prompt).doesNotContain("子智能体自身人设");
         assertThat(withoutSpawn).doesNotContain("可委派的专业子智能体");
     }
 
