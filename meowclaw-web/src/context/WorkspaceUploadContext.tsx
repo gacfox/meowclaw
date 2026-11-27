@@ -9,7 +9,6 @@ import {
   type ReactNode,
 } from "react";
 import { toast } from "sonner";
-import { WorkspaceUploadPanel } from "@/components/workspace/WorkspaceUploadPanel";
 import {
   cancelWorkspaceUpload,
   completeWorkspaceUpload,
@@ -410,7 +409,6 @@ export function WorkspaceUploadProvider({ children }: { children: ReactNode }) {
   return (
     <WorkspaceUploadContext.Provider value={value}>
       {children}
-      <WorkspaceUploadPanel />
     </WorkspaceUploadContext.Provider>
   );
 }

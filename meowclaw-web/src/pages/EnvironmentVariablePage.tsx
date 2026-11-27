@@ -6,7 +6,7 @@ import {
   deleteEnvironmentVariable,
   listEnvironmentVariables,
   updateEnvironmentVariable,
-} from "@/services/environmentVariable";
+} from "@/services/environment-variable";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";

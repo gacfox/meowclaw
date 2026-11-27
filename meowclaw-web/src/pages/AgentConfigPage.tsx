@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import type { AgentDTO, EmbeddingModelDTO, LlmDTO, McpToolDTO, ToolInfoDTO } from "@/types";
 import { listAgents, createAgent, updateAgent, deleteAgent as apiDeleteAgent, uploadAgentAvatar } from "@/services/agent";
 import { listLlms } from "@/services/llm";
-import { listEmbeddingModels } from "@/services/embeddingModel";
+import { listEmbeddingModels } from "@/services/embedding-model";
 import { listTools } from "@/services/tool";
 import { listMcpTools } from "@/services/mcp-service";
 import { Button } from "@/components/ui/button";

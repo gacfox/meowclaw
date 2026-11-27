@@ -18,19 +18,19 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, SquarePen, Loader2, Copy, Pencil, RefreshCw, ArrowUp, ArrowDown, Check, Clock, TriangleAlert, X, Square, Shield, ShieldAlert, MoreHorizontal, FolderPlus, Brain, MessagesSquare, Zap, Database } from "lucide-react";
+import { Plus, SquarePen, Copy, Pencil, RefreshCw, ArrowUp, ArrowDown, Check, Clock, TriangleAlert, X, Square, ShieldAlert, MoreHorizontal, FolderPlus, MessagesSquare, Zap, Database } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Alert, AlertTitle, AlertDescription, AlertAction } from "@/components/ui/alert";
 import { motion, AnimatePresence } from "framer-motion";
 import { BatchBubble, ConversationTimeline } from "@/components/chat/ChatEventBubble";
+import { ChatComposer, type ChatPendingImage } from "@/components/chat/ChatComposer";
 import { parseApprovalContent } from "@/lib/approval";
 import type { ApprovalContent } from "@/lib/approval";
 import { parseSubagentContent } from "@/lib/subagent";
 import type { SubagentContent } from "@/lib/subagent";
 import { SubagentDrawer } from "@/components/chat/SubagentDrawer";
 import { ConversationSearchDialog } from "@/components/chat/ConversationSearchDialog";
-import { ContextUsageGauge } from "@/components/chat/ContextUsageGauge";
 import { defaultReasoningEffort, parseReasoningEffortOptions } from "@/lib/reasoningEffort";
 import { readAgentPreferences, writeAgentPreferences } from "@/lib/agentPreferences";
 import type { AgentPreferences } from "@/lib/agentPreferences";
@@ -117,7 +117,7 @@ export function ChatPage() {
   const [generatingTitleId, setGeneratingTitleId] = useState<number | null>(null);
   const [optimisticContent, setOptimisticContent] = useState<string | null>(null);
   const [optimisticImages, setOptimisticImages] = useState<string[]>([]);
-  const [pendingImages, setPendingImages] = useState<{ dataUrl: string; name: string }[]>([]);
+  const [pendingImages, setPendingImages] = useState<ChatPendingImage[]>([]);
   const [llms, setLlms] = useState<LlmDTO[]>([]);
   const [agentPreferencesMap, setAgentPreferencesMap] = useState<Record<number, AgentPreferences>>({});
   const [streamSteps, setStreamSteps] = useState<StreamStep[]>([]);
@@ -177,7 +177,6 @@ export function ChatPage() {
   const convoListRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
   const creatingConvoRef = useRef(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const editTextareaRef = useRef<HTMLTextAreaElement>(null);
   const composerTextareaRef = useRef<HTMLTextAreaElement>(null);
   const selectedConvoIdRef = useRef<number | null>(null);
@@ -1142,118 +1141,28 @@ export function ChatPage() {
   };
 
   const composer = (
-    <div className="rounded-2xl border border-input bg-background px-3 pb-2 pt-3 shadow-sm transition-shadow focus-within:border-ring focus-within:ring-[3px] focus-within:ring-ring/50">
-      {pendingImages.length > 0 && (
-        <div className="mb-2 flex flex-wrap gap-2">
-          {pendingImages.map((img, i) => (
-            <div key={i} className="relative">
-              <img src={img.dataUrl} alt={img.name} className="size-14 rounded border object-cover" />
-              <button
-                className="absolute -right-1.5 -top-1.5 rounded-full bg-destructive p-0.5 text-destructive-foreground"
-                onClick={() => setPendingImages((prev) => prev.filter((_, idx) => idx !== i))}
-                title="移除"
-              >
-                <X className="size-3" />
-              </button>
-            </div>
-          ))}
-        </div>
-      )}
-      <textarea
-        ref={composerTextareaRef}
-        value={input}
-        onChange={(e) => setInput(e.target.value)}
-        onPaste={(e) => {
-          const images = Array.from(e.clipboardData.files).filter((file) =>
-            ["image/png", "image/jpeg", "image/webp", "image/gif"].includes(file.type)
-          );
-          if (images.length === 0) return;
-          e.preventDefault();
-          if (!canVision) {
-            toast.error("当前模型不支持图片输入");
-            return;
-          }
-          handleImageSelect(images);
-        }}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" && !e.shiftKey && !e.ctrlKey && !e.nativeEvent.isComposing) {
-            e.preventDefault();
-            handleSend();
-          }
-        }}
-        placeholder={isCurrentConvoRunning ? "正在执行中..." : "输入消息..."}
-        rows={1}
-        autoFocus
-        className="w-full resize-none bg-transparent px-1 py-1 text-sm outline-none placeholder:text-muted-foreground"
-      />
-      <div className="mt-1 flex items-center justify-between gap-2">
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept="image/png,image/jpeg,image/webp,image/gif"
-          multiple
-          className="hidden"
-          onChange={(e) => { handleImageSelect(e.target.files); e.target.value = ""; }}
-        />
-        <div className="flex min-w-0 flex-wrap items-center gap-1">
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <span>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="rounded-full text-muted-foreground"
-                  disabled={!canVision}
-                  onClick={() => fileInputRef.current?.click()}
-                >
-                  <Plus className="size-4" />
-                </Button>
-              </span>
-            </TooltipTrigger>
-            <TooltipContent>{canVision ? "上传图片" : "当前模型不支持图片输入"}</TooltipContent>
-          </Tooltip>
-          {reasoningEffort && (
-            <Select value={reasoningEffort} onValueChange={handleReasoningEffortChange}>
-              <SelectTrigger className="h-7 w-auto max-w-32 gap-1 rounded-full border-none bg-transparent px-2 text-xs text-muted-foreground shadow-none focus:ring-0 sm:max-w-none" title="思考强度">
-                <Brain className="size-3.5" />
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {effortOptions.map((effort) => (
-                  <SelectItem key={effort} value={effort}>{effort}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          )}
-          <Select
-            value={currentGuardrailPolicyId != null ? String(currentGuardrailPolicyId) : undefined}
-            onValueChange={handlePolicyChange}
-          >
-            <SelectTrigger className="h-7 w-auto max-w-32 gap-1 rounded-full border-none bg-transparent px-2 text-xs text-muted-foreground shadow-none focus:ring-0 sm:max-w-none">
-              <Shield className="size-3.5" />
-              <SelectValue placeholder="护栏策略" />
-            </SelectTrigger>
-            <SelectContent>
-              {policies.map((p) => (
-                <SelectItem key={p.id} value={String(p.id)}>{p.name}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          {!showHero && contextPromptTokens > 0 && usageContextLength > 0 && (
-            <ContextUsageGauge promptTokens={contextPromptTokens} contextLength={usageContextLength} />
-          )}
-        </div>
-        {isCurrentConvoRunning ? (
-          <Button variant="destructive" size="icon" className="rounded-full" onClick={handleStop} disabled={stopping} title="停止执行">
-            {stopping ? <Loader2 className="size-4 animate-spin" /> : <Square className="size-3.5" fill="currentColor" />}
-          </Button>
-        ) : (
-          <Button size="icon" className="rounded-full" onClick={handleSend} disabled={!input.trim() && pendingImages.length === 0} title="发送">
-            <ArrowUp className="size-4" />
-          </Button>
-        )}
-      </div>
-    </div>
+    <ChatComposer
+      pendingImages={pendingImages}
+      input={input}
+      canVision={canVision}
+      isRunning={isCurrentConvoRunning}
+      stopping={stopping}
+      reasoningEffort={reasoningEffort}
+      effortOptions={effortOptions}
+      policies={policies}
+      currentGuardrailPolicyId={currentGuardrailPolicyId}
+      showContextUsage={!showHero && contextPromptTokens > 0 && usageContextLength > 0}
+      contextPromptTokens={contextPromptTokens}
+      contextLength={usageContextLength}
+      textareaRef={composerTextareaRef}
+      onInputChange={setInput}
+      onRemoveImage={(index) => setPendingImages((previous) => previous.filter((_, i) => i !== index))}
+      onFilesSelected={(files) => void handleImageSelect(files)}
+      onSend={handleSend}
+      onStop={() => void handleStop()}
+      onReasoningEffortChange={handleReasoningEffortChange}
+      onPolicyChange={(value) => void handlePolicyChange(value)}
+    />
   );
 
   return (

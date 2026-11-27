@@ -1,12 +1,7 @@
+import type { SystemResourceMetrics } from "@/types";
 import { request } from "./request";
 
 export const SYSTEM_RESOURCE_MONITOR_CHANGED_EVENT = "meowclaw:system-resource-monitor-changed";
-
-export interface SystemResourceMetrics {
-  cpuUsage: number | null;
-  memoryUsage: number | null;
-  timestamp: number;
-}
 
 export async function getSystemResourceMetrics(): Promise<SystemResourceMetrics> {
   const res = await request<SystemResourceMetrics>("/api/system-resource/metrics");

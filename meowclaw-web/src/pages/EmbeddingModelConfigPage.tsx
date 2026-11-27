@@ -6,7 +6,7 @@ import {
   updateEmbeddingModel,
   deleteEmbeddingModel as apiDeleteEmbeddingModel,
   testEmbeddingModel,
-} from "@/services/embeddingModel";
+} from "@/services/embedding-model";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";

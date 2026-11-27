@@ -7,8 +7,8 @@ import {
   getSystemResourceMetrics,
   getSystemResourceMonitorEnabled,
   SYSTEM_RESOURCE_MONITOR_CHANGED_EVENT,
-  type SystemResourceMetrics,
-} from "@/services/systemResource";
+} from "@/services/system-resource";
+import type { SystemResourceMetrics } from "@/types";
 
 const POLL_INTERVAL_MS = 10000;
 

@@ -1,4 +1,4 @@
-import { Fragment, lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import type {
   AgentDTO,
@@ -30,7 +30,6 @@ import { useTouchInteraction } from "@/hooks/useTouchInteraction";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import {
   Dialog,
   DialogContent,
@@ -96,32 +95,13 @@ import {
   Upload,
 } from "lucide-react";
 import { toast } from "sonner";
-import { MarkdownRenderer } from "@/components/markdown/MarkdownRenderer";
 import { WorkspaceEntryView, type WorkspaceViewMode } from "@/components/workspace/WorkspaceEntryView";
 import { extensionOf, fileTypeLabel, formatFileSize } from "@/lib/workspaceFiles";
 import { WorkspaceConflictDialog } from "@/components/workspace/WorkspaceConflictDialog";
 import { WorkspaceTouchActionSheet } from "@/components/workspace/WorkspaceTouchActionSheet";
-import { WorkspaceImagePreview } from "@/components/workspace/WorkspaceImagePreview";
+import { WorkspacePreviewDialog } from "@/components/workspace/WorkspacePreviewDialog";
 
-const WorkspacePdfPreview = lazy(() => import("@/components/workspace/WorkspacePdfPreview")
-  .then((module) => ({ default: module.WorkspacePdfPreview })));
-
-const MD_EXTS = new Set(["md", "markdown"]);
-const EXT_TO_LANG: Record<string, string> = {
-  ts: "typescript", tsx: "typescript", mjs: "javascript", cjs: "javascript", js: "javascript", jsx: "javascript",
-  java: "java", kt: "kotlin", py: "python", go: "go", rs: "rust", c: "c", h: "c", cpp: "cpp", cc: "cpp", hpp: "hpp",
-  cs: "csharp", rb: "ruby", php: "php", swift: "swift",
-  css: "css", scss: "scss", less: "less", html: "html", htm: "html", xml: "xml",
-  json: "json", yml: "yaml", yaml: "yaml", toml: "toml", ini: "ini", properties: "properties",
-  sh: "bash", bash: "bash", zsh: "bash", bat: "bat", ps1: "powershell",
-  sql: "sql", graphql: "graphql", gql: "graphql", vue: "vue", svelte: "svelte",
-};
 const VIEW_MODE_KEY = "meowclaw_workspace_view_mode";
-
-function codeFence(name: string, code: string): string {
-  const lang = EXT_TO_LANG[extensionOf(name)] ?? "";
-  return (lang ? "```" + lang + "\n" : "```\n") + code + "\n```";
-}
 
 function parentOf(path: string): string {
   const segments = path.split("/").filter(Boolean);
@@ -930,51 +910,23 @@ export function WorkspacePage() {
         </span>
       </div>
 
-      {/* 预览 / 编辑 */}
-      <Dialog open={!!previewEntry} onOpenChange={(open) => { if (!open) closePreview(); }}>
-        <DialogContent className="flex max-h-[90vh] flex-col overflow-hidden sm:max-w-6xl">
-          <DialogHeader><DialogTitle className="break-all">{previewEntry?.path}</DialogTitle></DialogHeader>
-          {previewLoading ? (
-            <div className="py-8 text-center text-muted-foreground">加载中...</div>
-          ) : previewError ? (
-            <div className="py-8 text-center text-destructive">{previewError}</div>
-          ) : previewPdfUrl && previewEntry ? (
-            <Suspense fallback={<div className="py-8 text-center text-muted-foreground">正在加载 PDF 查看器...</div>}>
-              <WorkspacePdfPreview
-                key={previewPdfUrl}
-                url={previewPdfUrl}
-                downloading={downloading}
-                onDownload={() => handleDownload([previewEntry])}
-              />
-            </Suspense>
-          ) : previewContent?.kind === "IMAGE" ? (
-            <WorkspaceImagePreview blob={previewContent.blob} name={previewEntry?.name ?? "图片预览"} />
-          ) : previewContent?.kind === "TEXT" ? (
-            <>
-              <div className="min-h-0 flex-1 overflow-auto">
-                {previewMode === "view" ? (
-                  <MarkdownRenderer content={MD_EXTS.has(extensionOf(previewEntry?.name ?? ""))
-                    ? previewContent.content ?? ""
-                    : codeFence(previewEntry?.name ?? "", previewContent.content ?? "")} />
-                ) : (
-                  <Textarea rows={20} className="resize-y font-mono text-sm" value={editText}
-                    onChange={(event) => { setEditText(event.target.value); setEditModified(true); }} />
-                )}
-              </div>
-              <DialogFooter>
-                {previewMode === "view" ? (
-                  <><Button variant="outline" onClick={closePreview}>关闭</Button><Button onClick={() => setPreviewMode("edit")}>编辑</Button></>
-                ) : (
-                  <><Button variant="outline" onClick={() => setPreviewMode("view")}>预览</Button>
-                    <Button onClick={handleSave} disabled={editSaving || !editModified}>{editSaving ? "保存中..." : "保存"}</Button></>
-                )}
-              </DialogFooter>
-            </>
-          ) : (
-            <div className="py-8 text-center text-muted-foreground">该文件类型不支持在线预览</div>
-          )}
-        </DialogContent>
-      </Dialog>
+      <WorkspacePreviewDialog
+        entry={previewEntry}
+        content={previewContent}
+        pdfUrl={previewPdfUrl}
+        loading={previewLoading}
+        error={previewError}
+        mode={previewMode}
+        editText={editText}
+        editModified={editModified}
+        editSaving={editSaving}
+        downloading={downloading}
+        onClose={closePreview}
+        onDownload={(entry) => void handleDownload([entry])}
+        onModeChange={setPreviewMode}
+        onEditTextChange={(value) => { setEditText(value); setEditModified(true); }}
+        onSave={() => void handleSave()}
+      />
 
       {/* 新建 */}
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>

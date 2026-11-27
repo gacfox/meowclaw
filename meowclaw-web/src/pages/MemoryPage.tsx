@@ -1,11 +1,12 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import * as echarts from "echarts";
-import type { EChartsOption } from "echarts";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { useTheme } from "next-themes";
 import { listAgents } from "@/services/agent";
 import { createMemory, deleteMemory, getMemoryGraph, listMemories, listMemoryEntities, recallPreview, updateMemory } from "@/services/memory";
 import type { AgentDTO, MemoryEntityWithCount, MemoryGraph, MemoryNodeDTO, PageResult } from "@/types";
+import { EntityChips } from "@/components/memory/EntityChips";
+import { MemoryCard } from "@/components/memory/MemoryCard";
+import { MemoryGraphView } from "@/components/memory/MemoryGraphView";
+import { formatMemoryTimestamp, memoryTypeBadgeVariant, memoryTypeLabel } from "@/components/memory/memoryUtils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -35,164 +36,6 @@ const TYPE_OPTIONS = [
   { value: "preference", label: "偏好" },
   { value: "rule", label: "规则" },
 ];
-
-const GRAPH_COLORS = {
-  light: { fact: "#4f83cc", preference: "#1f7a4d", rule: "#c28c3c", entity: "#b34d8b" },
-  dark: { fact: "#5594d0", preference: "#35a773", rule: "#b88930", entity: "#c05a97" },
-} as const;
-
-function typeBadgeVariant(type: string): "default" | "secondary" | "outline" {
-  if (type === "preference") return "secondary";
-  if (type === "rule") return "outline";
-  return "default";
-}
-
-function typeLabel(type: string): string {
-  return TYPE_OPTIONS.find((o) => o.value === type)?.label ?? type;
-}
-
-function formatTimestamp(ts: number | null): string {
-  if (ts == null || ts <= 0) return "-";
-  const d = new Date(ts);
-  const pad = (n: number) => n.toString().padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
-}
-
-function truncateLabel(text: string, max: number): string {
-  const flat = text.replace(/\s+/g, " ").trim();
-  return flat.length > max ? flat.slice(0, max) + "…" : flat;
-}
-
-function EntityChips({ node }: { node: MemoryNodeDTO }) {
-  if (!node.entities || node.entities.length === 0) return null;
-  return (
-    <div className="flex flex-wrap gap-1">
-      {node.entities.map((entity) => (
-        <Badge key={entity.id} variant="outline" className="text-xs">{entity.name}</Badge>
-      ))}
-    </div>
-  );
-}
-
-function MemoryCard({ node, onClick }: { node: MemoryNodeDTO; onClick: () => void }) {
-  return (
-    <Card className="cursor-pointer transition-shadow hover:shadow-md" onClick={onClick}>
-      <CardContent className="flex flex-col gap-2 p-4">
-        <div className="flex items-center justify-between">
-          <Badge variant={typeBadgeVariant(node.type)}>{typeLabel(node.type)}</Badge>
-          <span className="text-xs text-muted-foreground">{formatTimestamp(node.updatedAt)}</span>
-        </div>
-        <p className="line-clamp-3 whitespace-pre-wrap text-sm">{node.content}</p>
-        <EntityChips node={node} />
-      </CardContent>
-    </Card>
-  );
-}
-
-function MemoryGraphView({ graph, onMemoryClick }: { graph: MemoryGraph; onMemoryClick: (memoryId: number) => void }) {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const chartRef = useRef<echarts.ECharts | null>(null);
-  const onMemoryClickRef = useRef(onMemoryClick);
-  const { resolvedTheme } = useTheme();
-
-  useEffect(() => {
-    onMemoryClickRef.current = onMemoryClick;
-  }, [onMemoryClick]);
-
-  useEffect(() => {
-    if (!containerRef.current) return;
-    const chart = echarts.init(containerRef.current);
-    chartRef.current = chart;
-    chart.on("click", (params) => {
-      const data = params.data as { memoryId?: number } | undefined;
-      if (params.dataType === "node" && data?.memoryId != null) {
-        onMemoryClickRef.current(data.memoryId);
-      }
-    });
-    const resizeObserver = new ResizeObserver(() => chart.resize());
-    resizeObserver.observe(containerRef.current);
-    return () => {
-      resizeObserver.disconnect();
-      chart.dispose();
-      chartRef.current = null;
-    };
-  }, []);
-
-  useEffect(() => {
-    const chart = chartRef.current;
-    if (!chart) return;
-    const colors = GRAPH_COLORS[resolvedTheme === "dark" ? "dark" : "light"];
-    const nodes = [
-      ...graph.memories.map((m) => ({
-        id: `m-${m.id}`,
-        name: truncateLabel(m.content, 12),
-        memoryId: m.id,
-        category: typeLabel(m.type),
-        symbol: "circle",
-        symbolSize: 26,
-      })),
-      ...graph.entities.map((e) => ({
-        id: `e-${e.id}`,
-        name: truncateLabel(e.name, 12),
-        category: "实体",
-        symbol: "circle",
-        symbolSize: 20,
-      })),
-    ];
-    const links = graph.relations.map((r) => ({
-      source: `m-${r.memoryId}`,
-      target: `e-${r.entityId}`,
-      value: r.description,
-    }));
-    const option: EChartsOption = {
-      tooltip: {
-        formatter: (params: unknown) => {
-          const p = params as { dataType: string; data?: { value?: string }; name: string };
-          if (p.dataType === "edge") return p.data?.value ?? "";
-          return p.name;
-        },
-      },
-      legend: {
-        data: ["事实", "偏好", "规则", "实体"],
-        bottom: 0,
-        icon: "circle",
-        textStyle: { fontSize: 12 },
-      },
-      series: [{
-        type: "graph",
-        layout: "force",
-        roam: true,
-        draggable: true,
-        force: { repulsion: 220, edgeLength: 100 },
-        label: { show: true, fontSize: 10 },
-        itemStyle: {
-          borderColor: resolvedTheme === "dark" ? "#0f172a" : "#1e293b",
-          borderWidth: 2,
-        },
-        categories: [
-          { name: "事实", itemStyle: { color: colors.fact } },
-          { name: "偏好", itemStyle: { color: colors.preference } },
-          { name: "规则", itemStyle: { color: colors.rule } },
-          { name: "实体", itemStyle: { color: colors.entity } },
-        ],
-        data: nodes,
-        links,
-        lineStyle: { color: "source", opacity: 0.4, curveness: 0.1 },
-        emphasis: { focus: "adjacency", itemStyle: { borderWidth: 3 } },
-      }] as EChartsOption["series"],
-    };
-    chart.setOption(option, true);
-  }, [graph, resolvedTheme]);
-
-  return (
-    <div className="relative">
-      <div ref={containerRef} className="h-[55dvh] min-h-80 w-full rounded-lg border md:h-[600px]" />
-      {graph.memories.length === 0 && (
-        <div className="absolute inset-0 flex items-center justify-center text-muted-foreground">暂无记忆数据</div>
-      )}
-    </div>
-  );
-}
 
 export function MemoryPage() {
   const [agents, setAgents] = useState<AgentDTO[]>([]);
@@ -589,7 +432,7 @@ export function MemoryPage() {
               <SheetHeader>
                 <SheetTitle className="flex items-center gap-2">
                   记忆详情
-                  <Badge variant={typeBadgeVariant(detail.type)}>{typeLabel(detail.type)}</Badge>
+                  <Badge variant={memoryTypeBadgeVariant(detail.type)}>{memoryTypeLabel(detail.type)}</Badge>
                 </SheetTitle>
               </SheetHeader>
               <div className="flex flex-col gap-5 px-4 pb-4">
@@ -617,15 +460,15 @@ export function MemoryPage() {
                   <div className="grid grid-cols-3 gap-2 text-sm">
                     <div>
                       <div className="text-xs text-muted-foreground">创建时间</div>
-                      {formatTimestamp(detail.createdAt)}
+                      {formatMemoryTimestamp(detail.createdAt)}
                     </div>
                     <div>
                       <div className="text-xs text-muted-foreground">更新时间</div>
-                      {formatTimestamp(detail.updatedAt)}
+                      {formatMemoryTimestamp(detail.updatedAt)}
                     </div>
                     <div>
                       <div className="text-xs text-muted-foreground">最近召回</div>
-                      {formatTimestamp(detail.lastAccessedAt)}
+                      {formatMemoryTimestamp(detail.lastAccessedAt)}
                     </div>
                   </div>
                 )}
@@ -674,7 +517,7 @@ export function MemoryPage() {
                 <Card key={node.id}>
                   <CardContent className="flex flex-col gap-2 p-3">
                     <div className="flex items-center justify-between">
-                      <Badge variant={typeBadgeVariant(node.type)}>{typeLabel(node.type)}</Badge>
+                      <Badge variant={memoryTypeBadgeVariant(node.type)}>{memoryTypeLabel(node.type)}</Badge>
                       <span className="text-xs text-muted-foreground">id: {node.id}</span>
                     </div>
                     <p className="whitespace-pre-wrap text-sm">{node.content}</p>

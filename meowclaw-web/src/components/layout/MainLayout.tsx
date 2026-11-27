@@ -4,6 +4,7 @@ import { AppSidebar } from "./AppSidebar";
 import { AppHeader } from "./AppHeader";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { WorkspaceUploadProvider } from "@/context/WorkspaceUploadContext";
+import { WorkspaceUploadPanel } from "@/components/workspace/WorkspaceUploadPanel";
 
 const SIDEBAR_OPEN_STORAGE_KEY = "meowclaw_sidebar_open";
 
@@ -37,6 +38,7 @@ export function MainLayout() {
           </div>
         </SidebarInset>
       </SidebarProvider>
+      <WorkspaceUploadPanel />
     </WorkspaceUploadProvider>
   );
 }

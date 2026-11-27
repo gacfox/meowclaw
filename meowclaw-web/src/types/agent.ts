@@ -1,4 +1,21 @@
-import { downloadRequest, uploadRequest } from "./request";
+export interface AgentDTO {
+  id: number;
+  name: string;
+  avatarUrl: string | null;
+  persona: string | null;
+  enabledTools: string | null;
+  enabledMcpTools: string | null;
+  llmId: number | null;
+  secondaryLlmId: number | null;
+  embeddingModelId: number | null;
+  workspaceFolder: string | null;
+  aggressiveMemoryRecall: boolean | null;
+  allowAsSubagent: boolean;
+  subagentDescription: string | null;
+  professionalSubagentIds: number[];
+  createdAt: number;
+  updatedAt: number;
+}
 
 export interface ConfigImportCategoryResult {
   type: string;
@@ -27,12 +44,4 @@ export interface ConfigImportResult {
   renamedCount: number;
   categories: ConfigImportCategoryResult[];
   items: ConfigImportItemResult[];
-}
-
-export async function exportAgentConfig(): Promise<Blob> {
-  return downloadRequest("/api/system-config/agent-config/export");
-}
-
-export async function importAgentConfig(file: File): Promise<ConfigImportResult> {
-  return uploadRequest<ConfigImportResult>("/api/system-config/agent-config/import", file);
 }

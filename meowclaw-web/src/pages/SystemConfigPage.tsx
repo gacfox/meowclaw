@@ -10,14 +10,13 @@ import {
 import {
   exportAgentConfig,
   importAgentConfig,
-  type ConfigImportResult,
-} from "@/services/systemConfig";
+} from "@/services/system-config";
 import {
   getSystemResourceMonitorEnabled,
   SYSTEM_RESOURCE_MONITOR_CHANGED_EVENT,
   updateSystemResourceMonitorEnabled,
-} from "@/services/systemResource";
-import type { TraceRetentionPolicy } from "@/types";
+} from "@/services/system-resource";
+import type { ConfigImportResult, TraceRetentionPolicy } from "@/types";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
