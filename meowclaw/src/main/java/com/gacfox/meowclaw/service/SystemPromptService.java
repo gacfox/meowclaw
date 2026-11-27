@@ -1,6 +1,7 @@
 package com.gacfox.meowclaw.service;
 
 import com.gacfox.meowclaw.entity.Agent;
+import com.gacfox.meowclaw.entity.AgentSubagentRelation;
 import com.gacfox.meowclaw.entity.ChatEventBatch;
 import com.gacfox.meowclaw.entity.ContextRecap;
 import com.gacfox.meowclaw.repository.AgentRepository;
@@ -25,12 +26,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.LocalDate;
-import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
+import java.util.*;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -93,32 +89,28 @@ public class SystemPromptService {
         if (persona != null && !persona.isBlank()) {
             vars.put("persona", persona.strip());
         }
-        String prompt = PromptTemplate.build(systemPromptTemplate, vars);
-        if (!toolNames.contains(SpawnSubagentTool.TOOL_NAME)) {
-            return prompt;
-        }
-        List<Agent> professionals = professionalSubagents(agent.getId());
-        if (professionals.isEmpty()) {
-            return prompt;
-        }
-        StringBuilder result = new StringBuilder(prompt)
-                .append("\n\n## 可委派的专业子智能体\n")
-                .append("调用 spawn_subagent 时传入下列 agent_id 可使用对应专业子智能体；")
-                .append("缺省 agent_id 则创建 general 子智能体。\n");
-        for (Agent professional : professionals) {
-            result.append("\n- agent_id: ").append(professional.getId())
-                    .append("\n  name: ").append(professional.getName());
-            String description = professional.getSubagentDescription();
-            if (description != null && !description.isBlank()) {
-                result.append("\n  description: ").append(description.strip());
+        if (toolNames.contains(SpawnSubagentTool.TOOL_NAME)) {
+            List<ProfessionalSubagentSummary> professionals = professionalSubagents(agent.getId()).stream()
+                    .map(professional -> {
+                        String description = professional.getSubagentDescription();
+                        return new ProfessionalSubagentSummary(professional.getId(), professional.getName(),
+                                description == null || description.isBlank() ? null : description.strip());
+                    })
+                    .toList();
+            if (!professionals.isEmpty()) {
+                vars.put("hasProfessionalSubagents", true);
+                vars.put("professionalSubagents", professionals);
             }
         }
-        return result.toString();
+        return PromptTemplate.build(systemPromptTemplate, vars);
+    }
+
+    public record ProfessionalSubagentSummary(Long id, String name, String description) {
     }
 
     private List<Agent> professionalSubagents(Long parentAgentId) {
         List<Long> ids = subagentRelationRepository.findByParentAgentId(parentAgentId).stream()
-                .map(relation -> relation.getSubagentId())
+                .map(AgentSubagentRelation::getSubagentId)
                 .toList();
         if (ids.isEmpty()) {
             return List.of();
@@ -155,7 +147,7 @@ public class SystemPromptService {
             } else if (previousRecapIds.isEmpty()) {
                 recapMode = "snapshot";
                 recap = recaps.stream().map(ContextRecap::getContent).collect(Collectors.joining("\n\n"));
-            } else if (recapIds.containsAll(previousRecapIds)) {
+            } else if (new HashSet<>(recapIds).containsAll(previousRecapIds)) {
                 List<ContextRecap> added = recaps.stream()
                         .filter(item -> !previousRecapIds.contains(item.getId())).toList();
                 if (!added.isEmpty()) {

@@ -39,3 +39,16 @@
 # 最终答复
 
 任务完成、无法继续或需要用户澄清时，直接输出完整答复，不再调用工具。只有仍需执行实际操作或获取信息时才发起工具调用。
+{{#hasProfessionalSubagents}}
+
+## 可委派的专业子智能体
+
+调用 spawn_subagent 时传入下列 agent_id 可使用对应专业子智能体；缺省 agent_id 则创建 general 子智能体。
+{{#professionalSubagents}}
+- agent_id: {{id}}
+  name: {{name}}
+{{#description}}
+  description: {{{description}}}
+{{/description}}
+{{/professionalSubagents}}
+{{/hasProfessionalSubagents}}
