@@ -1,7 +1,7 @@
 import type { TraceDetail } from "@/types";
 import { BatchBubble } from "@/components/chat/ChatEventBubble";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { ArrowDown, ArrowUp } from "lucide-react";
+import { ArrowDown, ArrowUp, Database } from "lucide-react";
 import { LlmCallCard } from "./LlmCallCard";
 import { formatTraceDuration, formatTraceTimestamp, traceStatusBadge } from "./traceUtils";
 
@@ -44,9 +44,14 @@ export function TraceDetailSheet({ detail, loading, onClose, onOpenConversation 
                 </div>
                 <div>
                   <div className="text-xs text-muted-foreground">tokens</div>
-                  <span className="inline-flex items-center gap-0.5"><ArrowUp className="size-3" />{detail.inputTokens ?? "-"}</span>
-                  {" / "}
+                  <span className="mr-1 inline-flex items-center gap-0.5"><ArrowUp className="size-3" />{detail.inputTokens ?? "-"}</span>
                   <span className="inline-flex items-center gap-0.5"><ArrowDown className="size-3" />{detail.outputTokens ?? "-"}</span>
+                  {detail.cachedTokens != null && detail.cachedTokens > 0 && (
+                    <span title="缓存输入 tokens" className="ml-1 inline-flex items-center gap-0.5">
+                      <Database className="size-3" />
+                      {detail.cachedTokens}
+                    </span>
+                  )}
                 </div>
                 <div>
                   <div className="text-xs text-muted-foreground">开始时间</div>

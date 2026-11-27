@@ -28,6 +28,8 @@ public class TraceItemDTO {
     private Long inputTokens;
     @Schema(description = "输出 Token 数")
     private Long outputTokens;
+    @Schema(description = "缓存输入 Token 数")
+    private Long cachedTokens;
     @Schema(description = "语言模型调用次数")
     private Long llmCallCount;
     @Schema(description = "批次创建时间戳")

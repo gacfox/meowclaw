@@ -1,12 +1,16 @@
 package com.gacfox.meowclaw.service.observability;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.gacfox.meowclaw.converter.ChatEventConverter;
+import com.gacfox.meowclaw.converter.LlmCallLogConverter;
 import com.gacfox.meowclaw.dto.common.Pagination;
+import com.gacfox.meowclaw.dto.observability.TraceDetailDTO;
 import com.gacfox.meowclaw.dto.observability.TraceItemDTO;
 import com.gacfox.meowclaw.dto.observability.TraceRetentionPolicy;
 import com.gacfox.meowclaw.entity.*;
 import com.gacfox.meowclaw.interceptor.llm.TokenUsageContext;
 import com.gacfox.meowclaw.repository.*;
+import com.gacfox.meowclaw.service.chat.ContextCompressionService;
 import com.gacfox.meowclaw.service.system.SystemConfigService;
 import com.gacfox.meowclaw.util.JsonUtil;
 import jakarta.persistence.EntityManager;
@@ -21,6 +25,8 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 @DataJpaTest(properties = {
         "spring.jpa.hibernate.ddl-auto=none",
@@ -76,6 +82,26 @@ class TraceManagementServiceTest {
         assertThatThrownBy(() -> traceService.detail(withoutLog.getId()))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("追踪不存在");
+    }
+
+    @Test
+    void listAndDetailExposeBatchCachedTokens() {
+        ChatEventBatch batch = batch("COMPLETED", System.currentTimeMillis());
+        batch.setCachedTokens(64L);
+        batchRepository.save(batch);
+        log(batch.getId(), "agent", batch.getCreatedAt());
+        ContextCompressionService compressionService = mock(ContextCompressionService.class);
+        when(compressionService.parseAttachments(null)).thenReturn(List.of());
+        TraceService service = new TraceService(batchRepository, chatEventRepository, llmCallLogRepository,
+                conversationRepository, agentRepository, mock(ChatEventConverter.class),
+                mock(LlmCallLogConverter.class), compressionService, traceDeletionRegistry);
+
+        Pagination<TraceItemDTO> result = service.list(null, null, null, null,
+                null, null, 1, 20);
+        TraceDetailDTO detail = service.detail(batch.getId());
+
+        assertThat(result.getList().get(0).getCachedTokens()).isEqualTo(64L);
+        assertThat(detail.getCachedTokens()).isEqualTo(64L);
     }
 
     @Test

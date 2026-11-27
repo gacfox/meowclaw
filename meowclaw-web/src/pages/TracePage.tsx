@@ -26,7 +26,7 @@ import {
 import {
   Pagination, PaginationContent, PaginationEllipsis, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious,
 } from "@/components/ui/pagination";
-import { ArrowDown, ArrowUp, RefreshCw, Trash2 } from "lucide-react";
+import { ArrowDown, ArrowUp, Database, RefreshCw, Trash2 } from "lucide-react";
 
 const DEFAULT_SIZE = 20;
 const ALL_VALUE = "ALL";
@@ -275,7 +275,7 @@ export function TracePage() {
               <TableHead>用户输入</TableHead>
               <TableHead className="w-20">状态</TableHead>
               <TableHead className="w-24">LLM调用</TableHead>
-              <TableHead className="w-36">tokens</TableHead>
+              <TableHead className="w-44">tokens</TableHead>
               <TableHead className="w-20">耗时</TableHead>
               <TableHead className="w-20 text-right">操作</TableHead>
             </TableRow>
@@ -311,9 +311,14 @@ export function TracePage() {
                   <TableCell>{traceStatusBadge(item.status)}</TableCell>
                   <TableCell>{item.llmCallCount}</TableCell>
                   <TableCell className="text-xs text-muted-foreground">
-                    <span className="inline-flex items-center gap-0.5"><ArrowUp className="size-3" />{item.inputTokens ?? "-"}</span>
-                    {" / "}
+                    <span className="mr-1 inline-flex items-center gap-0.5"><ArrowUp className="size-3" />{item.inputTokens ?? "-"}</span>
                     <span className="inline-flex items-center gap-0.5"><ArrowDown className="size-3" />{item.outputTokens ?? "-"}</span>
+                    {item.cachedTokens != null && item.cachedTokens > 0 && (
+                      <span title="缓存输入 tokens" className="ml-1 inline-flex items-center gap-0.5">
+                        <Database className="size-3" />
+                        {item.cachedTokens}
+                      </span>
+                    )}
                   </TableCell>
                   <TableCell className="text-muted-foreground">{formatTraceDuration(item)}</TableCell>
                   <TableCell className="text-right" onClick={(event) => event.stopPropagation()}>

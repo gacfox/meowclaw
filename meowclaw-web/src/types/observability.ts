@@ -47,6 +47,7 @@ export interface TraceItem {
   status: string;
   inputTokens: number | null;
   outputTokens: number | null;
+  cachedTokens: number | null;
   llmCallCount: number;
   createdAt: number;
   completedAt: number | null;
@@ -82,6 +83,7 @@ export interface TraceDetail {
   errorMessage: string | null;
   inputTokens: number | null;
   outputTokens: number | null;
+  cachedTokens: number | null;
   createdAt: number;
   completedAt: number | null;
   events: ChatEventDTO[];
